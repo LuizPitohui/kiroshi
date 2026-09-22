@@ -1,0 +1,11 @@
+-- O placeholder guarda uma miniatura 16x16 em webp como data URI.
+--
+-- A coluna nascera VarChar(64), tamanho que nao cabe nem na imagem mais
+-- simples possivel: o prefixo "data:image/webp;base64," sozinho ja ocupa 23
+-- caracteres, e a menor miniatura medida deu 95. Na pratica isso fazia todo
+-- envio de imagem falhar com erro de banco, enquanto envios de arquivo comum
+-- passavam — o que escondia o problema.
+--
+-- O tamanho e limitado pela geracao (16x16, qualidade 40), entao nao ha razao
+-- para um teto na coluna.
+ALTER TABLE "Attachment" ALTER COLUMN "placeholder" SET DATA TYPE TEXT;

@@ -1,0 +1,590 @@
+// Modelo de dados do Order.
+//
+// Convencoes:
+//  - Todo id e um snowflake em String; ordenar por id equivale a ordenar por tempo.
+//  - Permissoes sao BigInt (bitfield). Postgres BIGINT e assinado, entao usamos
+//    ate o bit 62; hoje o maior bit em uso e o 30.
+//  - Exclusao de mensagem e logica (deletedAt) para nao quebrar respostas que
+//    citam a mensagem apagada.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Usuarios
+// ---------------------------------------------------------------------------
+
+enum PresenceStatus {
+  ONLINE
+  IDLE
+  DND
+  OFFLINE
+}
+
+model User {
+  id           String  @id
+  email        String  @unique @db.VarChar(254)
+  username     String  @unique @db.VarChar(32)
+  displayName  String  @db.VarChar(32)
+  /**
+   * Opcional: quem cria a conta pelo Google pode nunca definir uma.
+   * Todo lugar que confere senha precisa tratar o nulo como "esta conta nao
+   * entra por senha" — e nao como "senha vazia confere".
+   */
+  passwordHash String?
+  avatarUrl    String?
+  bannerUrl    String?
+  bio          String? @db.VarChar(190)
+  pronouns     String? @db.VarChar(40)
+  accentColor  String? @db.VarChar(7)
+  bot          Boolean @default(false)
+
+  // Presenca persistida: o status escolhido sobrevive ao fechar o app.
+  status       PresenceStatus @default(ONLINE)
+  customStatus String?        @db.VarChar(128)
+
+  // 2FA
+  totpSecret  String?
+  totpEnabled Boolean  @default(false)
+  backupCodes String[] @default([])
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastSeenAt DateTime  @default(now())
+  disabledAt DateTime?
+
+  sessions          Session[]
+  linkedAccounts    LinkedAccount[]
+  ownedGuilds       Guild[]               @relation("GuildOwner")
+  memberships       GuildMember[]
+  messages          Message[]
+  reactions         Reaction[]
+  invites           Invite[]
+  sentRelations     Relationship[]        @relation("RelationRequester")
+  receivedRelations Relationship[]        @relation("RelationAddressee")
+  readStates        ReadState[]
+  channelRecipients ChannelRecipient[]
+  voiceState        VoiceState?
+  createdEmojis     Emoji[]
+  createdStickers   Sticker[]
+  createdSounds     SoundboardSound[]
+  ownedChannels     Channel[]             @relation("ChannelOwner")
+  attachments       Attachment[]
+  guildSettings     UserGuildSettings[]
+  channelSettings   UserChannelSettings[]
+  auditEntries      AuditLogEntry[]
+
+  @@index([username])
+  @@index([lastSeenAt])
+}
+
+enum AuthProvider {
+  GOOGLE
+}
+
+/**
+ * Uma conta de outro provedor ligada a uma conta do Kiroshi.
+ * Tabela em vez de uma coluna `googleId` porque o vinculo tem estado proprio
+ * — quando foi feito, com qual email — e porque um segundo provedor nao
+ * deveria exigir migrar o formato de novo.
+ * O par (provider, providerId) e unico: uma conta do Google nao pode abrir
+ * duas contas do Kiroshi. O par (userId, provider) tambem: ninguem pluga dois
+ * Googles na mesma conta, o que deixaria ambiguo qual deles vale.
+ * O email fica guardado so para mostrar "vinculado a fulano@gmail.com" na
+ * tela. NUNCA e usado para encontrar a conta: o email do Kiroshi nao e
+ * verificado, entao casar por email deixaria qualquer pessoa reivindicar a
+ * conta de quem tivesse registrado com o email dela.
+ */
+model LinkedAccount {
+  id         String       @id
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   AuthProvider
+  /**
+   * O identificador estavel do provedor: no Google, o `sub`.
+   */
+  providerId String
+  /**
+   * So para exibicao. Ver o comentario acima.
+   */
+  email      String?      @db.VarChar(254)
+  linkedAt   DateTime     @default(now())
+
+  @@unique([provider, providerId])
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model Session {
+  id               String   @id
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String   @unique
+  userAgent        String?  @db.VarChar(300)
+  ipAddress        String?  @db.VarChar(64)
+  createdAt        DateTime @default(now())
+  lastUsedAt       DateTime @default(now())
+  expiresAt        DateTime
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum RelationshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+model Relationship {
+  id          String             @id
+  requesterId String
+  requester   User               @relation("RelationRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User               @relation("RelationAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      RelationshipStatus
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  // Um par de usuarios tem no maximo uma relacao; o bloqueio e direcional e
+  // fica gravado no par ordenado (requester bloqueia addressee).
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Servidores
+// ---------------------------------------------------------------------------
+
+model Guild {
+  id              String   @id
+  name            String   @db.VarChar(100)
+  description     String?  @db.VarChar(300)
+  iconUrl         String?
+  bannerUrl       String?
+  ownerId         String
+  owner           User     @relation("GuildOwner", fields: [ownerId], references: [id])
+  systemChannelId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  channels    Channel[]
+  roles       Role[]
+  members     GuildMember[]
+  invites     Invite[]
+  emojis      Emoji[]
+  stickers    Sticker[]
+  sounds      SoundboardSound[]
+  bans        GuildBan[]
+  voiceStates VoiceState[]
+  settings    UserGuildSettings[]
+  auditLog    AuditLogEntry[]
+
+  @@index([ownerId])
+}
+
+model Role {
+  id          String  @id
+  guildId     String
+  guild       Guild   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name        String  @db.VarChar(100)
+  color       String? @db.VarChar(7)
+  position    Int     @default(0)
+  permissions BigInt  @default(0)
+  hoist       Boolean @default(false)
+  mentionable Boolean @default(false)
+  // Cargo everyone e cargos de bot: nao podem ser apagados.
+  managed     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  members MemberRole[]
+
+  @@index([guildId, position])
+}
+
+model GuildMember {
+  guildId        String
+  guild          Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname       String?  @db.VarChar(32)
+  joinedAt       DateTime @default(now())
+  serverMuted    Boolean  @default(false)
+  serverDeafened Boolean  @default(false)
+
+  roles MemberRole[]
+
+  @@id([guildId, userId])
+  @@index([userId])
+}
+
+model MemberRole {
+  guildId String
+  userId  String
+  roleId  String
+  member  GuildMember @relation(fields: [guildId, userId], references: [guildId, userId], onDelete: Cascade)
+  role    Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, userId, roleId])
+  @@index([roleId])
+}
+
+model GuildBan {
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  userId    String
+  reason    String?  @db.VarChar(512)
+  bannedBy  String
+  createdAt DateTime @default(now())
+
+  @@id([guildId, userId])
+}
+
+// ---------------------------------------------------------------------------
+// Canais
+// ---------------------------------------------------------------------------
+
+enum ChannelType {
+  GUILD_CATEGORY
+  GUILD_TEXT
+  GUILD_VOICE
+  GUILD_ANNOUNCEMENT
+  DM
+  GROUP_DM
+}
+
+model Channel {
+  id               String      @id
+  type             ChannelType
+  guildId          String?
+  guild            Guild?      @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name             String?     @db.VarChar(100)
+  topic            String?     @db.VarChar(1024)
+  position         Int         @default(0)
+  parentId         String?
+  parent           Channel?    @relation("ChannelParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children         Channel[]   @relation("ChannelParent")
+  nsfw             Boolean     @default(false)
+  rateLimitPerUser Int         @default(0)
+
+  // Somente canais de voz.
+  bitrate   Int?
+  userLimit Int?
+
+  // Somente DM e GROUP_DM.
+  ownerId String?
+  owner   User?   @relation("ChannelOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  iconUrl String?
+
+  lastMessageId String?
+  lastPinAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  overwrites  PermissionOverwrite[]
+  messages    Message[]
+  recipients  ChannelRecipient[]
+  invites     Invite[]
+  readStates  ReadState[]
+  voiceStates VoiceState[]
+  settings    UserChannelSettings[]
+
+  @@index([guildId, position])
+  @@index([parentId])
+}
+
+model ChannelRecipient {
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+  // Fechar a DM some com ela da barra lateral sem apagar o historico.
+  closed    Boolean  @default(false)
+
+  @@id([channelId, userId])
+  @@index([userId, closed])
+}
+
+enum OverwriteTargetType {
+  ROLE
+  MEMBER
+}
+
+model PermissionOverwrite {
+  channelId  String
+  channel    Channel             @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  targetId   String
+  targetType OverwriteTargetType
+  allow      BigInt              @default(0)
+  deny       BigInt              @default(0)
+
+  @@id([channelId, targetId])
+  @@index([channelId])
+}
+
+// ---------------------------------------------------------------------------
+// Mensagens
+// ---------------------------------------------------------------------------
+
+enum MessageType {
+  DEFAULT
+  REPLY
+  USER_JOIN
+  PINNED_MESSAGE
+  CALL
+}
+
+model Message {
+  id        String      @id
+  channelId String
+  channel   Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  guildId   String?
+  authorId  String
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String      @db.VarChar(4000)
+  type      MessageType @default(DEFAULT)
+
+  replyToId String?
+  replyTo   Message?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReply")
+
+  mentionedUserIds Json    @default("[]")
+  mentionedRoleIds Json    @default("[]")
+  mentionsEveryone Boolean @default(false)
+
+  embeds Json @default("[]")
+
+  pinned    Boolean   @default(false)
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  attachments Attachment[]
+  reactions   Reaction[]
+  stickerId   String?
+  sticker     Sticker?     @relation(fields: [stickerId], references: [id], onDelete: SetNull)
+
+  // Busca de historico e sempre "deste canal, antes deste id, nao apagadas".
+  @@index([channelId, deletedAt, id(sort: Desc)])
+  @@index([authorId])
+  @@index([channelId, pinned])
+}
+
+model Attachment {
+  id           String   @id
+  messageId    String?
+  message      Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploaderId   String
+  uploader     User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  filename     String   @db.VarChar(255)
+  storageKey   String   @unique
+  size         Int
+  contentType  String?  @db.VarChar(128)
+  width        Int?
+  height       Int?
+  // Miniatura 16x16 em webp, embutida como data URI. Ja passou de 64
+  // caracteres com a imagem mais simples possivel: o limite antigo fazia
+  // TODO envio de imagem falhar. O tamanho e limitado pela geracao, nao
+  // precisa de teto na coluna.
+  placeholder  String?  @db.Text
+  durationSecs Float?
+  waveform     String?
+  createdAt    DateTime @default(now())
+
+  @@index([messageId])
+  // Uploads sem mensagem sao limpos por um job periodico.
+  @@index([messageId, createdAt])
+}
+
+model Reaction {
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Emoji unicode, ou null quando for customizado.
+  emoji     String?  @db.VarChar(64)
+  emojiId   String?
+  emojiRef  Emoji?   @relation(fields: [emojiId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // Chave composta com COALESCE nao existe no Prisma; usamos uma coluna
+  // derivada estavel para garantir uma reacao por usuario por emoji.
+  emojiKey String @db.VarChar(64)
+
+  @@id([messageId, userId, emojiKey])
+  @@index([messageId])
+}
+
+// ---------------------------------------------------------------------------
+// Expressoes
+// ---------------------------------------------------------------------------
+
+model Emoji {
+  id        String   @id
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(32)
+  url       String
+  animated  Boolean  @default(false)
+  creatorId String?
+  creator   User?    @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  reactions Reaction[]
+
+  @@unique([guildId, name])
+  @@index([guildId])
+}
+
+model Sticker {
+  id          String   @id
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name        String   @db.VarChar(30)
+  description String?  @db.VarChar(100)
+  tags        String   @default("") @db.VarChar(200)
+  url         String
+  creatorId   String?
+  creator     User?    @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  messages Message[]
+
+  @@unique([guildId, name])
+  @@index([guildId])
+}
+
+model SoundboardSound {
+  id           String   @id
+  guildId      String
+  guild        Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name         String   @db.VarChar(32)
+  url          String
+  emoji        String?  @db.VarChar(64)
+  volume       Float    @default(1)
+  durationSecs Float    @default(0)
+  creatorId    String?
+  creator      User?    @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@unique([guildId, name])
+  @@index([guildId])
+}
+
+// ---------------------------------------------------------------------------
+// Convites
+// ---------------------------------------------------------------------------
+
+model Invite {
+  code      String    @id @db.VarChar(12)
+  guildId   String
+  guild     Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String?
+  channel   Channel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  inviterId String
+  inviter   User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  uses      Int       @default(0)
+  maxUses   Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([guildId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Voz
+// ---------------------------------------------------------------------------
+
+model VoiceState {
+  // Um usuario esta em no maximo um canal de voz por vez.
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guildId    String?
+  guild      Guild?   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId  String
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sessionId  String
+  selfMute   Boolean  @default(false)
+  selfDeaf   Boolean  @default(false)
+  serverMute Boolean  @default(false)
+  serverDeaf Boolean  @default(false)
+  selfVideo  Boolean  @default(false)
+  selfStream Boolean  @default(false)
+  joinedAt   DateTime @default(now())
+
+  @@index([channelId])
+  @@index([guildId])
+}
+
+// ---------------------------------------------------------------------------
+// Estado de leitura e preferencias
+// ---------------------------------------------------------------------------
+
+model ReadState {
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId         String
+  channel           Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  lastReadMessageId String?
+  mentionCount      Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  @@id([userId, channelId])
+  @@index([userId])
+}
+
+enum NotificationLevel {
+  ALL
+  MENTIONS
+  NOTHING
+}
+
+model UserGuildSettings {
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guildId           String
+  guild             Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  muted             Boolean           @default(false)
+  notificationLevel NotificationLevel @default(ALL)
+
+  @@id([userId, guildId])
+}
+
+model UserChannelSettings {
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId         String
+  channel           Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  muted             Boolean            @default(false)
+  notificationLevel NotificationLevel?
+
+  @@id([userId, channelId])
+}
+
+// ---------------------------------------------------------------------------
+// Auditoria
+// ---------------------------------------------------------------------------
+
+model AuditLogEntry {
+  id        String   @id
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  action    String   @db.VarChar(64)
+  targetId  String?
+  changes   Json     @default("{}")
+  reason    String?  @db.VarChar(512)
+  createdAt DateTime @default(now())
+
+  @@index([guildId, id(sort: Desc)])
+}

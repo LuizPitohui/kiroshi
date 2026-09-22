@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "order-ui",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js",
+        "--config",
+        "packages/desktop/vite.web.config.ts",
+        "--port",
+        "5273"
+      ],
+      "port": 5273
+    }
+  ]
+}

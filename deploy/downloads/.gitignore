@@ -1,0 +1,4 @@
+# Os instaladores sao enviados pelo deploy, nao versionados: 82 MB por versao
+# encheriam o repositorio sem necessidade.
+*.exe
+*.blockmap

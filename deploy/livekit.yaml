@@ -1,0 +1,106 @@
+# Configuracao do SFU.
+#
+# O ponto delicado aqui e o caminho da midia. O servidor esta atras de NAT sem
+# redirecionamento de portas IPv4, mas tem IPv6 publico alcancavel (testado).
+# Entao a midia anda por IPv6 direto, e o resto (sinalizacao) vai pelo tunel.
+
+port: 7880
+
+rtc:
+  # Uma porta UDP so para toda a midia, em vez de uma faixa. Com faixa seria
+  # preciso liberar centenas de portas; com porta unica o LiveKit multiplexa
+  # todas as conexoes e basta um caminho aberto.
+  udp_port: 7881
+
+  # TCP na mesma ideia, para quem estiver em rede que bloqueia UDP.
+  tcp_port: 7882
+
+  # Sem STUN: os enderecos anunciados sao os das interfaces filtradas abaixo,
+  # e todos eles sao alcancaveis por alguem. Ligar `use_external_ip` fez o
+  # LiveKit descobrir o IPv4 publico por STUN e descarta-lo em seguida — ele
+  # valida o endereco tentando receber um pacote de volta, e o CGNAT bloqueia
+  # exatamente isso.
+  use_external_ip: false
+
+  #
+  # `node_ip` NAO e usado de proposito.
+  #
+  # Ele aceita um endereco so, e aqui existem dois caminhos validos que servem
+  # publicos diferentes: o IPv6 publico, para quem tem IPv6, e o endereco da
+  # rede virtual, para quem nao tem. Fixar um deles deixaria o outro grupo sem
+  # voz — foi o que aconteceu com quem acessava dos Estados Unidos por IPv4.
+  #
+  # Sem `node_ip`, o LiveKit enumera as interfaces de `interfaces.includes` e
+  # anuncia todas, deixando o ICE escolher o caminho que cada cliente alcanca.
+  #
+
+  # Atras de NAT o proprio LiveKit nao descobre o endereco publico sozinho.
+  enable_loopback_candidate: false
+
+  # So a interface fisica da maquina.
+  #
+  # Isto e essencial e nao e um detalhe de ajuste fino. O container roda com a
+  # rede do host, entao o LiveKit enxerga toda ponte de docker do servidor —
+  # e esta maquina tem mais de dez, das outras aplicacoes que rodam nela. Sem
+  # filtro, ele anunciava 18 candidatos ICE, quase todos enderecos 172.x que
+  # nenhum cliente alcanca.
+  #
+  # O efeito nao era so ruido: o navegador testa os candidatos em paralelo mas
+  # espera cada um falhar, e com tantos endereços mortos a negociacao estourava
+  # o prazo antes de chegar no IPv6 que funciona. Camera e compartilhamento de
+  # tela falhavam com "negotiation timed out"; o audio passava porque e
+  # publicado na entrada, quando ha menos disputa.
+  #
+  # Com o filtro sobram poucos candidatos e o ICE resolve em milissegundos.
+  #
+  # Duas interfaces, servindo publicos diferentes:
+  #
+  #   fisica   IPv6 publico, o caminho direto e mais rapido. Serve quem tem
+  #            IPv6, que e a maioria em fibra no Brasil. (Tambem traz o IPv4
+  #            da rede local, util so para quem esta na mesma casa.)
+  #
+  #   virtual  endereco da rede Tailscale, alcancavel por qualquer um que
+  #            entre nela. E o unico caminho para quem nao tem IPv6: o IPv4
+  #            desta maquina esta atras de CGNAT e nao aceita conexao de fora.
+  #
+  # Nao e "ou um ou outro": os dois sao anunciados, e cada cliente usa o que
+  # consegue alcancar. Quem tem IPv6 nem encosta na rede virtual.
+  interfaces:
+    includes:
+      - ${LIVEKIT_INTERFACE}
+      - ${LIVEKIT_VPN_INTERFACE}
+
+# As chaves sao geradas no deploy e ficam no .env, nunca no git.
+keys:
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+
+room:
+  # Sala sem ninguem e apagada: para 10 pessoas nao faz sentido manter estado.
+  empty_timeout: 60
+  departure_timeout: 20
+  max_participants: 25
+  # Entrar em uma sala que nao existe cria a sala. Evita um passo de API antes
+  # de cada chamada.
+  auto_create: true
+
+audio:
+  # Limiar para considerar que alguem esta falando, em dB.
+  active_level: 35
+  min_percentile: 40
+  update_interval: 400
+  smooth_intervals: 4
+
+video:
+  # Se a conexao de quem envia piora, derruba a camada de qualidade em vez de
+  # travar a imagem.
+  dynacast_pause_delay: 5s
+
+logging:
+  level: info
+  json: false
+
+# Sem limite artificial de banda: a rede local e boa e o gargalo real e o
+# upload de quem transmite.
+limit:
+  num_tracks: -1
+  bytes_per_sec: 0

@@ -1,0 +1,3273 @@
+/*
+  Kiroshi — sistema visual.
+
+  A referencia e instrumento optico, nao aplicativo de escritorio: fundo
+  grafite azulado, ciano como assinatura, informacao tecnica em monoespacada.
+  Quatro decisoes guiam o resto:
+
+  1. Clareza antes de efeito. A ordem de decisao e clareza, funcionamento,
+     consistencia, identidade, efeito — nessa ordem. Um detalhe cyberpunk que
+     atrapalhe leitura ou navegacao e simplificado ou removido.
+
+  2. O ciano e sinal, nao decoracao. Ele marca o que esta ativo, o que exige
+     atencao e as bordas que delimitam. Se estiver em tudo, nao marca nada.
+
+  3. Peso pela luz. Em vez de sombra pesada, a hierarquia vem do quanto cada
+     superficie e mais clara que o fundo, e de um brilho baixo no que esta em
+     foco. Sombra some em tela escura; luminosidade nao.
+
+  4. Geometria com significado. Hexagono e comunidade, circulo e pessoa,
+     retangulo arredondado e conteudo. A forma separa o que a cor sozinha
+     nao separaria — e continua separando para quem nao distingue cores.
+
+  O canto vivo saiu. Ele era a primeira decisao deste arquivo e sustentava a
+  ideia de "equipamento", mas custava legibilidade em cartao e campo, e a
+  direcao nova troca 2px por uma familia de tres raios.
+*/
+
+/*
+  Inter e JetBrains Mono, empacotadas no executavel.
+
+  `font-display: swap` de proposito: a fonte vem do disco, entao a troca e
+  imperceptivel, e no pior caso o texto aparece com a fonte do sistema em vez
+  de ficar invisivel esperando.
+*/
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fontes/inter-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fontes/inter-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fontes/inter-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fontes/inter-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fontes/jetbrains-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fontes/jetbrains-500.woff2') format('woff2');
+}
+
+/*
+  ==========================================================================
+  TOKENS SEMANTICOS
+
+  Esta e a fonte da verdade do sistema visual. Nenhum componente deve escrever
+  uma cor, um raio ou uma duracao direto no CSS: se um valor nao existe aqui,
+  ele precisa existir aqui antes de ser usado.
+
+  Abaixo do bloco semantico vem os nomes antigos (`--void`, `--optic`,
+  `--text-dim`...), agora apontando para estes. Sao mais de duas mil linhas de
+  CSS escritas com aqueles nomes; reescrever todas de uma vez para trocar a
+  paleta seria arriscado sem ganho nenhum. O alias faz a interface inteira
+  adotar as cores novas de imediato, e cada arquivo migra para os nomes
+  semanticos quando for mexido.
+
+  CONTRASTE — medido, nao estimado. Todas as combinacoes de texto sobre as
+  quatro superficies passam em AA (4.5:1). Duas observacoes que o calculo
+  revelou e que valem regra:
+
+    `text.muted` sobre `bg.elevated` da 4.51 — passa por um centesimo. Em
+    superficie elevada, texto secundario deve subir para `text.secondary`.
+
+    `border.default` sobre o fundo da 1.72. Serve para separador decorativo,
+    mas esta abaixo dos 3:1 que a WCAG pede de contorno com significado. Por
+    isso existe `--border-forte`, para campo de formulario e foco.
+  ==========================================================================
+*/
+:root {
+  /* Superficies, do mais fundo ao mais alto */
+  --bg-canvas: #080c12;
+  --bg-sidebar: #0e151f;
+  --bg-surface: #151f2c;
+  --bg-elevated: #1d2a3a;
+
+  /* Contornos. O forte existe para o que carrega significado. */
+  --border-default: #2b3b4f;
+  --border-forte: #4a6076;
+
+  /* Texto */
+  --text-primary: #eef4ff;
+  --text-secondary: #a8b8cc;
+  --text-muted: #7f91a8;
+
+  /* Acentos */
+  --accent-primary: #20e0d0;
+  --accent-secondary: #8b7cff;
+
+  /* Estados */
+  --status-success: #45d69a;
+  --status-warning: #ffc568;
+  --status-danger: #ff687d;
+
+  /*
+    Raios.
+
+    Sai do canto quase vivo (2px) para uma forma mais macia, como a
+    especificacao pede. Tres degraus, e nao um so: um contador de mencoes com
+    12px de raio vira uma bolha disforme, e um cartao com 6px parece um erro.
+  */
+  --r-sm: 6px;
+  --r-control: 8px;
+  --r-card: 12px;
+  --r-pill: 999px;
+
+  /* --- nomes antigos, apontando para os novos --- */
+  --void: var(--bg-canvas);
+  --panel: var(--bg-sidebar);
+  --raised: var(--bg-surface);
+  --hover: #18242f;
+  --active: var(--bg-elevated);
+  --input: #0b1119;
+
+  /* Ciano optico: a cor do instrumento ligado */
+  --optic: var(--accent-primary);
+  --optic-bright: #5cf0e4;
+  --optic-dim: #12a89c;
+  --optic-wash: rgba(32, 224, 208, 0.1);
+  --optic-glow: rgba(32, 224, 208, 0.28);
+  /* Lavagem quase imperceptivel, para faixa alternada e realce de leitura. */
+  --optic-wash-fraco: rgba(32, 224, 208, 0.03);
+
+  /* Ambar: foco, aviso, o unico calor da paleta */
+  --amber: var(--status-warning);
+  --amber-wash: rgba(255, 197, 104, 0.12);
+
+  /* Vermelho: ao vivo, perigo, desconectar */
+  --red: var(--status-danger);
+  --red-wash: rgba(255, 104, 125, 0.12);
+
+  /* Presenca */
+  --on: var(--status-success);
+  --away: var(--status-warning);
+  --busy: var(--status-danger);
+  --off: #5a6d84;
+
+  /* Texto */
+  --text: var(--text-primary);
+  --text-dim: var(--text-secondary);
+  --text-faint: var(--text-muted);
+  --text-ghost: #56677e;
+  --link: var(--accent-primary);
+
+  /* Linhas */
+  --line: var(--border-default);
+  --line-soft: rgba(43, 59, 79, 0.55);
+  --line-strong: var(--border-forte);
+
+  /*
+    Medidas da estrutura.
+
+    Sao pontos de partida da especificacao, nao limites rigidos. A barra global
+    e a navegacao contextual ficam separadas: custa 72px de largura que antes
+    voltavam para a conversa, e paga isso deixando evidente, sempre, em que
+    servidor e em que canal a pessoa esta.
+  */
+  --rail-w: 72px;
+  --nav-w: 256px;
+  --nav-w-min: 224px;
+  --nav-w-max: 320px;
+  --head-h: 64px;
+  --panel-w: 320px;
+  --presence-w: 224px;
+  /* A conversa do canal de voz e mais larga que a lista de membros: ali se le
+     texto corrido, nao uma coluna de nomes. */
+  --chat-lateral-w: var(--panel-w);
+  --titlebar-h: 34px;
+  --hud-h: 64px;
+
+  /* Raios antigos, apontando para os novos degraus. */
+  --r: var(--r-sm);
+  --r-md: var(--r-control);
+
+  /*
+    Movimento.
+
+    Um so par de duracoes para o sistema inteiro: 120ms para resposta a toque
+    (cor, realce, aparecer) e 220ms para mudanca de forma (tamanho, posicao,
+    um painel abrindo). Duracoes escolhidas caso a caso fazem a interface
+    parecer montada por pessoas diferentes.
+
+    A curva sai rapido e freia no fim. Nada de "ease" puro, que comeca devagar
+    e da a impressao de atraso antes de qualquer coisa acontecer.
+  */
+  --mov: 120ms;
+  --mov-lenta: 220ms;
+  --curva: cubic-bezier(0.2, 0.8, 0.25, 1);
+
+  /*
+    Fontes empacotadas, nao as do sistema.
+
+    Antes o cromo usava Bahnschrift e o corpo usava Segoe UI, ambas do
+    Windows. Funcionava nesta maquina e so nesta: quem nao tivesse a fonte caia
+    num substituto qualquer, e a mesma tela ficava diferente em cada
+    computador do grupo. Nao da para ajustar densidade e altura de linha sobre
+    uma base que muda.
+
+    Inter para tudo que se le, JetBrains Mono para dado tecnico — atalho,
+    latencia, identificador. Sao 144 KB dentro do executavel, sem rede: o
+    aplicativo abre igual offline.
+
+    A monoespacada nao entra em paragrafo nem em conversa. Ela e para numero
+    que se compara e texto que se digita igual.
+  */
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'Consolas', monospace;
+
+  /*
+    Escala de texto.
+
+    O corpo da mensagem e o unico texto que se le por minutos seguidos, entao
+    ele e o maior: 15px. O cromo fica em 14px e o dado tecnico em 12px, onde
+    a monoespacada ainda e legivel sem roubar espaco.
+  */
+  --t-mensagem: 15px;
+  --t-corpo: 14px;
+  --t-pequeno: 13px;
+  --t-tecnico: 12px;
+  --t-titulo: 20px;
+  --t-titulo-g: 28px;
+
+  color-scheme: dark;
+}
+
+/*
+  Tema claro. Mantem a mesma gramatica — linhas finas, canto vivo, ciano como
+  sinal — mas invertida. O ciano escurece para nao vibrar sobre branco.
+*/
+:root[data-theme='light'] {
+  /*
+    Os nomes SEMANTICOS vem primeiro, e os antigos logo abaixo.
+
+    Sem este bloco o tema claro ficava pela metade: ele redefinia so os nomes
+    antigos, entao qualquer componente escrito com os nomes novos continuaria
+    com a superficie escura sobre um fundo claro — texto branco em cartao
+    branco. O alias resolve o sentido escuro (antigo aponta para novo), nao o
+    contrario.
+
+    O ciano escurece bastante aqui: #20e0d0 sobre branco da 1.6:1 e some. O
+    tom usado da 4.6:1 contra a superficie clara.
+  */
+  --bg-canvas: #e8ecf0;
+  --bg-sidebar: #f2f5f8;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+
+  --border-default: #c9d4de;
+  --border-forte: #7a8896;
+
+  --text-primary: #16202b;
+  --text-secondary: #4a5a6b;
+  --text-muted: #5d6c7c;
+
+  --accent-primary: #007771;
+  --accent-secondary: #5b48d6;
+
+  --status-success: #007771;
+  --status-warning: #8a5600;
+  --status-danger: #c62334;
+
+  --void: #e8ecf0;
+  --panel: #f2f5f8;
+  --raised: #ffffff;
+  --hover: #e9eef3;
+  --active: #dde5ec;
+  --input: #ffffff;
+
+  --optic: #00897b;
+  --optic-bright: #00a896;
+  --optic-dim: #006b60;
+  --optic-wash: rgba(0, 137, 123, 0.08);
+  --optic-glow: rgba(0, 137, 123, 0.18);
+
+  --amber: #b87400;
+  --amber-wash: rgba(184, 116, 0, 0.1);
+
+  --red: #d32f3d;
+  --red-wash: rgba(211, 47, 61, 0.1);
+
+  --on: #00897b;
+  --away: #b87400;
+  --busy: #d32f3d;
+  --off: #93a4b8;
+
+  --text: #16202b;
+  --text-dim: #4a5a6b;
+  --text-faint: #75869a;
+  --text-ghost: #a3b2c1;
+  --link: #00695c;
+
+  --line: rgba(0, 137, 123, 0.16);
+  --line-soft: rgba(30, 50, 70, 0.1);
+  --line-strong: rgba(0, 137, 123, 0.34);
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--void);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+.selectable,
+.msg-text,
+input,
+textarea {
+  user-select: text;
+  cursor: auto;
+}
+
+button {
+  font: inherit;
+  font-family: var(--font-ui);
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 1px solid var(--optic);
+  outline-offset: 1px;
+}
+
+input,
+textarea,
+select {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--input);
+  /*
+    Borda forte, e nao `--line-soft`.
+
+    O contorno de um campo carrega significado — diz onde se pode escrever —
+    e a WCAG pede 3:1 para isso. O separador padrao da 1.72 contra o fundo:
+    serve para dividir areas, nao para delimitar um controle.
+  */
+  border: 1px solid var(--border-forte);
+  border-radius: var(--r-control);
+  padding: 9px 11px;
+  width: 100%;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--optic);
+  box-shadow: 0 0 0 1px var(--optic-wash);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-ghost);
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Rotulo tecnico: aparece em cabecalho de secao e em qualquer lugar que
+   precise soar como etiqueta de equipamento, nao como titulo de documento. */
+.label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Numero, tempo, contagem: tudo que e medida usa monoespacada, para nao
+   dancar quando o valor muda. */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--active);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--optic-dim);
+}
+
+/* ==========================================================================
+   Estrutura
+   ========================================================================== */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--void);
+}
+
+.app-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  gap: 1px;
+  background: var(--line-soft);
+  /* A coluna de membros sai pela direita com margem negativa quando fecha; sem
+     cortar aqui, ela criaria barra de rolagem horizontal na janela. */
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Aviso de atualizacao
+
+   Uma faixa fina no topo, acima de tudo. Nao e modal e nao bloqueia nada: a
+   versao nova ja esta baixada e entra sozinha no proximo fechamento, entao o
+   aviso e uma oferta de atalho, nao uma exigencia.
+   -------------------------------------------------------------------------- */
+
+.atualizacao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  /* Ambar e a cor de aviso da paleta: chama atencao sem o alarme do vermelho,
+     que aqui esta reservado para ao vivo e desconectar. */
+  background: var(--amber-wash);
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font-size: 13px;
+  /* Nao encolhe: entre a barra de titulo e o corpo, que e quem cede espaco. */
+  flex: none;
+}
+
+.atualizacao-texto {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atualizacao-acao,
+.atualizacao-depois {
+  border: none;
+  border-radius: var(--r-md);
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+
+.atualizacao-acao {
+  background: var(--amber);
+  color: var(--void);
+}
+
+.atualizacao-depois {
+  background: transparent;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.atualizacao-depois:hover {
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------------------
+   Barra de titulo
+   -------------------------------------------------------------------------- */
+
+.titlebar {
+  height: var(--titlebar-h);
+  background: var(--void);
+  display: flex;
+  align-items: center;
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.titlebar-mark {
+  /* Altura fixa, largura pela proporcao da marca (210 x 292): forcar um
+     quadrado aqui achataria o desenho. */
+  height: 15px;
+  width: auto;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.titlebar-context {
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  text-transform: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.titlebar-spacer {
+  flex: 1;
+}
+
+.titlebar-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+  height: 100%;
+}
+
+.titlebar-button {
+  width: 44px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  transition: background 0.1s, color 0.1s;
+}
+
+.titlebar-button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.titlebar-button.close:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.status-pill {
+  -webkit-app-region: no-drag;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border: 1px solid;
+  text-transform: uppercase;
+}
+
+.status-pill.warn {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: var(--amber-wash);
+}
+
+.status-pill.bad {
+  color: var(--red);
+  border-color: var(--red);
+  background: var(--red-wash);
+}
+
+/* --------------------------------------------------------------------------
+   Coluna de navegacao: servidores em cima, canais embaixo
+   -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+   Barra global: a coluna mais externa
+
+   So servidores e inicio. Fundo mais escuro que a navegacao contextual ao
+   lado, para as duas lerem como camadas diferentes e nao como uma coluna
+   larga dividida por uma linha.
+   -------------------------------------------------------------------------- */
+
+.rail {
+  width: var(--rail-w);
+  flex: none;
+  background: var(--bg-canvas);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  min-height: 0;
+}
+
+/* A lista rola; inicio e o botao de criar ficam ancorados nas pontas. */
+.rail-lista {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.rail-lista::-webkit-scrollbar {
+  display: none;
+}
+
+.rail-divider {
+  width: 28px;
+  height: 1px;
+  background: var(--border-default);
+  flex: none;
+  margin: 2px 0;
+}
+
+.rail-slot {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 48px;
+  cursor: pointer;
+}
+
+/*
+  O marcador do servidor ativo: um tracinho colado na borda esquerda.
+
+  Forma e posicao, nao so cor. Quem nao distingue o ciano do cinza continua
+  vendo QUAL servidor esta aberto, porque a marca existe ou nao existe — e
+  isso e o que a especificacao pede em "identificado por forma, posicao ou
+  marcador lateral, nao somente pela cor".
+*/
+.rail-slot::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 3px;
+  height: 0;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--text-primary);
+  transition: height var(--mov) var(--curva);
+}
+
+.rail-slot.unread::before {
+  height: 8px;
+}
+
+.rail-slot.active::before {
+  height: 24px;
+}
+
+.rail-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: none;
+  cursor: pointer;
+  transition: background var(--mov), color var(--mov), clip-path var(--mov);
+}
+
+.rail-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/*
+  Hexagono para servidor, circulo para o resto.
+
+  A geometria separa comunidade de acao: o hexagono e da marca e diz
+  "isto e um lugar onde ha gente". Inicio e criar nao sao lugares.
+*/
+.rail-server {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.rail-home,
+.rail-add {
+  border-radius: var(--r-card);
+}
+
+.rail-slot:hover .rail-btn {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.rail-slot.active .rail-btn {
+  background: var(--optic-wash);
+  color: var(--accent-primary);
+}
+
+.rail-add {
+  background: transparent;
+  border: 1px dashed var(--border-default);
+  color: var(--text-muted);
+}
+
+.rail-badge {
+  position: absolute;
+  top: 2px;
+  right: 10px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  background: var(--status-danger);
+  color: var(--bg-canvas);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--bg-canvas);
+  z-index: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Navegacao contextual
+   -------------------------------------------------------------------------- */
+
+.nav {
+  width: var(--nav-w);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+/* ---- Cabecalho do servidor ---- */
+
+.nav-header {
+  /* Cabecalho de 64px, como o da area de conteudo ao lado: as duas alturas
+     alinham e a tela ganha uma linha horizontal continua no topo. */
+  height: var(--head-h);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.nav-header:hover {
+  background: var(--hover);
+}
+
+.nav-header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 8px 16px;
+  min-height: 0;
+}
+
+/* ---- Categorias e canais ---- */
+
+.category {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 14px 4px 5px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+}
+
+.category:hover {
+  color: var(--text-dim);
+}
+
+.category .chevron {
+  transition: transform 0.12s;
+}
+
+.category.collapsed .chevron {
+  transform: rotate(-90deg);
+}
+
+.channel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  margin-bottom: 1px;
+  border-radius: var(--r);
+  color: var(--text-faint);
+  font-size: 14px;
+  position: relative;
+  border-left: 2px solid transparent;
+}
+
+.channel:hover {
+  background: var(--hover);
+  color: var(--text-dim);
+}
+
+.channel.active {
+  background: var(--optic-wash);
+  border-left-color: var(--optic);
+  color: var(--text);
+}
+
+.channel.unread {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.channel.unread::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 14px;
+  background: var(--text);
+}
+
+.channel-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.channel-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-ghost);
+}
+
+.channel-badge {
+  min-width: 16px;
+  height: 15px;
+  padding: 0 4px;
+  background: var(--red);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.channel-action {
+  opacity: 0;
+  color: var(--text-ghost);
+  display: grid;
+  place-items: center;
+  padding: 2px;
+}
+
+.channel:hover .channel-action,
+.category:hover .channel-action {
+  opacity: 1;
+}
+
+.channel-action:hover {
+  color: var(--optic);
+}
+
+/* ---- Pessoas dentro do canal de voz ---- */
+
+.voice-roster {
+  padding-left: 16px;
+  margin: 2px 0 6px;
+  border-left: 1px solid var(--line);
+  margin-left: 12px;
+}
+
+.voice-person {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px;
+  font-size: 13px;
+  color: var(--text-faint);
+  border-radius: var(--r);
+}
+
+.voice-person:hover {
+  background: var(--hover);
+}
+
+.voice-person-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-person-icons {
+  display: flex;
+  gap: 3px;
+  color: var(--text-ghost);
+}
+
+.voice-person-icons .muted {
+  color: var(--red);
+}
+
+/* O anel de fala nasce transparente para nao mexer no layout ao acender */
+.speaking-ring {
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow 0.08s ease-out;
+}
+
+.voice-person.speaking .speaking-ring {
+  box-shadow: 0 0 0 2px var(--optic), 0 0 8px var(--optic-glow);
+}
+
+/* --------------------------------------------------------------------------
+   Barra inferior: identidade, controles de voz e telemetria
+   -------------------------------------------------------------------------- */
+
+.hud {
+  height: var(--hud-h);
+  background: var(--void);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.hud-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px 5px 5px;
+  border-radius: var(--r);
+  min-width: 168px;
+  max-width: 220px;
+  cursor: pointer;
+}
+
+.hud-identity:hover {
+  background: var(--hover);
+}
+
+.hud-identity-text {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.hud-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Reconectando fica em ambar e pulsando: e um estado temporario que a pessoa
+   precisa notar sem que pareca erro definitivo. */
+.hud-sub.reconectando {
+  color: var(--amber);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.hud-divider {
+  width: 1px;
+  height: 26px;
+  background: var(--line);
+  flex-shrink: 0;
+}
+
+.hud-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hud-spacer {
+  flex: 1;
+}
+
+
+/* Telemetria: latencia e qualidade, sempre no mesmo lugar, sempre em
+   monoespacada, para dar para ler de relance sem procurar. */
+.hud-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-right: 4px;
+}
+
+.hud-metric {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-metric-value {
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: right;
+}
+
+/* Barras de qualidade, estilo medidor de sinal */
+.signal {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.signal span {
+  width: 3px;
+  background: var(--text-ghost);
+  transition: background 0.2s;
+}
+
+.signal span:nth-child(1) { height: 4px; }
+.signal span:nth-child(2) { height: 7px; }
+.signal span:nth-child(3) { height: 10px; }
+.signal span:nth-child(4) { height: 12px; }
+
+.signal.good span:nth-child(-n + 4) { background: var(--optic); }
+.signal.ok span:nth-child(-n + 3) { background: var(--amber); }
+.signal.bad span:nth-child(-n + 1) { background: var(--red); }
+
+/* Botao de acao do HUD e de barras em geral */
+.act {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  flex-shrink: 0;
+}
+
+.act:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.act.on {
+  color: var(--optic);
+  border-color: var(--line-strong);
+  background: var(--optic-wash);
+}
+
+.act.off {
+  color: var(--red);
+  border-color: var(--red);
+  background: var(--red-wash);
+}
+
+.act.live {
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.act.danger:hover {
+  color: var(--red);
+  border-color: var(--red);
+  background: var(--red-wash);
+}
+
+.act:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   Avatares
+   -------------------------------------------------------------------------- */
+
+.avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.avatar img,
+.avatar-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.presence {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+}
+
+.presence.ONLINE { background: var(--on); }
+.presence.IDLE { background: var(--away); }
+.presence.DND { background: var(--busy); }
+.presence.OFFLINE { background: var(--off); }
+
+/* --------------------------------------------------------------------------
+   Area central: palco e conversa empilhados
+   -------------------------------------------------------------------------- */
+
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--void);
+}
+
+.chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--void);
+  min-height: 0;
+  min-width: 0;
+}
+
+.chat-head {
+  /* Mesma altura do cabecalho da navegacao, para alinharem. */
+  height: var(--head-h);
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.chat-title {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.chat-topic {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 10px;
+  margin-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.chat-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 12px;
+  min-height: 0;
+}
+
+.messages-intro {
+  padding: 28px 16px 14px;
+}
+
+.messages-intro h2 {
+  font-family: var(--font-ui);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-bottom: 6px;
+}
+
+.messages-intro p {
+  color: var(--text-faint);
+  font-size: 14px;
+}
+
+/* ---- Mensagem ---- */
+
+.msg {
+  position: relative;
+  padding: 2px 46px 2px 14px;
+  display: flex;
+  gap: 12px;
+}
+
+.msg:hover {
+  background: var(--optic-wash-fraco);
+}
+
+.msg.pinged {
+  background: var(--amber-wash);
+  box-shadow: inset 2px 0 0 var(--amber);
+}
+
+.msg.first {
+  margin-top: 14px;
+}
+
+.msg-gutter {
+  width: 36px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.msg-avatar {
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+}
+
+.msg-time-hover {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-ghost);
+  opacity: 0;
+  line-height: 21px;
+  white-space: nowrap;
+}
+
+.msg:hover .msg-time-hover {
+  opacity: 1;
+}
+
+.msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 1px;
+}
+
+.msg-author {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.msg-author:hover {
+  text-decoration: underline;
+}
+
+.msg-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-ghost);
+}
+
+.msg-edited {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-ghost);
+}
+
+.msg-text {
+  font-size: 14px;
+  line-height: 1.45;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.msg-text.big-emoji {
+  font-size: 36px;
+  line-height: 1.2;
+}
+
+.msg-text code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--input);
+  border: 1px solid var(--line-soft);
+  padding: 1px 4px;
+  border-radius: var(--r);
+}
+
+.msg-text pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--input);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--optic);
+  padding: 9px 11px;
+  margin: 5px 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.msg-text pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.msg-text blockquote {
+  border-left: 2px solid var(--optic-dim);
+  padding-left: 10px;
+  margin: 3px 0;
+  color: var(--text-dim);
+}
+
+.mention {
+  background: var(--optic-wash);
+  color: var(--optic-bright);
+  padding: 0 3px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mention:hover {
+  background: var(--optic);
+  color: var(--void);
+}
+
+.spoiler {
+  background: var(--active);
+  color: transparent;
+  cursor: pointer;
+  padding: 0 3px;
+}
+
+.spoiler.revealed {
+  background: var(--raised);
+  color: inherit;
+}
+
+.custom-emoji {
+  width: 20px;
+  height: 20px;
+  vertical-align: -0.32em;
+  object-fit: contain;
+}
+
+.big-emoji .custom-emoji {
+  width: 44px;
+  height: 44px;
+  vertical-align: -0.1em;
+}
+
+/* ---- Citacao ---- */
+
+.msg-reply {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+  cursor: pointer;
+}
+
+.msg-reply::before {
+  content: '';
+  width: 24px;
+  height: 8px;
+  border-left: 1px solid var(--line-strong);
+  border-top: 1px solid var(--line-strong);
+  margin-left: -30px;
+  margin-bottom: 7px;
+}
+
+.msg-reply-author {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.msg-reply-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 380px;
+}
+
+/* ---- Acoes da mensagem ---- */
+
+.msg-actions {
+  position: absolute;
+  top: -12px;
+  right: 14px;
+  display: none;
+  gap: 1px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  padding: 1px;
+}
+
+.msg:hover .msg-actions {
+  display: flex;
+}
+
+.msg-action {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.msg-action:hover {
+  background: var(--hover);
+  color: var(--optic);
+}
+
+.msg-action.danger:hover {
+  color: var(--red);
+}
+
+/* ---- Anexos ---- */
+
+.attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.att-image {
+  max-width: 480px;
+  max-height: 340px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  object-fit: contain;
+  align-self: flex-start;
+  background: var(--void);
+}
+
+.att-video {
+  max-width: 480px;
+  max-height: 340px;
+  border: 1px solid var(--line);
+}
+
+.att-file {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--optic);
+  max-width: 400px;
+}
+
+.att-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--link);
+  font-size: 13px;
+}
+
+.att-size {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ---- Cartao de link ---- */
+
+.embed {
+  display: flex;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--optic);
+  background: var(--raised);
+  padding: 9px 11px;
+  margin-top: 5px;
+  max-width: 440px;
+  gap: 10px;
+}
+
+.embed-site {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+
+.embed-title {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--link);
+  margin-bottom: 3px;
+}
+
+.embed-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.embed-thumb {
+  width: 68px;
+  height: 68px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.embed-image {
+  margin-top: 6px;
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+}
+
+/* ---- Reacoes ---- */
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.reaction {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px;
+  height: 22px;
+  background: var(--raised);
+  border: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.reaction:hover {
+  border-color: var(--line-strong);
+}
+
+.reaction.mine {
+  background: var(--optic-wash);
+  border-color: var(--optic);
+  color: var(--optic-bright);
+}
+
+.reaction img {
+  width: 15px;
+  height: 15px;
+}
+
+.reaction-add {
+  opacity: 0;
+}
+
+.msg:hover .reaction-add {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Caixa de escrita
+   -------------------------------------------------------------------------- */
+
+.composer-wrap {
+  /* O campo de envio e uma superficie propria. */
+  border-radius: var(--r-card);
+  padding: 0 14px 18px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.composer-reply {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  padding: 0 12px;
+  transition: border-color 0.12s;
+}
+
+.composer:focus-within {
+  border-color: var(--line-strong);
+}
+
+.composer textarea {
+  flex: 1;
+  background: none;
+  border: none;
+  resize: none;
+  padding: 10px 0;
+  max-height: 300px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.composer textarea:focus {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+.composer-btn {
+  width: 32px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.composer-btn:hover {
+  color: var(--optic);
+}
+
+.composer-atts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 12px 0;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-bottom: none;
+}
+
+.composer-att {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  background: var(--void);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  padding: 4px;
+  text-align: center;
+}
+
+.composer-att img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.composer-att-x {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  background: var(--void);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  display: grid;
+  place-items: center;
+}
+
+.composer-att-x:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.typing {
+  position: absolute;
+  bottom: 2px;
+  left: 18px;
+  font-size: 12px;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.typing-dots span {
+  width: 3px;
+  height: 3px;
+  background: var(--optic);
+  animation: blip 1.3s infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.18s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes blip {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* --------------------------------------------------------------------------
+   Coluna de presenca
+   -------------------------------------------------------------------------- */
+
+.presence-col {
+  width: var(--presence-w);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 12px 8px;
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Conversa do canal de voz, na coluna da direita
+
+   Ocupa o lugar da lista de membros quando um canal de voz esta aberto. Mais
+   larga que a lista porque ali se le texto, nao uma coluna de nomes: com a
+   largura da lista de membros, uma frase comum quebra em quatro linhas.
+   -------------------------------------------------------------------------- */
+
+.chat-lateral {
+  /* Largura fixa: e uma coluna, nao o centro. Sem isto o `flex: 1` herdado de
+     `.chat` a faria disputar espaco com o palco e engolir o video. */
+  flex: 0 0 var(--chat-lateral-w);
+  width: var(--chat-lateral-w);
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+}
+
+.chat-lateral .chat-head {
+  height: 38px;
+  padding: 0 10px;
+}
+
+.chat-lateral .chat-title {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* Na largura de uma coluna, o avatar de cada mensagem custa um terco da linha
+   de texto. As mensagens agrupadas ja escondem o dele; aqui o recuo encolhe
+   para o texto ter onde respirar. */
+.chat-lateral .messages {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.chat-lateral .composer-wrap {
+  margin: 0 8px 8px;
+}
+
+.presence-group {
+  padding: 14px 8px 5px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  display: flex;
+  justify-content: space-between;
+}
+
+.presence-group .n {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 8px;
+  border-radius: var(--r);
+  min-width: 0;
+  cursor: pointer;
+}
+
+.member:hover {
+  background: var(--hover);
+}
+
+.member .avatar {
+  width: 28px;
+  height: 28px;
+}
+
+.member.offline {
+  opacity: 0.38;
+}
+
+.member-text {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.member-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-status {
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Mensagem fixada
+   -------------------------------------------------------------------------- */
+
+/*
+   Fixar funcionava no servidor e era invisivel aqui: nada na mensagem mudava,
+   entao clicar no alfinete era indistinguivel de um botao morto. A faixa
+   ambar na lateral marca sem competir com a leitura.
+*/
+.msg.pinned {
+  background: var(--amber-wash);
+  box-shadow: inset 2px 0 0 var(--amber);
+}
+
+.msg-pinned {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 2px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.msg-action.on {
+  color: var(--amber);
+}
+
+.msg-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Aviso curto preso a mensagem, para o erro nascer onde a acao aconteceu em
+   vez de num canto qualquer da tela. */
+.msg-aviso {
+  margin: 3px 0;
+  padding: 5px 9px;
+  background: var(--red-wash);
+  border-left: 2px solid var(--red);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------
+   Palco de video
+   -------------------------------------------------------------------------- */
+
+/* O palco divide espaco com a conversa em vez de substituir: da para assistir
+   a tela de alguem e continuar lendo e escrevendo.
+
+   Todos os quadros vivem no mesmo container, inclusive o que esta em destaque.
+   Promover um quadro troca classe e tamanho, nunca a posicao na arvore — assim
+   o video nao e desmontado, a faixa nao precisa ser reanexada, a imagem nao
+   pisca, e a mudanca de tamanho anima sozinha. */
+.stage {
+  background: var(--void);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+  transition: height var(--mov-lenta) var(--curva);
+}
+
+/* --------------------------------------------------------------------------
+   Palco em tela cheia
+
+   O modo do canal de voz aberto: nao ha conversa embaixo para dividir espaco,
+   entao o palco toma toda a altura do centro e acompanha a janela sozinho.
+   -------------------------------------------------------------------------- */
+
+.stage.fill {
+  flex: 1;
+  /* Sem borda de baixo: nao ha nada depois dele para separar. */
+  border-bottom: none;
+  /* A altura vem do flex, e nao de um valor em pixel — animar `height` aqui
+     faria o palco tremer a cada redimensionamento da janela. */
+  transition: none;
+}
+
+.stage.collapsed .stage-floor {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stage-bar {
+  height: 30px;
+  padding: 0 6px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.stage-title {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--optic);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* O ponto so pulsa quando ha transmissao. Um indicador que pisca o tempo todo
+   deixa de indicar qualquer coisa. */
+.stage-title.live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.stage-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.stage-act {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    color var(--mov) var(--curva),
+    background var(--mov) var(--curva),
+    border-color var(--mov) var(--curva);
+}
+
+.stage-act:hover {
+  color: var(--optic);
+  background: var(--optic-wash);
+  border-color: var(--line-strong);
+}
+
+.stage-act svg {
+  transition: transform var(--mov) var(--curva);
+}
+
+/* --------------------------------------------------------------------------
+   Chao do palco: a grade de quadros
+   -------------------------------------------------------------------------- */
+
+/*
+  Os quadros sao dimensionados pela ALTURA da linha, nao pela largura da
+  coluna. Partindo da largura, um quadro 16/9 em uma coluna larga fica mais
+  alto que o palco e transborda; partindo da altura, ele sempre cabe, e a
+  largura sai da proporcao. O max-width impede que dois participantes ocupem
+  a tela inteira em um palco baixo e largo.
+*/
+.stage-floor {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  align-content: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+  transition: opacity var(--mov) var(--curva);
+}
+
+.tile {
+  /* Quadro de video: cartao. */
+  border-radius: var(--r-card);
+  position: relative;
+  flex: 0 0 auto;
+  height: calc((100% - (var(--rows, 1) - 1) * 6px) / var(--rows, 1));
+  aspect-ratio: 16 / 9;
+  max-width: calc((100% - (var(--cols, 1) - 1) * 6px) / var(--cols, 1));
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    height var(--mov-lenta) var(--curva),
+    max-width var(--mov-lenta) var(--curva),
+    flex-basis var(--mov-lenta) var(--curva),
+    border-color var(--mov) var(--curva),
+    box-shadow var(--mov) var(--curva);
+}
+
+.tile:hover {
+  border-color: var(--line-strong);
+}
+
+.tile.speaking {
+  border-color: var(--optic);
+  box-shadow:
+    0 0 0 1px var(--optic),
+    0 0 14px var(--optic-glow);
+}
+
+/* Quem esta sem camera nao precisa de 16/9: o rosto e redondo e o espaco
+   vazio dos lados so empurra os outros para longe. */
+.tile.faceless {
+  aspect-ratio: 4 / 3;
+}
+
+/* O quadro em destaque ocupa a linha inteira e sobe para o topo pela ordem,
+   sem mudar de lugar na arvore. */
+.tile.spot {
+  order: -1;
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+  height: calc(100% - 82px);
+  aspect-ratio: auto;
+}
+
+/* Os demais viram uma fita embaixo do principal. */
+.tile.mini {
+  height: 76px;
+  max-width: 148px;
+  aspect-ratio: 16 / 9;
+}
+
+.tile.mini.faceless {
+  aspect-ratio: 1 / 1;
+}
+
+/* Em tela cheia o quadro e a tela: as medidas da grade nao valem mais. */
+.tile.fullscreen {
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  aspect-ratio: auto;
+  border: none;
+  background: #000;
+}
+
+/*
+  O video preso a caixa do quadro, nao ao proprio tamanho.
+
+  `object-fit: contain` sozinho nao basta: ele decide como a imagem cabe DENTRO
+  do elemento, e o elemento e que estava grande demais. O quadro e um grid com
+  `place-items: center`, entao o filho nao estica, e `height: 100%` contra uma
+  area de altura indefinida vira `auto` — o video assumia a propria proporcao.
+  Medido: elemento de 1552x873 dentro de um quadro de 1554x551, com 322px
+  sobrando para o `overflow: hidden` cortar. Era o topo e a base da
+  transmissao sumindo.
+
+  `position: absolute` com `inset: 0` da ao video exatamente a caixa do quadro,
+  sem depender de como a porcentagem resolve. Dai o `contain` faz o que
+  promete: cabe inteiro, em qualquer quadro e com qualquer proporcao de
+  origem — tela cheia, destaque, miniatura ou grade.
+*/
+.tile video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.tile .avatar {
+  transition: width var(--mov-lenta) var(--curva), height var(--mov-lenta) var(--curva);
+}
+
+/* --------------------------------------------------------------------------
+   Sobreposicoes do quadro
+   -------------------------------------------------------------------------- */
+
+.tile-live {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  background: var(--red);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.tile-live::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.tile.mini .tile-live {
+  font-size: 0;
+  gap: 0;
+  padding: 3px;
+}
+
+/* As ferramentas aparecem ao passar o mouse. Sempre visiveis, virariam sujeira
+   sobre a imagem que a pessoa esta tentando assistir. */
+.tile-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    opacity var(--mov) var(--curva),
+    transform var(--mov) var(--curva);
+}
+
+.tile:hover .tile-tools,
+.tile:focus-visible .tile-tools,
+.tile:focus-within .tile-tools {
+  opacity: 1;
+  transform: none;
+}
+
+.tile-tool {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  background: rgba(8, 12, 18, 0.85);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    color var(--mov) var(--curva),
+    background var(--mov) var(--curva),
+    border-color var(--mov) var(--curva);
+}
+
+.tile-tool:hover {
+  color: var(--optic);
+  border-color: var(--optic);
+  background: rgba(8, 12, 18, 0.95);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Alca para redimensionar o palco */
+.stage-resize {
+  height: 5px;
+  background: transparent;
+  cursor: ns-resize;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.stage-resize::after {
+  content: '';
+  position: absolute;
+  inset: 2px 45% 2px 45%;
+  background: var(--line-strong);
+  transition:
+    background var(--mov) var(--curva),
+    inset var(--mov) var(--curva);
+}
+
+.stage-resize:hover::after {
+  background: var(--optic);
+  inset: 2px 38% 2px 38%;
+}
+
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field-label {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 5px;
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--red);
+  margin-top: 5px;
+}
+
+/* ---- Botoes ---- */
+
+.btn {
+  /* Botao: controle, 8px. */
+  border-radius: var(--r-control);
+  font-family: var(--font-ui);
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--optic);
+  color: var(--void);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--optic-bright);
+}
+
+.btn-ghost {
+  color: var(--text-dim);
+  border-color: var(--line);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+
+.btn-quiet {
+  color: var(--text-faint);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  color: var(--optic);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #ff6b76;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ---- Interruptor ---- */
+
+.switch {
+  width: 36px;
+  height: 20px;
+  background: var(--active);
+  border: 1px solid var(--line-soft);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.14s, border-color 0.14s;
+}
+
+.switch.on {
+  background: var(--optic-wash);
+  border-color: var(--optic);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  background: var(--text-faint);
+  transition: transform 0.14s cubic-bezier(0.3, 0, 0.2, 1), background 0.14s;
+}
+
+.switch.on::after {
+  transform: translateX(16px);
+  background: var(--optic);
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  padding: 0;
+  border: none;
+  height: 18px;
+  min-width: 140px;
+  max-width: 300px;
+  flex: 1;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--active);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--optic);
+  margin-top: -4.5px;
+}
+
+input[type='range']:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ---- Medidor de microfone ---- */
+
+.meter {
+  height: 5px;
+  background: var(--active);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.meter-fill {
+  height: 100%;
+  background: var(--optic);
+  transition: width 0.06s linear;
+}
+
+/* --------------------------------------------------------------------------
+   Tela de entrada
+   -------------------------------------------------------------------------- */
+
+.auth {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 40%, var(--optic-wash), transparent),
+    var(--void);
+  position: relative;
+}
+
+/* Grade sutil ao fundo: da a sensacao de painel tecnico sem competir com o
+   cartao de entrada. */
+.auth::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 20%, transparent 75%);
+  pointer-events: none;
+}
+
+.auth-card {
+  /* Cartao: 12px. */
+  border-radius: var(--r-card);
+  width: min(420px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  padding: 30px 28px 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-mark {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+  /* Creme, como na folha de identidade. A marca herda a cor do texto, entao
+     ela e definida aqui e nao dentro do desenho. */
+  color: var(--text-primary);
+}
+
+.auth-logo {
+  font-family: var(--font-ui);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-align: center;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.auth-sub {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+  margin-bottom: 22px;
+}
+
+.auth-switch {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-faint);
+  margin-top: 14px;
+}
+
+.auth-error {
+  background: var(--red-wash);
+  border: 1px solid var(--red);
+  color: #ff9aa2;
+  padding: 9px 11px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+/*
+  A divisoria entre entrar com senha e entrar com Google.
+
+  Uma linha com a palavra no meio, e nao duas secoes empilhadas: sao dois
+  caminhos para a MESMA coisa, e empilhar sugere que um vem depois do outro.
+*/
+.auth-ou {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-ou::before,
+.auth-ou::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--text-primary);
+}
+
+.btn-google:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--bg-elevated);
+}
+
+/* Recado calmo: diz de qual conta do Google veio, sem parecer aviso de erro. */
+.auth-nota {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--raised);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-server {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-top: 14px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* --------------------------------------------------------------------------
+   Seletor de tela
+   -------------------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab.active {
+  color: var(--optic);
+  border-bottom-color: var(--optic);
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.source {
+  border: 1px solid var(--line);
+  background: var(--raised);
+  text-align: left;
+  transition: border-color 0.1s;
+  overflow: hidden;
+}
+
+.source:hover {
+  border-color: var(--line-strong);
+}
+
+.source.selected {
+  border-color: var(--optic);
+  box-shadow: 0 0 0 1px var(--optic);
+}
+
+.source img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #000;
+  display: block;
+}
+
+.source-name {
+  padding: 6px 8px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.source-name img {
+  width: 14px;
+  height: 14px;
+  aspect-ratio: auto;
+  background: none;
+}
+
+/* --------------------------------------------------------------------------
+   Ajustes
+   -------------------------------------------------------------------------- */
+
+.settings {
+  position: fixed;
+  inset: 0;
+  background: var(--void);
+  z-index: 200;
+  display: flex;
+}
+
+.settings-nav {
+  width: 216px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 48px 8px 20px 16px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.settings-group {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  padding: 16px 10px 6px;
+}
+
+.settings-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 1px;
+  border-left: 2px solid transparent;
+}
+
+.settings-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.settings-item.active {
+  background: var(--optic-wash);
+  border-left-color: var(--optic);
+  color: var(--text);
+}
+
+.settings-content {
+  flex: 1;
+  padding: 48px 36px 36px;
+  overflow-y: auto;
+  max-width: 720px;
+}
+
+.settings-title {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--optic);
+  margin-bottom: 18px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.row-text {
+  flex: 1;
+  min-width: 170px;
+}
+
+.row-title {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.row-desc {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.settings-close {
+  position: absolute;
+  top: 48px;
+  right: 36px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.settings-close:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* --------------------------------------------------------------------------
+   Menus e cartoes
+   -------------------------------------------------------------------------- */
+
+.menu {
+  position: fixed;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  padding: 4px;
+  min-width: 190px;
+  z-index: 300;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+.menu-item:hover {
+  background: var(--optic);
+  color: var(--void);
+}
+
+.menu-item.danger {
+  color: var(--red);
+}
+
+.menu-item.danger:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  background: var(--raised);
+  border: 1px solid var(--line-soft);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.chip-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--text-faint);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* --------------------------------------------------------------------------
+   Utilitarios
+   -------------------------------------------------------------------------- */
+
+.empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 36px;
+  color: var(--text-faint);
+}
+
+.empty h3 {
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--active);
+  border-top-color: var(--optic);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.divider {
+  height: 1px;
+  background: var(--line);
+  margin: 14px 0;
+}
+
+/* ==========================================================================
+   Movimento
+   ==========================================================================
+
+   Esta secao vem por ultimo de proposito: ela nao muda como nada se parece,
+   so como chega ali.
+
+   Antes dela, todo estado trocava no mesmo quadro — o realce aparecia inteiro,
+   o modal surgia do nada, a coluna de membros piscava para dentro e para fora.
+   Nada estava errado, e era exatamente esse o problema: a interface respondia
+   sem dar sinal de que tinha entendido o clique.
+
+   Duas regras, e so duas:
+
+     toque   (cor, realce, aparecer)         --mov       120ms
+     forma   (tamanho, posicao, deslocar)    --mov-lenta 220ms
+
+   E so propriedade barata: cor, opacidade e transform. Animar largura ou
+   posicao de caixa forca o navegador a recalcular a pagina a cada quadro, e
+   uma conversa com quinhentas mensagens engasga. As poucas excecoes — o palco
+   crescendo, a coluna abrindo — estao marcadas onde acontecem.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Toque: tudo que reage ao mouse ou ao teclado
+   -------------------------------------------------------------------------- */
+
+.titlebar-button,
+.rail-btn,
+.rail-slot,
+.nav-header,
+.category,
+.channel,
+.channel-action,
+.voice-person,
+.member,
+.mention,
+.msg-author,
+.msg-action,
+.act,
+.btn,
+.btn-primary,
+.btn-danger,
+.btn-ghost,
+.btn-quiet,
+.composer-btn,
+.composer-att-x,
+.reaction,
+.reaction-add,
+.menu-item,
+.tab,
+.settings-item,
+.settings-close,
+.chat-actions button,
+.source,
+.chip,
+.switch,
+.embed,
+.att-file,
+.att-image {
+  transition:
+    color var(--mov) var(--curva),
+    background-color var(--mov) var(--curva),
+    border-color var(--mov) var(--curva),
+    opacity var(--mov) var(--curva),
+    box-shadow var(--mov) var(--curva);
+}
+
+/*
+  O que so aparece quando o mouse passa por cima.
+
+  Sem isso, as acoes da mensagem surgiam de estalo ao atravessar a lista com o
+  cursor, e o olho lia aquilo como piscada em vez de resposta.
+*/
+.msg-actions,
+.msg-time-hover,
+.channel-action,
+.composer-att-x {
+  transition:
+    opacity var(--mov) var(--curva),
+    transform var(--mov) var(--curva);
+}
+
+/*
+  Um empurrao de um pixel no que se pode clicar.
+
+  Nao e enfeite: e a confirmacao de que o clique chegou, no unico lugar onde a
+  pessoa esta olhando. Some ao soltar, entao nunca fica devendo.
+*/
+.btn:active,
+.btn-primary:active,
+.btn-danger:active,
+.act:active,
+.composer-btn:active,
+.tile-tool:active,
+.stage-act:active,
+.titlebar-button:active {
+  transform: translateY(1px);
+}
+
+/* --------------------------------------------------------------------------
+   Entradas: o que aparece na tela
+   -------------------------------------------------------------------------- */
+
+@keyframes surgir {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes crescer {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A camada cresce a partir de quase-tamanho em vez de brotar pronta: a
+   escala curta diz de onde ela veio sem virar espetaculo. */
+.dialogo,
+.balao,
+.menu {
+  animation: crescer var(--mov-lenta) var(--curva);
+}
+
+/*
+  Mensagem nova desliza de baixo, um respiro.
+
+  Vale so para a ultima da lista. Animar todas faria a conversa inteira se
+  mexer a cada rolagem, e abrir um canal viraria uma cascata.
+*/
+.messages > .msg:last-child {
+  animation: subir var(--mov-lenta) var(--curva);
+}
+
+.typing,
+.auth-error,
+.field-error,
+.status-pill {
+  animation: surgir var(--mov) var(--curva);
+}
+
+.auth-card {
+  animation: crescer 260ms var(--curva);
+}
+
+/* --------------------------------------------------------------------------
+   Forma: o que muda de tamanho ou de lugar
+   -------------------------------------------------------------------------- */
+
+/*
+  A coluna de membros e o unico painel que abre e fecha no dia a dia, e era a
+  troca mais brusca da tela: 224px apareciam de uma vez e tudo ao lado pulava.
+
+  Ela desliza pela margem, nao pela largura. Encolher a largura reflui a lista
+  inteira a cada quadro — os nomes se reorganizam enquanto ela fecha, e o que
+  era para ser suave vira tremor. Com margem negativa a coluna mantem o tamanho
+  e so sai de cena; o navegador resolve isso no compositor.
+
+  Fica montada enquanto esta escondida, de proposito: um elemento que desmonta
+  nao tem como animar a saida, e remontar a lista a cada clique custa mais que
+  deixa-la parada.
+*/
+.presence-col {
+  transition:
+    margin-right var(--mov-lenta) var(--curva),
+    opacity var(--mov-lenta) var(--curva);
+}
+
+.presence-col.hidden {
+  margin-right: calc(-1 * var(--presence-w));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chevron,
+.category .chevron {
+  transition: transform var(--mov-lenta) var(--curva);
+}
+
+.meter-fill {
+  transition: width 90ms linear;
+}
+
+/* O anel de quem esta falando pulsa junto com a voz; a transicao curta tira o
+   serrilhado sem atrasar o sinal. */
+.speaking-ring {
+  transition:
+    transform var(--mov) var(--curva),
+    opacity var(--mov) var(--curva);
+}
+
+.avatar {
+  transition: box-shadow var(--mov) var(--curva);
+}
+
+/* Rolagem: levar o usuario ate a mensagem citada sem teletransporte. */
+.messages,
+.settings-content,
+.nav-scroll {
+  scroll-behavior: smooth;
+}
+
+/* --------------------------------------------------------------------------
+   Foco pelo teclado
+   -------------------------------------------------------------------------- */
+
+/*
+  O contorno padrao do navegador aparecia tambem ao clicar com o mouse, o que
+  sujava a tela toda. :focus-visible mostra so para quem esta navegando pelo
+  teclado — que e justamente quem precisa saber onde esta.
+*/
+:focus-visible {
+  outline: 2px solid var(--optic);
+  outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible),
+[role='button']:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --------------------------------------------------------------------------
+   Quem pediu para nao ter movimento
+   -------------------------------------------------------------------------- */
+
+/*
+  Nao e preferencia estetica: movimento na tela provoca enjoo e tontura em
+  quem tem sensibilidade vestibular, e enxaqueca em quem tem aura visual. O
+  sistema operacional ja pergunta isso, e por padrao obedecemos.
+
+  O que o sistema nao cobre e o caso inverso. No Windows, desligar "efeitos de
+  animacao" e conselho comum para maquina lenta, e quem fez isso por
+  desempenho nao pediu para que nenhum aplicativo se mova nunca mais. Entao
+  Ajustes > Aparencia > Movimento pode anular a consulta de midia nos dois
+  sentidos, e `data-mov` no <html> carrega essa escolha.
+
+  Em qualquer caso a interface continua inteira — so para de se mexer.
+*/
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-mov='completo']) *,
+  :root:not([data-mov='completo']) *::before,
+  :root:not([data-mov='completo']) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:root[data-mov='reduzido'] *,
+:root[data-mov='reduzido'] *::before,
+:root[data-mov='reduzido'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

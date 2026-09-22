@@ -1,0 +1,24 @@
+node_modules/
+dist/
+build/
+# Com estrela porque nem sempre a pasta e "release": o Windows trava os
+# arquivos do app enquanto ele esta aberto, e empacotar durante um teste exige
+# mandar a saida para "release-<versao>".
+release*/
+out/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+packages/server/prisma/migrations/dev.db*
+packages/server/uploads/
+packages/desktop/release*/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# O .env.production do cliente so tem o endereco padrao do servidor, sem
+# segredo nenhum, e precisa ir junto para o build sair igual em qualquer maquina.
+!packages/desktop/.env.production

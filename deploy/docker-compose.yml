@@ -1,0 +1,84 @@
+# Kiroshi em producao.
+#
+# Dois servicos: a API (REST + gateway) e o SFU de voz. O Postgres nao esta
+# aqui porque o servidor ja tem uma instancia compartilhada; o Kiroshi usa um
+# banco proprio dentro dela.
+#
+# Caminho de rede:
+#
+#   API e gateway  ->  Cloudflare Tunnel  ->  127.0.0.1:4000
+#   Midia (voz)    ->  IPv6 publico direto ->  [::]:7881/udp
+#
+# A midia nao passa pelo tunel de proposito: o Cloudflare Tunnel transporta
+# HTTP e WebSocket, nao UDP. O caminho direto por IPv6 tambem e melhor, porque
+# tira um intermediario do meio de uma conversa em tempo real.
+
+name: kiroshi
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    image: kiroshi-api:latest
+    container_name: kiroshi-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4000
+      STORAGE_DIR: /data/uploads
+      KIROSHI_DOWNLOAD_DIR: /data/downloads
+    volumes:
+      - kiroshi-uploads:/data/uploads
+      # Os instaladores. Em disco e nao em volume: sao substituidos a cada
+      # versao e nao ha o que preservar — o que vale esta no repositorio.
+      - ./downloads:/data/downloads:ro
+    ports:
+      # So no loopback: quem chega de fora vem pelo Cloudflare Tunnel.
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      livekit:
+        condition: service_started
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  livekit:
+    # Preso na serie menor, nao em latest: atualizacao de correcao entra
+    # sozinha, mudanca de comportamento nao chega sem alguem decidir.
+    #
+    # A versao importa mais do que parece. Com a v1.8, que era o que o
+    # compose pedia antes, publicar camera ou tela levava quase 15 segundos:
+    # a negociacao terminava em 400 ms e o livekit-client 2.x ficava esperando
+    # uma confirmacao que aquele servidor nao mandava, ate cair em um prazo
+    # interno. Na interface isso aparecia como "carregando para sempre".
+    image: livekit/livekit-server:v1.13
+    container_name: kiroshi-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    # Rede do host: o LiveKit precisa enxergar os enderecos reais da maquina
+    # para anunciar candidatos ICE validos. Com a rede do docker ele anunciaria
+    # um IP interno que nenhum cliente consegue alcancar.
+    network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:7880/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  kiroshi-uploads:

@@ -1,0 +1,350 @@
+/**
+ * Teste ponta a ponta contra o servidor rodando.
+ * Exercita: login -> gateway -> READY -> mensagem -> evento em tempo real.
+ */
+import WebSocket from 'ws';
+
+const API = 'http://127.0.0.1:4000';
+const GW = 'ws://127.0.0.1:4000/gateway';
+
+let passed = 0;
+let failed = 0;
+
+function check(name, condition, detail = '') {
+  if (condition) {
+    console.log(`  OK   ${name}`);
+    passed++;
+  } else {
+    console.log(`  FALHA ${name} ${detail}`);
+    failed++;
+  }
+}
+
+async function api(method, path, { token, body } = {}) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const text = await res.text();
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+  return { status: res.status, body: json };
+}
+
+function connectGateway(token, label) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(GW);
+    const events = [];
+    let ready = null;
+    let sessionId = null;
+    const waiters = new Map();
+
+    const timeout = setTimeout(() => reject(new Error(`${label}: timeout no READY`)), 15000);
+
+    ws.on('message', (raw) => {
+      const msg = JSON.parse(raw.toString());
+
+      if (msg.op === 10) {
+        ws.send(JSON.stringify({
+          op: 2,
+          d: { token, properties: { os: 'test', client: 'e2e', version: '1' } },
+        }));
+        return;
+      }
+
+      if (msg.op === 0) {
+        events.push(msg);
+        if (msg.t === 'READY') {
+          ready = msg.d;
+          sessionId = msg.d.sessionId;
+          clearTimeout(timeout);
+          resolve({
+            ws,
+            get ready() { return ready; },
+            get sessionId() { return sessionId; },
+            events,
+            waitFor(eventName, ms = 8000) {
+              const existing = events.find((e) => e.t === eventName && !waiters.has(e));
+              if (existing) return Promise.resolve(existing.d);
+              return new Promise((res, rej) => {
+                const t = setTimeout(() => rej(new Error(`timeout esperando ${eventName}`)), ms);
+                waiters.set(eventName, (d) => { clearTimeout(t); res(d); });
+              });
+            },
+            close: () => ws.close(),
+          });
+        }
+        const waiter = waiters.get(msg.t);
+        if (waiter) { waiters.delete(msg.t); waiter(msg.d); }
+      }
+    });
+
+    ws.on('error', (e) => { clearTimeout(timeout); reject(e); });
+  });
+}
+
+async function main() {
+  console.log('\n--- AUTENTICACAO ---');
+
+  const badLogin = await api('POST', '/api/v1/auth/login', {
+    body: { login: 'pitohui', password: 'senha-errada' },
+  });
+  check('senha errada e rejeitada', badLogin.status === 401, `status ${badLogin.status}`);
+
+  const login = await api('POST', '/api/v1/auth/login', {
+    body: { login: 'pitohui', password: 'ordem123456' },
+  });
+  check('login com senha correta', login.status === 200, JSON.stringify(login.body).slice(0, 200));
+  const token = login.body?.accessToken;
+  check('recebeu accessToken', typeof token === 'string' && token.length > 20);
+  check('recebeu refreshToken', typeof login.body?.refreshToken === 'string');
+  check('nao vazou passwordHash', !JSON.stringify(login.body).includes('passwordHash'));
+
+  const login2 = await api('POST', '/api/v1/auth/login', {
+    body: { login: 'kaya', password: 'ordem123456' },
+  });
+  const token2 = login2.body?.accessToken;
+  check('segundo usuario logou', login2.status === 200);
+
+  const noAuth = await api('GET', '/api/v1/users/@me');
+  check('rota protegida exige token', noAuth.status === 401);
+
+  const me = await api('GET', '/api/v1/users/@me', { token });
+  check('users/@me responde', me.status === 200 && me.body?.username === 'pitohui');
+
+  console.log('\n--- GATEWAY ---');
+
+  const alice = await connectGateway(token, 'alice');
+  check('READY recebido', Boolean(alice.ready));
+  check('READY traz o usuario', alice.ready?.user?.username === 'pitohui');
+  check('READY traz servidores', Array.isArray(alice.ready?.guilds) && alice.ready.guilds.length >= 1);
+
+  const guild = alice.ready.guilds.find((g) => g.name === 'Arasaka');
+  check('achou o servidor Arasaka', Boolean(guild));
+  check('servidor tem canais', guild.channels.length >= 6, `${guild?.channels?.length}`);
+  check('servidor tem cargos', guild.roles.length >= 3);
+  check('servidor tem membros', guild.members.length === 5);
+  check('permissoes sao string (BigInt serializado)', typeof guild.roles[0].permissions === 'string');
+
+  const textChannel = guild.channels.find((c) => c.type === 'GUILD_TEXT' && c.name === 'geral');
+  const voiceChannel = guild.channels.find((c) => c.type === 'GUILD_VOICE');
+  check('achou canal de texto', Boolean(textChannel));
+  check('achou canal de voz', Boolean(voiceChannel));
+
+  const bob = await connectGateway(token2, 'bob');
+  check('segunda sessao conectou', Boolean(bob.ready));
+
+  console.log('\n--- MENSAGENS EM TEMPO REAL ---');
+
+  const bobWaits = bob.waitFor('MESSAGE_CREATE');
+  const sent = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token,
+    body: { content: 'ola do teste e2e <@' + bob.ready.user.id + '>', nonce: 'nonce-123' },
+  });
+  check('mensagem criada', sent.status === 201, JSON.stringify(sent.body).slice(0, 200));
+  check('eco do nonce', sent.body?.nonce === 'nonce-123');
+  check('mencao detectada', sent.body?.mentionedUserIds?.includes(bob.ready.user.id));
+
+  const received = await bobWaits;
+  check('outro usuario recebeu em tempo real', received?.id === sent.body?.id);
+  check('evento nao vaza nonce alheio', received?.nonce === null);
+
+  console.log('\n--- HISTORICO E EDICAO ---');
+
+  const history = await api('GET', `/api/v1/channels/${textChannel.id}/messages?limit=50`, { token });
+  check('historico carrega', history.status === 200 && Array.isArray(history.body));
+  check('historico em ordem crescente', history.body.length >= 6);
+  const ids = history.body.map((m) => BigInt(m.id));
+  check('ids ordenados', ids.every((id, i) => i === 0 || id > ids[i - 1]));
+
+  const edited = await api('PATCH', `/api/v1/channels/${textChannel.id}/messages/${sent.body.id}`, {
+    token, body: { content: 'texto editado' },
+  });
+  check('edicao funciona', edited.status === 200 && edited.body?.content === 'texto editado');
+  check('marca editedAt', Boolean(edited.body?.editedAt));
+
+  const foreignEdit = await api('PATCH', `/api/v1/channels/${textChannel.id}/messages/${sent.body.id}`, {
+    token: token2, body: { content: 'invadido' },
+  });
+  check('nao edita mensagem alheia', foreignEdit.status === 403, `status ${foreignEdit.status}`);
+
+  console.log('\n--- REACOES ---');
+
+  const react = await api('PUT', `/api/v1/channels/${textChannel.id}/messages/${sent.body.id}/reactions`, {
+    token: token2, body: { emoji: '🎉' },
+  });
+  check('reacao adicionada', react.status === 200, JSON.stringify(react.body).slice(0, 150));
+
+  const withReaction = await api('GET', `/api/v1/channels/${textChannel.id}/messages?limit=5`, { token });
+  const target = withReaction.body.find((m) => m.id === sent.body.id);
+  check('reacao aparece na mensagem', target?.reactions?.[0]?.count === 1);
+
+  console.log('\n--- PERMISSOES ---');
+
+  const kickAttempt = await api('DELETE', `/api/v1/guilds/${guild.id}/members/${alice.ready.user.id}`, {
+    token: token2,
+  });
+  check('membro comum nao expulsa o dono', kickAttempt.status === 403, `status ${kickAttempt.status}`);
+
+  const roleAttempt = await api('POST', `/api/v1/guilds/${guild.id}/roles`, {
+    token: token2, body: { name: 'hack', permissions: '16' },
+  });
+  check('membro sem MANAGE_ROLES nao cria cargo', roleAttempt.status === 403, `status ${roleAttempt.status}`);
+
+  console.log('\n--- CANAIS E SERVIDORES ---');
+
+  const newGuild = await api('POST', '/api/v1/guilds', {
+    token, body: { name: 'Servidor Teste', withDefaultChannels: true },
+  });
+  check('cria servidor', newGuild.status === 201, JSON.stringify(newGuild.body).slice(0, 150));
+  check('servidor novo tem canais padrao', newGuild.body?.channels?.length === 4);
+  check('dono ja e membro', newGuild.body?.members?.length === 1);
+
+  const newChannel = await api('POST', `/api/v1/guilds/${guild.id}/channels`, {
+    token, body: { name: 'novo-canal', type: 'GUILD_TEXT' },
+  });
+  check('cria canal', newChannel.status === 201, JSON.stringify(newChannel.body).slice(0, 150));
+
+  console.log('\n--- CONVITES ---');
+
+  const invite = await api('POST', `/api/v1/guilds/${newGuild.body.id}/invites`, {
+    token, body: { maxAgeSecs: 3600, maxUses: 5 },
+  });
+  check('cria convite', invite.status === 201 && typeof invite.body?.code === 'string');
+
+  const preview = await api('GET', `/api/v1/invites/${invite.body.code}`);
+  check('preview do convite sem login', preview.status === 200 && preview.body?.guild?.name === 'Servidor Teste');
+
+  const accept = await api('POST', `/api/v1/invites/${invite.body.code}`, { token: token2 });
+  check('aceita convite', accept.status === 200 && accept.body?.joined === true, JSON.stringify(accept.body).slice(0, 150));
+
+  console.log('\n--- VOZ ---');
+
+  const info = await fetch(`${API}/api/info`).then((r) => r.json());
+  const voiceJoin = await api('POST', '/api/v1/voice/join', {
+    token, body: { channelId: voiceChannel.id },
+  });
+
+  if (!info.voiceEnabled) {
+    check('sem SFU configurado, a voz responde 503', voiceJoin.status === 503, `status ${voiceJoin.status}`);
+  } else {
+    check('emite token de voz', voiceJoin.status === 200, `status ${voiceJoin.status}`);
+    check('token aponta para o SFU', typeof voiceJoin.body?.url === 'string' && voiceJoin.body.url.startsWith('ws'));
+    check('sala e derivada do canal', voiceJoin.body?.roomName === `channel_${voiceChannel.id}`);
+
+    // O token e um JWT do LiveKit; o payload diz o que a pessoa pode fazer.
+    const claims = JSON.parse(
+      Buffer.from(voiceJoin.body.token.split('.')[1], 'base64url').toString(),
+    );
+    check('dono pode publicar microfone', claims.video?.canPublishSources?.includes('microphone'));
+    check('dono pode compartilhar tela', claims.video?.canPublishSources?.includes('screen_share'));
+    check('dono tem poder de moderacao na sala', claims.video?.roomAdmin === true);
+
+    // Regressao: reconectar no mesmo canal precisa emitir token novo. Antes,
+    // o servidor via que a pessoa "ja estava la" e nao mandava nada, deixando
+    // o app presa sem conseguir entrar.
+    const rejoin = await api('POST', '/api/v1/voice/join', {
+      token, body: { channelId: voiceChannel.id },
+    });
+    check('reentrar no mesmo canal emite token novo', rejoin.status === 200, `status ${rejoin.status}`);
+
+    // Um membro sem permissao de falar entra so como ouvinte.
+    const listenerJoin = await api('POST', '/api/v1/voice/join', {
+      token: token2, body: { channelId: voiceChannel.id },
+    });
+    check('outro membro tambem recebe token', listenerJoin.status === 200);
+
+    await api('POST', '/api/v1/voice/leave', { token });
+  }
+
+  const foreignVoice = await api('POST', '/api/v1/voice/join', {
+    token, body: { channelId: textChannel.id },
+  });
+  check(
+    'nao emite token de voz para canal de texto',
+    foreignVoice.status >= 400,
+    `status ${foreignVoice.status}`,
+  );
+
+  console.log('\n--- MENCOES INVALIDAS (regressao) ---');
+
+  // Um id inventado quebrava o envio com 500 por violacao de chave
+  // estrangeira em ReadState, depois da mensagem ja ter sido criada.
+  const fakeMention = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token, body: { content: 'ola <@999999999999999999>' },
+  });
+  check(
+    'mencao a usuario inexistente nao derruba o envio',
+    fakeMention.status === 201,
+    `status ${fakeMention.status} ${JSON.stringify(fakeMention.body).slice(0, 160)}`,
+  );
+  check(
+    'mencao invalida e descartada',
+    Array.isArray(fakeMention.body?.mentionedUserIds) &&
+      fakeMention.body.mentionedUserIds.length === 0,
+    JSON.stringify(fakeMention.body?.mentionedUserIds),
+  );
+
+  const fakeRole = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token, body: { content: 'atencao <@&999999999999999999>' },
+  });
+  check('mencao a cargo inexistente nao derruba o envio', fakeRole.status === 201);
+  check(
+    'mencao de cargo invalido e descartada',
+    fakeRole.body?.mentionedRoleIds?.length === 0,
+  );
+
+  // Mencao valida continua sendo gravada.
+  const realMention = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token, body: { content: `oi <@${bob.ready.user.id}>` },
+  });
+  check(
+    'mencao valida e preservada',
+    realMention.body?.mentionedUserIds?.includes(bob.ready.user.id),
+  );
+
+  console.log('\n--- CORPO VAZIO COM CONTENT-TYPE JSON (regressao) ---');
+
+  // Clientes HTTP mandam content-type json mesmo sem corpo; o Fastify
+  // rejeitava isso com 400 antes do parser tolerante.
+  const emptyBody = await fetch(`${API}/api/v1/auth/logout`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token2}` },
+  });
+  check('POST sem corpo com content-type json funciona', emptyBody.status === 200, `status ${emptyBody.status}`);
+
+  console.log('\n--- VALIDACAO E RATE LIMIT ---');
+
+  const badMessage = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token, body: { content: '' },
+  });
+  check('rejeita mensagem vazia', badMessage.status === 400, `status ${badMessage.status}`);
+
+  const longMessage = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token, body: { content: 'x'.repeat(5000) },
+  });
+  check('rejeita mensagem longa demais', longMessage.status === 400);
+
+  let limited = false;
+  for (let i = 0; i < 15; i++) {
+    const r = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+      token, body: { content: `spam ${i}` },
+    });
+    if (r.status === 429) { limited = true; break; }
+  }
+  check('rate limit dispara', limited);
+
+  alice.close();
+  bob.close();
+
+  console.log(`\n=========================================`);
+  console.log(`  ${passed} passaram, ${failed} falharam`);
+  console.log(`=========================================\n`);
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+main().catch((e) => { console.error('ERRO FATAL:', e); process.exit(1); });

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "electron-vite/node"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["electron/**/*", "electron.vite.config.ts"]
+}

@@ -1,0 +1,67 @@
+# Empacotamento do cliente.
+#
+# Gera um instalador NSIS que a pessoa baixa, executa e usa. Sem loja, sem
+# dependencia externa: o Electron e o app vao juntos no executavel.
+
+appId: fun.arasaka.kiroshi
+productName: Kiroshi
+copyright: Kiroshi
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/*.ts'
+
+# O Electron traz todas as localizacoes do Chromium; ficamos com as que os
+# usuarios falam e economizamos alguns megabytes.
+electronLanguages:
+  - pt-BR
+  - en-US
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  # Sem certificado de assinatura o SmartScreen avisa na primeira execucao.
+  # Assinar exige um certificado EV pago; para um grupo fechado nao compensa,
+  # e o aviso some depois que alguns usuarios executarem o mesmo arquivo.
+  signAndEditExecutable: true
+
+nsis:
+  # Cada pessoa instala para si: nao pede senha de administrador.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Kiroshi
+  # Desinstalar tira tudo, inclusive os dados locais do app.
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  artifactName: Kiroshi-Setup-${version}.${ext}
+  # O instalador fala portugues, como o resto do app.
+  language: '1046'
+
+# De onde o aplicativo busca atualizacao.
+#
+# `generic` e o provedor para quem hospeda os proprios arquivos: nao precisa
+# de GitHub Releases nem de conta em lugar nenhum. O electron-builder passa a
+# gerar um `latest.yml` ao lado do instalador, com versao, tamanho e hash, e o
+# aplicativo instalado le esse arquivo para saber se ha algo novo.
+#
+# E o mesmo endereco que as pessoas usam para baixar na mao. Um so lugar para
+# publicar, e quem instalou nunca mais precisa voltar nele.
+publish:
+  provider: generic
+  url: https://order.arasaka.fun/baixar
+  channel: latest

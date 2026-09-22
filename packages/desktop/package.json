@@ -1,0 +1,35 @@
+{
+  "name": "@kiroshi/desktop",
+  "version": "1.7.0",
+  "private": true,
+  "description": "Kiroshi — cliente desktop",
+  "author": "Kiroshi",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "preview": "electron-vite preview",
+    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "dist:dir": "electron-vite build && electron-builder --dir --publish never",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "@kiroshi/shared": "*",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "electron": "38.8.6",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "livekit-client": "^2.22.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^5.7.3",
+    "vite": "^7.3.6",
+    "zustand": "^5.0.15"
+  }
+}

@@ -1,0 +1,2117 @@
+/*
+  ==========================================================================
+  COMPONENTES COMPARTILHADOS
+
+  As pecas de `src/components/ui/`. Ficam num arquivo separado de proposito:
+  `global.css` descreve a ESTRUTURA do aplicativo — colunas, palco, conversa —
+  e isto descreve as PECAS que qualquer tela monta. Misturar os dois foi o que
+  deixou o arquivo anterior com tres mil linhas onde nao dava para achar nada.
+
+  Tudo aqui usa so os tokens semanticos definidos no topo de `global.css`. Se
+  um valor precisar existir, ele nasce la primeiro. E a regra que impede o
+  sistema de virar uma colecao de excecoes.
+  ==========================================================================
+*/
+
+/*
+  Acessivel ao leitor de tela, invisivel na tela.
+
+  Usado para dizer "Erro:" antes da mensagem, onde a cor sozinha nao comunica.
+  `clip` em vez de `display: none` porque o segundo remove o texto da arvore
+  de acessibilidade tambem, que e o oposto do que se quer.
+*/
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Camadas sobrepostas: dialogo, gaveta, balao, menu
+   -------------------------------------------------------------------------- */
+
+.camada-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 12, 18, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+/* A gaveta encosta na borda; aqui o fundo nao centraliza nada. */
+.camada-fundo-lateral {
+  display: block;
+  padding: 0;
+}
+
+.dialogo {
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-card);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.dialogo-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 12px;
+}
+
+.dialogo-titulo {
+  margin: 0;
+  font-size: var(--t-titulo);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dialogo-descricao {
+  margin: 4px 0 0;
+  font-size: var(--t-pequeno);
+  color: var(--text-secondary);
+}
+
+.dialogo-corpo {
+  padding: 0 18px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.dialogo-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 18px 18px;
+}
+
+.dialogo-fechar,
+.painel-fechar,
+.aviso-fechar,
+.toast-fechar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.dialogo-fechar:hover,
+.painel-fechar:hover,
+.aviso-fechar:hover,
+.toast-fechar:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.gaveta {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  box-shadow: 0 0 48px rgba(0, 0, 0, 0.5);
+}
+
+.gaveta-direita {
+  right: 0;
+  border-left: 1px solid var(--border-default);
+}
+
+.gaveta-esquerda {
+  left: 0;
+  border-right: 1px solid var(--border-default);
+}
+
+.gaveta-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--head-h);
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--border-default);
+  flex: none;
+}
+
+.gaveta-titulo {
+  margin: 0;
+  font-size: var(--t-corpo);
+  font-weight: 600;
+}
+
+.gaveta-corpo {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.balao {
+  position: fixed;
+  z-index: 300;
+  min-width: 180px;
+  max-width: min(360px, calc(100vw - 16px));
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--t-pequeno);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.menu-item.perigoso {
+  color: var(--status-danger);
+}
+
+.menu-item.perigoso:hover:not(:disabled) {
+  background: var(--red-wash);
+}
+
+.menu-icone {
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.menu-divisor {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border-default);
+}
+
+/* --------------------------------------------------------------------------
+   Formularios
+   -------------------------------------------------------------------------- */
+
+.campo {
+  margin-bottom: 14px;
+}
+
+.campo-rotulo {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-ui);
+  font-size: var(--t-tecnico);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.campo-caixa {
+  position: relative;
+  display: flex;
+}
+
+/* O botao do olho ocupa o canto direito; o texto para antes dele. */
+.campo-caixa:has(.campo-olho) input {
+  padding-right: 38px;
+}
+
+.campo-olho {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.campo-olho:hover {
+  color: var(--text-primary);
+}
+
+.campo-invalido input,
+.campo-invalido textarea {
+  border-color: var(--status-danger);
+}
+
+.campo-rodape {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+  font-size: var(--t-tecnico);
+  min-height: 15px;
+}
+
+.campo-erro {
+  color: var(--status-danger);
+}
+
+.campo-dica {
+  color: var(--text-muted);
+}
+
+.campo-contador {
+  flex: none;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.chave-linha {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.chave-linha.desabilitada {
+  opacity: 0.5;
+}
+
+.chave-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.chave-rotulo {
+  display: block;
+  font-size: var(--t-corpo);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.chave-descricao {
+  margin-top: 2px;
+  font-size: var(--t-pequeno);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/*
+  A chave e um checkbox de verdade, transparente por cima do desenho.
+
+  `opacity: 0` e nao `display: none`: o segundo tira o campo da ordem de
+  tabulacao e do alcance do leitor de tela, que e justamente o que este
+  componente existe para preservar.
+*/
+.chave-entrada {
+  position: absolute;
+  width: 40px;
+  height: 22px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.chave {
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  transition:
+    background var(--mov),
+    border-color var(--mov);
+}
+
+.chave::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition:
+    transform var(--mov) var(--curva),
+    background var(--mov);
+}
+
+.chave-entrada:checked + .chave {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.chave-entrada:checked + .chave::after {
+  transform: translateX(18px);
+  background: var(--bg-canvas);
+}
+
+.chave-entrada:focus-visible + .chave {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.secao {
+  margin-bottom: 28px;
+}
+
+.secao-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.secao-titulo {
+  margin: 0;
+  font-size: var(--t-corpo);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.secao-descricao {
+  margin: 3px 0 0;
+  font-size: var(--t-pequeno);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.secao-corpo {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-card);
+  padding: 4px 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Feedback
+
+   Cada tipo tem um ICONE proprio, e nao so uma cor. E o que a especificacao
+   pede em "erros nao devem depender apenas de vermelho": quem nao distingue
+   as cores continua distinguindo triangulo de circulo.
+   -------------------------------------------------------------------------- */
+
+.aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  font-size: var(--t-pequeno);
+  line-height: 1.55;
+}
+
+.aviso-icone {
+  flex: none;
+  margin-top: 1px;
+}
+
+.aviso-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.aviso-titulo {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.aviso-corpo {
+  color: var(--text-secondary);
+}
+
+.aviso-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.aviso-info {
+  border-color: var(--optic-wash);
+  background: var(--optic-wash);
+}
+.aviso-info .aviso-icone {
+  color: var(--accent-primary);
+}
+
+.aviso-sucesso {
+  border-color: rgba(69, 214, 154, 0.3);
+  background: rgba(69, 214, 154, 0.08);
+}
+.aviso-sucesso .aviso-icone {
+  color: var(--status-success);
+}
+
+.aviso-aviso {
+  border-color: rgba(255, 197, 104, 0.3);
+  background: var(--amber-wash);
+}
+.aviso-aviso .aviso-icone {
+  color: var(--status-warning);
+}
+
+.aviso-erro {
+  border-color: rgba(255, 104, 125, 0.3);
+  background: var(--red-wash);
+}
+.aviso-erro .aviso-icone {
+  color: var(--status-danger);
+}
+
+.conexao-detalhe {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+}
+
+.vazio {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 40px 24px;
+  height: 100%;
+}
+
+.vazio-compacto {
+  padding: 24px 16px;
+  height: auto;
+}
+
+.vazio-icone {
+  color: var(--text-ghost);
+  margin-bottom: 6px;
+}
+
+.vazio-titulo {
+  margin: 0;
+  font-size: var(--t-titulo);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.vazio-compacto .vazio-titulo {
+  font-size: var(--t-corpo);
+}
+
+.vazio-descricao {
+  margin: 0;
+  /* 44 caracteres e a largura em que uma frase ainda se le de uma vez. */
+  max-width: 44ch;
+  font-size: var(--t-pequeno);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.vazio-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.esqueleto {
+  display: block;
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 0%,
+    var(--bg-elevated) 50%,
+    var(--bg-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: esqueleto-onda 1.4s ease-in-out infinite;
+}
+
+.esqueleto-texto {
+  height: 11px;
+  margin-bottom: 7px;
+}
+
+.esqueleto-circulo {
+  border-radius: 50%;
+}
+
+.esqueleto-grupo > .esqueleto:last-child {
+  margin-bottom: 0;
+}
+
+@keyframes esqueleto-onda {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  /* Acima da barra de baixo, nunca por cima dela. */
+  bottom: calc(var(--hud-h) + 16px);
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* A pilha nao intercepta cliques; cada toast reativa o seu. */
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+  max-width: 380px;
+  padding: 10px 8px 10px 12px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  font-size: var(--t-pequeno);
+  animation: toast-entra var(--mov-lenta) var(--curva);
+}
+
+/* A cor fica no icone; o texto continua legivel em cima de tudo. */
+.toast-sucesso {
+  color: var(--status-success);
+}
+.toast-aviso {
+  color: var(--status-warning);
+}
+.toast-erro {
+  color: var(--status-danger);
+}
+.toast-info {
+  color: var(--accent-primary);
+}
+
+.toast-texto {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+@keyframes toast-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Painel contextual
+   -------------------------------------------------------------------------- */
+
+.painel {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border-default);
+}
+
+/* A alca cobre a borda esquerda, larga o bastante para acertar com o mouse
+   sem aparecer o tempo todo. */
+.painel-alca {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+.painel-alca:hover,
+.painel-alca:focus-visible {
+  background: var(--optic-wash);
+  outline: none;
+}
+
+.painel-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--head-h);
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--border-default);
+  flex: none;
+}
+
+.painel-titulo {
+  flex: 1;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--t-tecnico);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.painel-corpo {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Cartao de participante
+   -------------------------------------------------------------------------- */
+
+.tile-rodape {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+  background: rgba(8, 12, 18, 0.72);
+  font-size: var(--t-tecnico);
+  color: var(--text-primary);
+}
+
+.tile-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-mudo {
+  flex: none;
+  color: var(--status-danger);
+}
+
+/* --------------------------------------------------------------------------
+   Vitrine
+
+   So a tela de demonstracao dos componentes. Fica aqui, e nao em
+   `global.css`, porque nao faz parte do produto.
+   -------------------------------------------------------------------------- */
+
+.vitrine {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 28px 64px;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.vitrine-titulo {
+  margin: 0 0 24px;
+  font-size: var(--t-titulo-g);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.vitrine-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.vitrine-pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+/* Cola a ancora no fim da area visivel, para o teste poder cobrar que o balao
+   vire para cima quando nao cabe embaixo. */
+.vitrine-ancora-baixo {
+  position: fixed;
+  bottom: 12px;
+  left: 28px;
+  z-index: 5;
+}
+
+.vitrine-esqueleto {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 0;
+}
+
+/* --------------------------------------------------------------------------
+   Casca: o botao que devolve a navegacao quando a coluna vira gaveta
+
+   Uma tira estreita colada na borda esquerda. Ocupa o minimo, e existe para
+   que esconder a coluna nunca signifique perde-la.
+   -------------------------------------------------------------------------- */
+
+.abrir-canais {
+  flex: none;
+  width: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-right: 1px solid var(--border-default);
+  background: var(--bg-sidebar);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.abrir-canais:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/*
+  Na largura compacta a conversa usa a tela toda.
+
+  A margem que as colunas davam ao texto some junto com elas, entao ela volta
+  como espacamento interno — senao a mensagem encosta na borda da janela.
+*/
+.largura-compacta .messages {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Visualizador de imagem
+   -------------------------------------------------------------------------- */
+
+.lightbox-fundo {
+  background: rgba(8, 12, 18, 0.92);
+  padding: 0;
+}
+
+.lightbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 94vw;
+  max-height: 92vh;
+}
+
+.lightbox-barra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 6px 6px 14px;
+  border-radius: var(--r-pill);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  font-size: var(--t-pequeno);
+  color: var(--text-secondary);
+}
+
+.lightbox-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-acao {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.lightbox-acao:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.lightbox-img {
+  max-width: 100%;
+  min-height: 0;
+  object-fit: contain;
+  border-radius: var(--r-card);
+}
+
+/*
+  A linha "Criar canal" e um botao, nao um `div`.
+
+  Como botao ela herda estilo de formulario do navegador; estas regras a
+  devolvem a aparencia de linha da lista, sem abrir mao do foco por teclado.
+*/
+.category-acao {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-ghost);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.category-acao:hover {
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Canal de voz: palco, controles e estado
+
+   A composicao do palco vem de `voice/palco.ts` como um nome de modo, e cada
+   nome recebe aqui um tratamento proprio. Antes havia um tratamento so, de
+   grade, e ele estava errado nos dois extremos: uma pessoa sozinha ficava com
+   um selo 16/9 no meio de um campo vazio, e duas pessoas — o caso mais comum
+   deste grupo — ficavam com dois selos do tamanho de uma grade de nove.
+   -------------------------------------------------------------------------- */
+
+.canal-de-voz {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Sozinho e com imagem: o palco inteiro, sem a caixa de 16/9 em volta. */
+.stage-floor.palco-solo .tile {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: auto;
+}
+
+/* Dois: lado a lado e grandes. Sem isto herdavam a altura de uma linha de
+   grade e sobrava metade do palco em branco embaixo. */
+.stage-floor.palco-dupla .tile {
+  height: 100%;
+  max-width: calc((100% - 6px) / 2);
+}
+
+/* Faixa de rostos: uma linha baixa, e o nome nao some porque aqui ele e a
+   unica coisa que distingue um avatar do outro a essa altura. */
+.stage-floor.palco-faixa {
+  align-content: center;
+}
+
+.stage-floor.palco-faixa .tile {
+  height: 100%;
+  max-height: 104px;
+}
+
+/* --------------------------------------------------------------------------
+   Rodape do cartao
+
+   Havia duas implementacoes deste rodape: `.tile-label`, usada pelo palco, e
+   `.tile-rodape`, usada pelo componente compartilhado que ninguem usava. Elas
+   ja tinham divergido em fonte, recuo e cor do icone de mudo. Sobrou esta, e
+   ela herdou o que a outra tinha de melhor: o nome que some na fita, onde o
+   quadro tem 148px e o rotulo cobriria a imagem inteira.
+   -------------------------------------------------------------------------- */
+
+.tile.mini .tile-rodape {
+  opacity: 0;
+  transition: opacity var(--mov) var(--curva);
+}
+
+.tile.mini:hover .tile-rodape,
+.tile.mini:focus-visible .tile-rodape,
+.tile.mini:focus-within .tile-rodape {
+  opacity: 1;
+}
+
+.tile-warn {
+  flex: none;
+  color: var(--status-warning);
+  font-size: var(--t-pequeno);
+}
+
+/* --------------------------------------------------------------------------
+   Controles da chamada, abaixo do palco
+   -------------------------------------------------------------------------- */
+
+.chamada-controles {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+
+.chamada-controles .act {
+  /* `.act` global e um botao quadrado de 34px. Sem soltar a largura, o rotulo
+     vaza para fora e os botoes se sobrepoem — foi exatamente o que apareceu na
+     primeira montagem: cinco rotulos empilhados uns sobre os outros. */
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.chamada-controles .act:hover:not(:disabled) {
+  border-color: var(--border-forte);
+  color: var(--text-primary);
+}
+
+.chamada-controles .act:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Desligado, ligado e transmitindo sao tres estados, e cada um tem forma
+   propria alem da cor: quem nao distingue vermelho de verde ainda le o icone
+   cortado e o rotulo, que mudam junto. */
+.chamada-controles .act.off {
+  border-color: var(--status-danger);
+  color: var(--status-danger);
+}
+
+.chamada-controles .act.on {
+  border-color: var(--optic);
+  color: var(--optic-bright);
+  background: var(--optic-wash-fraco);
+}
+
+.chamada-controles .act.live {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+}
+
+.chamada-controles .act.danger {
+  border-color: var(--status-danger);
+  background: var(--red-wash);
+  color: var(--status-danger);
+}
+
+.chamada-controles .act.danger:hover {
+  background: var(--status-danger);
+  color: var(--bg-canvas);
+}
+
+.act-rotulo {
+  font-size: var(--t-pequeno);
+  white-space: nowrap;
+}
+
+/* O rotulo e o primeiro a sair quando a largura aperta: o icone sozinho ainda
+   funciona, uma fileira de botoes que nao cabe nao funciona de jeito nenhum. */
+@media (max-width: 900px) {
+  .chamada-controles .act-rotulo {
+    display: none;
+  }
+
+  .chamada-controles .act {
+    padding: 0 11px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Estado da conexao e diagnostico
+   -------------------------------------------------------------------------- */
+
+.chamada-estado {
+  flex: none;
+  padding: 10px 12px 0;
+}
+
+.conexao-detalhe {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.diagnostico {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: var(--t-corpo);
+}
+
+.diagnostico dt {
+  color: var(--text-muted);
+}
+
+.diagnostico dd {
+  margin: 0;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.diagnostico-nota {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--t-pequeno);
+}
+
+/* --------------------------------------------------------------------------
+   Dock da chamada em segundo plano
+   -------------------------------------------------------------------------- */
+
+.dock-chamada {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+}
+
+.dock-voltar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: var(--r-md);
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dock-voltar:hover {
+  background: var(--hover);
+}
+
+.dock-farol {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  transition:
+    color var(--mov) var(--curva),
+    background var(--mov) var(--curva);
+}
+
+/* Alguem falando muda a COR do farol, nao o tamanho: um icone que pulsa de
+   tamanho na barra de cima puxa o olho para fora da leitura o tempo todo. */
+.dock-farol.ativo {
+  background: var(--optic-wash);
+  color: var(--optic-bright);
+}
+
+.dock-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.dock-titulo {
+  font-size: var(--t-pequeno);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-sub {
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-gente {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dock-rosto {
+  display: inline-flex;
+  border-radius: var(--r-pill);
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow var(--mov) var(--curva);
+}
+
+.dock-rosto.falando {
+  box-shadow: 0 0 0 2px var(--optic);
+}
+
+.dock-resto {
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+}
+
+/* Empurra os controles para a direita da barra. */
+.dock-chamada .hud-controls {
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Colunas dentro do painel
+
+   `.presence-col` e `.chat-lateral` nasceram como colunas da tela e trazem
+   largura e borda proprias. Dentro do `ContextPanel` isso vira briga: a
+   largura fixa ignora a alca de arrastar, e as duas bordas esquerdas ficam
+   uma ao lado da outra. Aqui elas passam a preencher o painel e deixam a
+   moldura para ele.
+   -------------------------------------------------------------------------- */
+
+.painel .presence-col,
+.painel .chat-lateral {
+  width: 100%;
+  max-width: none;
+  flex: 1;
+  border-left: none;
+  background: transparent;
+}
+
+/* A conversa tem rolagem propria, com o campo de escrever preso embaixo.
+   Deixar o corpo do painel rolar tambem cria dois rolamentos aninhados, e o
+   campo sai da tela junto com as mensagens. */
+.painel-corpo:has(> .chat-lateral) {
+  display: flex;
+  overflow: hidden;
+}
+
+/* Sem titulo, o cabecalho da conversa lateral e so a fileira de acoes. */
+.painel .chat-lateral .chat-head {
+  justify-content: flex-end;
+  height: 32px;
+  border-bottom: none;
+}
+
+/* --------------------------------------------------------------------------
+   Vitrine: os modos do palco e o painel
+
+   Alturas fixas de proposito. O palco de verdade cresce com a janela, e aqui
+   o que se quer medir e a proporcao entre os quadros dentro de cada modo —
+   uma altura variavel faria o teste comparar numeros de execucoes diferentes.
+   -------------------------------------------------------------------------- */
+
+.vitrine-palco {
+  position: relative;
+  height: 200px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-card);
+  background: var(--bg-canvas);
+  overflow: hidden;
+}
+
+.vitrine-palco .stage-floor {
+  height: 100%;
+}
+
+.vitrine-nota {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+}
+
+/* O painel encosta na direita da janela, como no produto: a alca precisa de
+   uma borda contra a qual arrastar. */
+.vitrine-painel-area {
+  position: fixed;
+  top: var(--titlebar-h);
+  right: 0;
+  bottom: 0;
+  display: flex;
+  z-index: 40;
+}
+
+/* `hidden` sozinho nao esconde um elemento que o CSS declara como flex: a
+   regra do navegador para `[hidden]` tem especificidade menor que a classe.
+   Sem esta linha a barra continuava visivel ao lado do dock. */
+.stage-bar[hidden] {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Nao lidas: o divisor e o atalho de volta
+   -------------------------------------------------------------------------- */
+
+.chat {
+  /* O atalho de volta ao fim flutua sobre a conversa. */
+  position: relative;
+}
+
+/*
+  O divisor leva rotulo, e nao so uma linha.
+
+  Uma linha colorida atravessando a conversa e ambigua: pode ser separador de
+  dia, de assunto, ou defeito de desenho. Com "3 mensagens nao lidas" escrito
+  nela, ninguem precisa deduzir.
+*/
+.divisor-nao-lidas {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 14px 14px 6px;
+  border-top: 1px solid var(--status-danger);
+}
+
+.divisor-rotulo {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--status-danger);
+  color: var(--bg-canvas);
+  font-family: var(--font-ui);
+  font-size: var(--t-tecnico);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/*
+  O atalho so existe quando se saiu do fim, e flutua em vez de empurrar: uma
+  faixa que aparece e some no fluxo deslocaria a conversa inteira toda vez que
+  a rolagem cruzasse a fronteira.
+*/
+.voltar-ao-fim {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border-forte);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--t-pequeno);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
+}
+
+.voltar-ao-fim:hover {
+  color: var(--text-primary);
+  border-color: var(--optic);
+}
+
+.voltar-ao-fim svg {
+  flex: none;
+}
+
+/* Com mensagem nova o botao muda de COR e de TEXTO. So a cor nao bastaria:
+   "Ir para o fim" e "3 mensagens nao lidas" sao acoes diferentes — uma leva
+   ao presente, a outra ao ponto em que a pessoa parou. */
+.voltar-ao-fim.com-novidade {
+  border-color: var(--status-danger);
+  color: var(--status-danger);
+}
+
+.voltar-ao-fim.com-novidade:hover {
+  background: var(--status-danger);
+  color: var(--bg-canvas);
+}
+
+/* Na coluna estreita o campo de escrever e mais baixo. */
+.chat-lateral .voltar-ao-fim {
+  bottom: 74px;
+}
+
+/* --------------------------------------------------------------------------
+   Densidade compacta
+
+   O que ela faz: aperta o espacamento para caber mais conversa na tela. E o
+   que resolve a janela lateral estreita, onde o modo confortavel mostra
+   quatro mensagens e a conversa vira um tunel.
+
+   O avatar tambem encolhe, mas nao por aqui — ele recebe o tamanho em pixels
+   por propriedade, e nenhuma regra de estilo alcanca isso sem `!important`.
+   Quem cuida dele e `useDensidade`, e a largura da calha abaixo acompanha o
+   numero de la. Elas precisam casar: calha menor que o avatar o faz
+   transbordar por cima do texto, que foi o que a primeira versao fez.
+
+   O que ela NAO faz, de proposito: nao move o nome do autor para a mesma
+   linha do texto. Daria mais densidade ainda, mas exigiria transformar
+   `.msg-body` em uma linha flexivel — e anexos, respostas, embeds e reacoes
+   moram todos ali dentro. Eles iriam parar ao lado do texto em vez de abaixo
+   dele, e o ganho de algumas dezenas de pixels sairia caro nas mensagens que
+   tem qualquer coisa alem de texto puro.
+
+   Tudo aqui e espacamento e tamanho. Nenhuma informacao sai da tela: quem
+   escolhe compacto quer ver mais, nao ver menos.
+   -------------------------------------------------------------------------- */
+
+[data-densidade='compacto'] .msg {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+[data-densidade='compacto'] .msg.first {
+  margin-top: 7px;
+}
+
+[data-densidade='compacto'] .msg-gutter {
+  /* 28px para casar com o avatar, que recebe o tamanho por propriedade em
+     `useDensidade`. Uma calha menor que o avatar o faz transbordar por cima
+     do texto — foi o que a primeira versao fez. */
+  width: 28px;
+  padding-top: 1px;
+}
+
+[data-densidade='compacto'] .msg-head {
+  margin-bottom: 0;
+}
+
+[data-densidade='compacto'] .msg-text {
+  line-height: 1.38;
+}
+
+[data-densidade='compacto'] .messages-intro {
+  padding: 16px 16px 10px;
+}
+
+[data-densidade='compacto'] .divisor-nao-lidas {
+  margin-top: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Pagina inicial
+
+   Ocupa o centro quando nao ha servidor nem conversa aberta. O espaco e o
+   mesmo que antes mostrava "escolha um canal na barra lateral": e a maior
+   area da janela, e ela deve responder "e agora?", nao repetir uma instrucao.
+   -------------------------------------------------------------------------- */
+
+.inicio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--void);
+}
+
+.inicio-topo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.inicio-titulo {
+  margin: 0;
+  font-size: var(--t-titulo);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* As acoes vao para a direita da barra; em janela estreita caem para a linha
+   de baixo em vez de espremer as abas. */
+.inicio-acoes {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.inicio-acoes .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-conta {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+}
+
+/* O numero de pedidos pendentes e o unico item com prazo aqui, e por isso o
+   unico que ganha cor de alerta. */
+.tab-badge {
+  margin-left: 6px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--status-danger);
+  color: var(--bg-canvas);
+  font-size: var(--t-tecnico);
+  font-weight: 700;
+}
+
+.inicio-adicionar {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 14px 20px 0;
+}
+
+.inicio-adicionar > :first-child {
+  flex: 1;
+  max-width: 420px;
+}
+
+.inicio-aviso {
+  flex: none;
+  padding: 12px 20px 0;
+  max-width: 640px;
+}
+
+.inicio-lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 20px;
+}
+
+.inicio-pessoa {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.inicio-pessoa:hover {
+  background: var(--hover);
+}
+
+.inicio-nome {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.inicio-exibicao {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* O @usuario fica ao lado porque e ele que se digita para adicionar alguem —
+   esconde-lo obrigaria a abrir o perfil so para copiar o nome. */
+.inicio-usuario {
+  font-family: var(--font-mono);
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inicio-botoes {
+  display: flex;
+  gap: 6px;
+}
+
+/* Aceitar e recusar sao opostos e precisam de forma propria, nao so de cor:
+   o visto e o X ja dizem qual e qual sem depender de enxergar verde e
+   vermelho. */
+.inicio-botoes .act.bom {
+  color: var(--status-success);
+  border-color: var(--status-success);
+}
+
+.inicio-botoes .act.ruim {
+  color: var(--status-danger);
+  border-color: var(--status-danger);
+}
+
+.inicio-botoes .act.bom:hover {
+  background: var(--status-success);
+  color: var(--bg-canvas);
+}
+
+.inicio-botoes .act.ruim:hover {
+  background: var(--status-danger);
+  color: var(--bg-canvas);
+}
+
+/* A vitrine mostra o divisor e o botao fora da conversa, entao eles precisam
+   de um chao proprio: o botao e posicionado de forma absoluta no produto, e
+   solto aqui ele sairia voando para o canto da tela. */
+.vitrine-conversa {
+  position: relative;
+  padding: 10px 0;
+  border-radius: var(--r-card);
+  background: var(--bg-canvas);
+}
+
+.voltar-ao-fim.vitrine-estatico {
+  position: static;
+  transform: none;
+}
+
+/* --------------------------------------------------------------------------
+   Cartao de perfil
+
+   O mesmo cartao serve para a previa de quem edita e para ver o perfil de
+   outra pessoa. Por isso ele nao sabe nada sobre edicao: recebe valores e
+   desenha.
+   -------------------------------------------------------------------------- */
+
+.cartao-perfil {
+  width: 100%;
+  max-width: 320px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.cartao-faixa {
+  height: 68px;
+  background: var(--optic-wash);
+  background-size: cover;
+  background-position: center;
+}
+
+.cartao-corpo {
+  padding: 0 16px 16px;
+}
+
+/* O avatar monta sobre a faixa. O anel nao e enfeite: sem ele, avatar escuro
+   sobre faixa escura vira uma mancha so — que e o caso com a cor padrao. */
+.cartao-avatar {
+  margin-top: -36px;
+  border: 4px solid var(--bg-elevated);
+  border-radius: var(--r-pill);
+  background: var(--bg-elevated);
+}
+
+.cartao-nomes {
+  margin-top: 10px;
+}
+
+.cartao-exibicao {
+  margin: 0;
+  font-size: var(--t-titulo);
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.cartao-usuario {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+}
+
+.cartao-pronomes {
+  font-family: var(--font-ui);
+}
+
+/* Preserva as quebras de linha que a pessoa escreveu: sem isto, tres linhas
+   curtas viram um paragrafo so e a formatacao que ela viu no campo some. */
+.cartao-bio {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-default);
+  font-size: var(--t-pequeno);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cartao-acoes {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* --------------------------------------------------------------------------
+   Barra de alteracoes nao salvas
+
+   Presa embaixo e por cima do conteudo, nao dentro do fluxo: uma barra que
+   empurra desloca a coluna inteira assim que alguem digita a primeira letra.
+   -------------------------------------------------------------------------- */
+
+.barra-nao-salvo {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-forte);
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+}
+
+.barra-icone {
+  flex: none;
+  color: var(--status-warning);
+}
+
+.barra-texto {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-pequeno);
+  color: var(--text-secondary);
+}
+
+/* Erro muda a cor da borda E o icone fica vermelho: duas pistas, porque uma
+   barra amarela e uma vermelha lado a lado nunca aparecem para comparar. */
+.barra-nao-salvo.com-erro {
+  border-color: var(--status-danger);
+}
+
+.barra-nao-salvo.com-erro .barra-icone {
+  color: var(--status-danger);
+}
+
+.barra-nao-salvo.com-erro .barra-texto {
+  color: var(--status-danger);
+}
+
+/* --------------------------------------------------------------------------
+   Meu perfil: campos e previa lado a lado
+   -------------------------------------------------------------------------- */
+
+.perfil-colunas {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.perfil-campos {
+  flex: 1;
+  min-width: 0;
+}
+
+.perfil-previa {
+  flex: none;
+  width: 320px;
+  position: sticky;
+  top: 0;
+}
+
+.perfil-previa-rotulo {
+  display: block;
+  margin-bottom: 8px;
+  font-size: var(--t-tecnico);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.perfil-trocar-foto {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--t-pequeno);
+  cursor: pointer;
+}
+
+.perfil-trocar-foto:hover {
+  border-color: var(--border-forte);
+  color: var(--text-primary);
+}
+
+/* A previa desce para baixo dos campos quando a coluna aperta. Some, nunca:
+   ela e o unico jeito de ver o resultado antes de salvar. */
+@media (max-width: 1100px) {
+  .perfil-colunas {
+    flex-direction: column;
+    /*
+      `stretch` em vez do `flex-start` de cima, e nao e detalhe: em coluna, o
+      alinhamento manda no eixo HORIZONTAL, e `flex-start` faz cada filho
+      encolher ate o tamanho do proprio conteudo. Medido a 900px: a coluna de
+      campos ficava com 215px — um campo de nome com pouco mais de um dedo de
+      largura — enquanto a previa ocupava 612px.
+    */
+    align-items: stretch;
+  }
+
+  .perfil-previa {
+    width: 100%;
+    max-width: 320px;
+    position: static;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Acessibilidade: o que virou botao
+
+   Cinco elementos clicaveis eram `div` ou `span` com `onClick` — invisiveis
+   para o teclado. Viraram botao, e o botao traz consigo estilo de navegador
+   que precisa ser desfeito: fundo cinza, borda, fonte do sistema e
+   alinhamento centralizado.
+   -------------------------------------------------------------------------- */
+
+.nav-header,
+.hud-identity,
+.category-alternar {
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* A linha da categoria deixou de ter o clique; quem clica agora e o botao. */
+.category {
+  cursor: default;
+}
+
+.category-alternar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  /* Herda o tamanho e o espacamento de letra da propria categoria. */
+  font-family: var(--font-ui);
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.category-alternar:hover {
+  color: var(--text-secondary);
+}
+
+.category-alternar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mencao de canal: e navegacao, entao e botao. O estilo de link continua. */
+button.mention {
+  border: none;
+  font: inherit;
+  font-weight: 500;
+  border-radius: var(--r-sm);
+}
+
+button.mention:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* --------------------------------------------------------------------------
+   Atalho para o conteudo
+
+   Primeiro item da ordem de tabulacao, escondido ate receber foco. Sem ele,
+   chegar na conversa pelo teclado exige atravessar a barra de servidores e a
+   lista inteira de canais — toda vez que a pagina carrega.
+   -------------------------------------------------------------------------- */
+
+.pular-para-conteudo {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 500;
+  padding: 8px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--optic);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--t-pequeno);
+  /* Fora da tela ate receber foco — e nao `display: none`, que o tiraria da
+     ordem de tabulacao e o impediria de receber foco algum dia. */
+  transform: translateY(-200%);
+  transition: transform var(--mov) var(--curva);
+}
+
+.pular-para-conteudo:focus {
+  transform: translateY(0);
+}
+
+/* --------------------------------------------------------------------------
+   Enquanto a sessao nao chega
+
+   Esqueleto e nao roda-roda: o esqueleto mostra a FORMA do que vem, entao
+   quando o conteudo chega ele ocupa o lugar ja desenhado e a tela nao salta.
+   -------------------------------------------------------------------------- */
+
+.conectando {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px;
+  gap: 18px;
+}
+
+.conectando-aviso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--t-pequeno);
+}
+
+.conectando-esqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.conectando-linha {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* --------------------------------------------------------------------------
+   Convite para assistir uma transmissao
+
+   Ocupa o lugar do video quando ninguem aceitou ainda. Nao ha previa nem
+   miniatura ao vivo de proposito: qualquer imagem aqui exigiria baixar a
+   transmissao, que e exatamente o que este estado evita.
+   -------------------------------------------------------------------------- */
+
+.convite-transmissao {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+.convite-icone {
+  color: var(--text-muted);
+}
+
+.convite-titulo {
+  font-size: var(--t-pequeno);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/*
+  Na fita lateral o quadro tem 148px: nao cabe icone, frase e botao. Sobra o
+  botao, que e a unica coisa acionavel — e o nome ja aparece no rodape do
+  proprio cartao.
+*/
+.tile.mini .convite-icone,
+.tile.mini .convite-titulo {
+  display: none;
+}
+
+.tile.mini .convite-transmissao {
+  padding: 6px;
+}
+
+.tile.mini .convite-transmissao .btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--t-tecnico);
+}
+
+/* O cartao do convite nao e clicavel como os outros quadros: ele nao tem o
+   que destacar. O cursor diz isso antes do clique. */
+.tile:has(.convite-transmissao) {
+  cursor: default;
+}
+
+.tile:has(.convite-transmissao) .convite-transmissao .btn {
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Cartao da pessoa (botao direito)
+
+   Reune, num lugar so, o que se quer fazer com alguem durante uma chamada:
+   ver quem e, ajustar os dois volumes dela, e adicionar como amigo.
+   -------------------------------------------------------------------------- */
+
+.cartao-pessoa {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Dentro do balao o cartao encosta nas bordas: a moldura ja e do balao. */
+.cartao-pessoa .cartao-perfil {
+  max-width: none;
+  border: none;
+  border-radius: var(--r-md);
+}
+
+.cartao-volumes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.cartao-volume {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cartao-volume-icone {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.cartao-volume input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--optic);
+  cursor: pointer;
+}
+
+/* Largura fixa para o numero: sem ela, ir de 100% para 95% encolhe o rotulo
+   e o deslizante pula um pixel para o lado no meio do arrasto. */
+.cartao-volume-valor {
+  flex: none;
+  width: 44px;
+  text-align: right;
+  font-size: var(--t-tecnico);
+  color: var(--text-muted);
+}
+
+.cartao-pessoa-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 4px 4px;
+}
+
+.cartao-pessoa-acoes .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+}
+
+.cartao-ja-amigo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  font-size: var(--t-pequeno);
+  color: var(--status-success);
+}
+
+.cartao-erro {
+  font-size: var(--t-tecnico);
+  color: var(--status-danger);
+  text-align: center;
+}

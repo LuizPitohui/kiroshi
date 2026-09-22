@@ -1,0 +1,43 @@
+{
+  "name": "kiroshi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kiroshi — plataforma de comunicacao por voz, video e texto auto-hospedada",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/desktop"
+  ],
+  "scripts": {
+    "build": "npm run build -w @kiroshi/shared && npm run build -w @kiroshi/server && npm run build -w @kiroshi/desktop",
+    "build:shared": "npm run build -w @kiroshi/shared",
+    "dev:server": "npm run dev -w @kiroshi/server",
+    "dev:desktop": "npm run dev -w @kiroshi/desktop",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:push": "npm run db:push -w @kiroshi/server",
+    "db:migrate": "npm run db:migrate -w @kiroshi/server",
+    "db:seed": "npm run db:seed -w @kiroshi/server",
+    "dist:win": "npm run dist:win -w @kiroshi/desktop"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.2",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "@prisma/client@6.19.3": true,
+    "argon2@0.41.1": true,
+    "prisma@6.19.3": true,
+    "sharp@0.33.5": true,
+    "@prisma/engines@6.19.3": true,
+    "electron@38.8.6": true,
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.25.12": true
+  }
+}
