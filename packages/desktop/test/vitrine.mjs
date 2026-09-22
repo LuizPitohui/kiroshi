@@ -1200,6 +1200,285 @@ check(
   teclado.foraDoAlcance.join(', '),
 );
 
+// ---------------------------------------------------------------------------
+/*
+  O SISTEMA VISUAL CHEGOU MESMO NA TELA?
+
+  Esta secao existe porque CSS falha em silencio. Uma regra que perde em
+  especificidade, um arquivo que entra na ordem errada, uma fonte declarada e
+  nao empacotada — nada disso levanta erro, quebra a compilacao ou aparece no
+  typecheck. A tela so fica um pouco diferente do que se escreveu, e ninguem
+  nota ate alguem reclamar.
+
+  Ja aconteceu nesta base: `componentes.css` carrega DEPOIS de `global.css`,
+  entao um bloco novo escrito no fim do `global.css` perdia para qualquer
+  regra que `componentes.css` tivesse para a mesma classe. As camadas —
+  dialogo, menu, avatar — estavam escritas e nao apareciam.
+
+  O que se verifica aqui nao e gosto. E a diferenca entre o que o arquivo diz
+  e o que o navegador calculou.
+*/
+console.log(String.fromCharCode(10) + '--- SISTEMA VISUAL: A REGRA VENCEU? ---');
+
+const visual = JSON.parse(
+  await avaliar(`(async () => {
+    await document.fonts.load('700 26px Rajdhani');
+    await document.fonts.ready;
+
+    const palco = document.createElement('div');
+    palco.style.cssText = 'position:fixed;left:-9999px;top:0';
+    palco.innerHTML =
+      '<h2 class="settings-title">Audio</h2>' +
+      '<label class="field-label">Microfone</label>' +
+      '<div class="empty"><h3>Sem mensagens</h3></div>' +
+      '<button class="btn btn-primary">Salvar</button>' +
+      '<button class="btn">Cancelar</button>' +
+      '<div class="category"><span>Geral</span></div>' +
+      '<div class="category category-acao"><span>Criar canal</span></div>' +
+      '<div class="dialogo"><h2 class="dialogo-titulo">Confirmar</h2></div>' +
+      '<div class="avatar"></div>' +
+      '<div class="menu"></div>' +
+      '<div class="aviso"></div>' +
+      '<div class="cartao-pessoa"></div>' +
+      '<button class="btn btn-danger">Sair</button>' +
+      '<span class="channel-badge">3</span>';
+    document.body.appendChild(palco);
+
+    const s = (sel, pseudo) => {
+      const el = palco.querySelector(sel);
+      if (!el) return null;
+      const c = getComputedStyle(el, pseudo || null);
+      return {
+        fonte: c.fontFamily.split(',')[0].replace(/['"]/g, ''),
+        tamanho: parseFloat(c.fontSize),
+        espaco: parseFloat(c.letterSpacing) || 0,
+        caixa: c.textTransform,
+        conteudo: c.content,
+        raio: c.borderRadius,
+        recorte: c.clipPath,
+        cor: c.color,
+        fundo: c.backgroundColor,
+      };
+    };
+
+    const largura = (ff) => {
+      const c = document.createElement('canvas').getContext('2d');
+      c.font = '700 26px ' + ff;
+      return c.measureText('NENHUMA MENSAGEM AINDA').width;
+    };
+
+    const r = {
+      tituloAjuste: s('.settings-title'),
+      tituloAjusteMarca: s('.settings-title', '::before'),
+      rotuloCampo: s('.field-label'),
+      telaVazia: s('.empty h3'),
+      botaoPrimario: s('.btn-primary'),
+      botaoComum: s('.btn:not(.btn-primary)'),
+      categoria: s('.category:not(.category-acao) span'),
+      categoriaMarca: s('.category:not(.category-acao) span', '::before'),
+      categoriaAcaoMarca: s('.category-acao span', '::before'),
+      dialogo: s('.dialogo'),
+      dialogoTitulo: s('.dialogo-titulo'),
+      avatar: s('.avatar'),
+      menu: s('.menu'),
+      aviso: s('.aviso'),
+      cartaoPessoa: s('.cartao-pessoa'),
+      botaoPerigo: s('.btn-danger'),
+      seloNaoLidas: s('.channel-badge'),
+      rajdhaniPronta: document.fonts.check('700 26px Rajdhani'),
+      larguraRajdhani: largura('Rajdhani'),
+      larguraInter: largura('Inter'),
+      larguraSubstituta: largura('sans-serif'),
+    };
+    palco.remove();
+    return JSON.stringify(r);
+  })()`),
+);
+
+/*
+  A fonte de placa foi EMPACOTADA, nao so declarada.
+
+  `getComputedStyle` devolve o nome que esta no CSS mesmo quando o arquivo nao
+  existe — ele reporta a intencao, nao o resultado. Quem responde de verdade e
+  a medida: a Rajdhani e condensada, entao a mesma frase nos mesmos 26px tem
+  que sair visivelmente mais estreita que na Inter. Se o arquivo faltasse, o
+  navegador cairia na substituta do sistema e as duas larguras se encostariam.
+
+  Medido ao empacotar: 303px contra 388px da Inter e 383px da substituta.
+  Os 10% de folga cobrem variacao de versao da fonte.
+*/
+check('a fonte de placa esta empacotada, nao so declarada', visual.rajdhaniPronta);
+check(
+  'e ela e mesmo condensada, nao a substituta do sistema',
+  visual.larguraRajdhani < visual.larguraSubstituta * 0.9,
+  Math.round(visual.larguraRajdhani) +
+    'px vs ' +
+    Math.round(visual.larguraSubstituta) +
+    'px na substituta',
+);
+check(
+  'a tela vazia usa a fonte de placa',
+  visual.telaVazia.fonte === 'Rajdhani' && visual.telaVazia.caixa === 'uppercase',
+  visual.telaVazia.fonte + ' ' + visual.telaVazia.tamanho + 'px',
+);
+/*
+  Titulo grande vai com espacamento NEGATIVO — e o sinal trocado e justamente
+  o tipo de coisa que se perde numa refatoracao sem ninguem perceber.
+*/
+check(
+  'e o titulo grande fecha as letras, em vez de abrir',
+  visual.telaVazia.espaco < 0,
+  visual.telaVazia.espaco.toFixed(2) + 'px',
+);
+
+/*
+  As tres vozes continuam separadas.
+
+  O risco aqui nao e uma delas sumir: e todas convergirem. Se botao comum e
+  botao de confirmar acabarem na mesma fonte e na mesma caixa, a hierarquia de
+  que o sistema inteiro depende desaparece sem quebrar nada.
+*/
+check(
+  'o botao que comete fala como comando',
+  visual.botaoPrimario.fonte === 'JetBrains Mono' && visual.botaoPrimario.caixa === 'uppercase',
+  visual.botaoPrimario.fonte,
+);
+check(
+  'e o botao que desiste continua em voz normal',
+  visual.botaoComum.fonte === 'Inter' && visual.botaoComum.caixa !== 'uppercase',
+  visual.botaoComum.fonte + ' ' + visual.botaoComum.caixa,
+);
+check(
+  'rotulo de campo e leitura de instrumento',
+  visual.rotuloCampo.fonte === 'JetBrains Mono' && visual.rotuloCampo.caixa === 'uppercase',
+  visual.rotuloCampo.fonte,
+);
+
+/*
+  A marca de secao aparece onde ha secao, e SO onde ha secao.
+
+  A segunda metade importa tanto quanto a primeira. "Criar canal" mora na
+  mesma classe `.category` e nao e uma secao: e uma acao. Marcar
+  `// CRIAR CANAL` transformaria um botao em cabecalho e desfaria exatamente a
+  distincao que a marca existe para criar.
+*/
+check(
+  'a secao de ajustes se anuncia com a marca',
+  visual.tituloAjusteMarca.conteudo.includes('//'),
+  visual.tituloAjusteMarca.conteudo,
+);
+check(
+  'a categoria de canais tambem',
+  visual.categoriaMarca.conteudo.includes('//'),
+  visual.categoriaMarca.conteudo,
+);
+check(
+  'mas a acao na mesma classe NAO leva marca',
+  !visual.categoriaAcaoMarca.conteudo.includes('//'),
+  visual.categoriaAcaoMarca.conteudo,
+);
+check(
+  'e a marca e larga o bastante para ler como rotulo',
+  visual.tituloAjuste.espaco / visual.tituloAjuste.tamanho > 0.2,
+  (visual.tituloAjuste.espaco / visual.tituloAjuste.tamanho).toFixed(3) + 'em',
+);
+
+/*
+  As camadas venceram a ordem dos arquivos.
+
+  Aqui esta o caso concreto, e ele foi MEDIDO desfazendo o conserto: com o
+  bloco escrito no fim do `global.css`, `componentes.css` — que carrega depois
+  — devolvia o canto arredondado ao dialogo e ao aviso, sem um erro, um aviso
+  de compilacao ou uma linha no typecheck.
+
+  So os DOIS primeiros checks abaixo reprovam nesse arranjo; foi verificado um
+  por um, nao deduzido. Os outros tres passam dos dois jeitos, porque as
+  classes deles nao tem raio proprio disputando em `componentes.css`. Ficam
+  mesmo assim: guardam contra a regra ser apagada. So nao servem de prova de
+  ordem, e vale saber qual check prova o que — um check que passaria quebrado
+  da uma seguranca que ele nao tem.
+*/
+check(
+  'o dialogo e uma placa chanfrada',
+  visual.dialogo.recorte.includes('polygon') && visual.dialogo.raio === '0px',
+  visual.dialogo.recorte.slice(0, 24),
+);
+check(
+  'o aviso tambem perdeu o canto arredondado',
+  visual.aviso.recorte.includes('polygon') && visual.aviso.raio === '0px',
+  'raio ' + visual.aviso.raio,
+);
+check(
+  'o cartao de pessoa e uma ficha, nao um cartao de visita',
+  visual.cartaoPessoa.recorte.includes('polygon') && visual.cartaoPessoa.raio === '0px',
+  'raio ' + visual.cartaoPessoa.raio,
+);
+check(
+  'o titulo do dialogo le como comando de painel',
+  visual.dialogoTitulo.fonte === 'JetBrains Mono' && visual.dialogoTitulo.caixa === 'uppercase',
+  visual.dialogoTitulo.fonte,
+);
+check(
+  'o menu tambem, em escala menor',
+  visual.menu.recorte.includes('polygon'),
+  visual.menu.recorte.slice(0, 24),
+);
+/*
+  O avatar deixou de ser circulo. Nao e enfeite: o circulo joga fora os quatro
+  cantos de toda foto, e le como rede social. Quadrado cortado le como
+  credencial, que e a leitura certa num aplicativo chamado Kiroshi.
+*/
+check(
+  'o avatar e credencial, nao bolinha',
+  visual.avatar.raio === '0px' && visual.avatar.recorte.includes('polygon'),
+  'raio ' + visual.avatar.raio,
+);
+
+/*
+  O VERMELHO DE PREENCHIMENTO TEM QUE SER LEGIVEL POR BAIXO DO TEXTO.
+
+  Este e o defeito que motivou separar `--red` de `--red-solido`, e ele durou
+  meses sem ninguem notar: o vermelho foi escolhido para mensagem de erro, onde
+  brilha sobre fundo escuro (6.63:1), e depois reaproveitado como FUNDO em treze
+  lugares — botao de sair, selo de nao lidas, marcador de transmissao. Branco
+  sobre aquele rosa da 2.79:1, bem abaixo do minimo de 4.5.
+
+  Um tom claro e bom escrito e ruim por baixo; um escuro e o contrario. Nenhuma
+  ferramenta avisa: nao ha erro de compilacao para "esta cor foi usada no papel
+  errado", e na tela de quem escolheu ele parecia bom.
+
+  O calculo aqui e a formula de contraste do WCAG, sobre os valores que o
+  navegador REALMENTE computou — nao sobre os tokens. Se alguem trocar o token,
+  apontar um componente novo para o vermelho errado ou mexer na opacidade, este
+  check reprova com o numero na mao.
+*/
+function contraste(corA, corB) {
+  const canal = (c) => {
+    const n = c / 255;
+    return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4);
+  };
+  const lum = (css) => {
+    const [r, g, b] = css.match(/\d+(\.\d+)?/g).map(Number);
+    return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b);
+  };
+  const [claro, escuro] = [lum(corA), lum(corB)].sort((a, b) => b - a);
+  return (claro + 0.05) / (escuro + 0.05);
+}
+
+const razaoBotao = contraste(visual.botaoPerigo.cor, visual.botaoPerigo.fundo);
+check(
+  'o botao de perigo tem texto legivel sobre o vermelho',
+  razaoBotao >= 4.5,
+  razaoBotao.toFixed(2) + ':1',
+);
+
+const razaoSelo = contraste(visual.seloNaoLidas.cor, visual.seloNaoLidas.fundo);
+check(
+  'e o selo de nao lidas tambem',
+  razaoSelo >= 4.5,
+  razaoSelo.toFixed(2) + ':1',
+);
+
 console.log(`\n=========================================`);
 console.log(`  ${passou} passaram, ${falhou} falharam`);
 console.log(`=========================================\n`);

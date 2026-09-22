@@ -76,6 +76,38 @@
 }
 
 /*
+  Rajdhani: a terceira voz, e a unica que existe para ser VISTA antes de lida.
+
+  Inter e JetBrains cobrem ler e medir. Faltava a voz de PLACA — o nome do
+  aplicativo, o titulo de uma tela vazia, o cabecalho de uma sala. Em Inter
+  esses textos ficavam corretos e mudos: a mesma fonte do resto, um pouco
+  maior.
+
+  Rajdhani e condensada e de terminacoes retas. Duas consequencias praticas,
+  nao decorativas: em caixa alta ela ocupa menos largura que a Inter no mesmo
+  tamanho, entao cabe titulo grande em painel estreito; e o desenho quadrado
+  combina com o canto vivo e o chanfro do resto do sistema, onde a Inter
+  humanista destoava.
+
+  Dois pesos, 31 KB, mesma licenca aberta das outras duas. Nao entra em
+  paragrafo nem em conversa: em texto corrido a condensacao cansa.
+*/
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fontes/rajdhani-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fontes/rajdhani-700.woff2') format('woff2');
+}
+
+/*
   ==========================================================================
   TOKENS SEMANTICOS
 
@@ -103,15 +135,33 @@
   ==========================================================================
 */
 :root {
-  /* Superficies, do mais fundo ao mais alto */
-  --bg-canvas: #080c12;
-  --bg-sidebar: #0e151f;
-  --bg-surface: #151f2c;
-  --bg-elevated: #1d2a3a;
+  /*
+    Superficies, do mais fundo ao mais alto.
 
-  /* Contornos. O forte existe para o que carrega significado. */
-  --border-default: #2b3b4f;
-  --border-forte: #4a6076;
+    Subiram todas. A escala antiga comecava em #080c12 — quase preto — e os
+    degraus entre elas eram curtos demais para separar nada sozinhos. O
+    resultado foi uma interface que dependia de BORDA para dizer onde uma
+    coisa termina e outra comeca, e borda em tudo e o que faz uma tela parecer
+    rascunho em vez de produto.
+
+    Agora os degraus sao largos o bastante para separar por luz. A borda passa
+    a ser excecao, para o que carrega significado — nao o andaime da tela.
+  */
+  --bg-canvas: #0e141c;
+  --bg-sidebar: #151d28;
+  --bg-surface: #1c2634;
+  --bg-elevated: #253243;
+
+  /*
+    Contornos.
+
+    O padrao ficou MAIS FRACO de proposito, quase um fio. Com as superficies
+    separadas por luz, a borda deixou de ser quem organiza a tela e virou um
+    detalhe — some quando nao e necessaria e aparece quando ha algo para
+    delimitar de verdade.
+  */
+  --border-default: #263243;
+  --border-forte: #3c5068;
 
   /* Texto */
   --text-primary: #eef4ff;
@@ -134,18 +184,41 @@
     especificacao pede. Tres degraus, e nao um so: um contador de mencoes com
     12px de raio vira uma bolha disforme, e um cartao com 6px parece um erro.
   */
-  --r-sm: 6px;
-  --r-control: 8px;
-  --r-card: 12px;
+  /*
+    Cantos quase retos.
+
+    Doze pixels de raio num cartao e a forma padrao de aplicativo de celular:
+    macia, amigavel, generica. Este aqui se chama Kiroshi, roda num servidor
+    chamado arasaka, e a identidade sempre esteve no nome — faltava estar na
+    forma.
+
+    Canto quase reto le como INSTRUMENTO. Nao e enfeite: e a diferenca entre
+    parecer um painel tecnico e parecer um formulario.
+  */
+  --r-sm: 2px;
+  --r-control: 3px;
+  --r-card: 4px;
   --r-pill: 999px;
+
+  /*
+    O chanfro: o canto cortado na diagonal.
+
+    A assinatura da estetica — canto de placa de metal cortada, e nao
+    retangulo arredondado. Fica como variavel porque so entra onde carrega
+    peso: quadro de chamada, dialogo, botao principal. Chanfrar tudo vira
+    ruido, e ruido e o erro de quem copia o clima sem entender a regra.
+  */
+  --chanfro: 9px;
+  --chanfro-sm: 6px;
 
   /* --- nomes antigos, apontando para os novos --- */
   --void: var(--bg-canvas);
   --panel: var(--bg-sidebar);
   --raised: var(--bg-surface);
-  --hover: #18242f;
+  --hover: #202b39;
   --active: var(--bg-elevated);
-  --input: #0b1119;
+  /* Campo afunda em vez de subir: e onde se escreve, nao onde se le. */
+  --input: #101720;
 
   /* Ciano optico: a cor do instrumento ligado */
   --optic: var(--accent-primary);
@@ -163,6 +236,33 @@
   /* Vermelho: ao vivo, perigo, desconectar */
   --red: var(--status-danger);
   --red-wash: rgba(255, 104, 125, 0.12);
+
+  /*
+    Vermelho de PREENCHIMENTO, separado do vermelho de TEXTO.
+
+    Os dois existem porque sao trabalhos opostos e um tom so nao serve para
+    ambos. Medido contra o fundo escuro:
+
+      #ff687d como texto ............... 6.63:1   otimo
+      #ff687d preenchido, texto branco . 2.79:1   reprova (o minimo e 4.5)
+      #dc2626 preenchido, texto branco . 4.83:1   passa
+      #dc2626 como texto ............... 3.83:1   reprova
+
+    O claro e legivel escrito e fraco por baixo; o escuro e o contrario. O
+    `--red` foi escolhido para mensagem de erro, onde ele brilha, e depois
+    reaproveitado como fundo em treze lugares — selo de nao lidas, marcador de
+    transmissao ao vivo, botao de sair. Todos ficaram com branco sobre rosa a
+    2.79:1: legivel na mesa de quem escreveu, nao no monitor de quem usa.
+
+    O tom e o mesmo #dc2626 do Nexus, o outro projeto da casa. Nao e citacao:
+    e a resposta certa para este problema, e sai de graca que as duas coisas
+    fiquem parecidas.
+
+    Quem NAO deve usar este: marca pequena sem texto em cima — a barrinha de
+    sinal ruim, o ponto de transmitindo. Ali nao ha contraste de texto para
+    resolver e o claro aparece mais.
+  */
+  --red-solido: #dc2626;
 
   /* Presenca */
   --on: var(--status-success);
@@ -218,6 +318,15 @@
     A curva sai rapido e freia no fim. Nada de "ease" puro, que comeca devagar
     e da a impressao de atraso antes de qualquer coisa acontecer.
   */
+  /*
+    Tres velocidades, nao duas.
+
+    Faltava a curta. Realce de passar o mouse e afundar de botao a 120ms se
+    percebem como atraso, porque respondem a uma acao que a pessoa acabou de
+    fazer com a propria mao — ali o movimento so precisa existir, nao ser
+    visto. 120ms fica para o que MUDA (abrir, revelar, deslizar).
+  */
+  --mov-rapida: 80ms;
   --mov: 120ms;
   --mov-lenta: 220ms;
   --curva: cubic-bezier(0.2, 0.8, 0.25, 1);
@@ -241,6 +350,37 @@
   --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'Consolas', monospace;
+  --font-display: 'Rajdhani', 'Bahnschrift', 'Oswald', var(--font-ui);
+
+  /*
+    Escala de espacamento de letra da monoespacada.
+
+    Tres degraus, porque a monoespacada faz tres trabalhos diferentes e cada
+    um pede um espacamento:
+
+      justa  — valor que se LE de relance (latencia, taxa, horario). Espacar
+               numero atrapalha: o olho compara colunas, nao letras.
+      media  — rotulo de campo e item de menu. Abre o suficiente para a caixa
+               alta respirar sem virar enfeite.
+      larga  — rotulo de secao e legenda de comando, que aparecem uma vez por
+               tela e existem para marcar territorio.
+
+    Ter os tres nomeados evita o que estava acontecendo: 0.14em aqui, 0.18em
+    ali, 0.12em acola, todos escolhidos no olho e nenhum igual ao outro.
+  */
+  --tk-mono-justa: 0.05em;
+  --tk-mono-media: 0.14em;
+  --tk-mono-larga: 0.24em;
+
+  /*
+    Titulo grande vai com espacamento NEGATIVO.
+
+    Parece contradizer o de cima e nao contradiz: sao problemas opostos. Caixa
+    alta pequena precisa de ar para nao virar borrao. Titulo de 28px ja tem ar
+    demais entre as letras, e o negativo junta a palavra num bloco solido —
+    que e o que faz titulo parecer titulo, e nao letras enfileiradas.
+  */
+  --tk-display: -0.03em;
 
   /*
     Escala de texto.
@@ -313,6 +453,8 @@
 
   --red: #d32f3d;
   --red-wash: rgba(211, 47, 61, 0.1);
+  /* Mesma separacao do tema escuro. Branco sobre este: 7.04:1. */
+  --red-solido: #b01526;
 
   --on: #00897b;
   --away: #b87400;
@@ -614,7 +756,7 @@ a:hover {
 }
 
 .titlebar-button.close:hover {
-  background: var(--red);
+  background: var(--red-solido);
   color: #fff;
 }
 
@@ -787,7 +929,7 @@ a:hover {
   min-width: 17px;
   height: 17px;
   padding: 0 4px;
-  background: var(--status-danger);
+  background: var(--red-solido);
   color: var(--bg-canvas);
   border-radius: var(--r-pill);
   font-family: var(--font-mono);
@@ -930,17 +1072,28 @@ a:hover {
   white-space: nowrap;
 }
 
+/*
+  Quantas pessoas estao na sala e informacao, nao enfeite.
+
+  Estava em `--text-ghost`, o tom mais apagado do sistema — o mesmo dos
+  rotulos de secao, que existem para sumir quando nao se olha para eles. So
+  que este numero e o unico jeito de saber se vale a pena entrar numa sala sem
+  abrir a sala. Contra o fundo da coluna ele mal passava de 3:1 e, em tela
+  pequena ou com brilho baixo, simplesmente nao aparecia.
+
+  `--text-muted` ainda e discreto e deixa de ser adivinhacao.
+*/
 .channel-count {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-ghost);
+  color: var(--text-muted);
 }
 
 .channel-badge {
   min-width: 16px;
   height: 15px;
   padding: 0 4px;
-  background: var(--red);
+  background: var(--red-solido);
   color: #fff;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1172,7 +1325,7 @@ a:hover {
 
 .act.live {
   color: #fff;
-  background: var(--red);
+  background: var(--red-solido);
   border-color: var(--red);
 }
 
@@ -1902,9 +2055,17 @@ a:hover {
   margin: 0 8px 8px;
 }
 
+/*
+  Cabecalho de secao na voz tecnica.
+
+  Ja era maiuscula com entrelinha aberta, mas em Inter — e maiuscula em Inter
+  le como "rotulo de formulario". A mesma palavra em monoespacada le como
+  LEITURA DE PAINEL. E a metade que faltava, e sai de graca: a fonte ja estava
+  empacotada.
+*/
 .presence-group {
   padding: 14px 8px 5px;
-  font-family: var(--font-ui);
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -2158,15 +2319,40 @@ a:hover {
 }
 
 .tile {
-  /* Quadro de video: cartao. */
-  border-radius: var(--r-card);
+  /*
+    Quadro de video: placa chanfrada, nao cartao arredondado.
+
+    O canto cortado na diagonal e a assinatura da estetica. A dificuldade e
+    que `clip-path` corta a BORDA junto com o resto — o jeito ingenuo deixa o
+    canto diagonal sem linha nenhuma, e o quadro parece rasgado ali.
+
+    A solucao e moldura em camadas, que e como se faz isso de verdade:
+
+      o proprio quadro e pintado com a cor da MOLDURA e chanfrado;
+      o `::before`, encolhido em 1px e com chanfro menor, pinta a superficie.
+
+    O que sobra entre os dois e uma moldura de 1px que acompanha a diagonal.
+    Quando alguem fala, basta trocar a cor do fundo do quadro e a moldura
+    inteira acende — inclusive no canto cortado.
+  */
   position: relative;
   flex: 0 0 auto;
   height: calc((100% - (var(--rows, 1) - 1) * 6px) / var(--rows, 1));
   aspect-ratio: 16 / 9;
   max-width: calc((100% - (var(--cols, 1) - 1) * 6px) / var(--cols, 1));
-  background: var(--panel);
-  border: 1px solid var(--line);
+
+  background: var(--border-default);
+  border: none;
+  border-radius: 0;
+  clip-path: polygon(
+    var(--chanfro) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro)),
+    calc(100% - var(--chanfro)) 100%,
+    0 100%,
+    0 var(--chanfro)
+  );
+
   overflow: hidden;
   display: grid;
   place-items: center;
@@ -2175,20 +2361,57 @@ a:hover {
     height var(--mov-lenta) var(--curva),
     max-width var(--mov-lenta) var(--curva),
     flex-basis var(--mov-lenta) var(--curva),
-    border-color var(--mov) var(--curva),
-    box-shadow var(--mov) var(--curva);
+    background-color var(--mov) var(--curva);
+}
+
+/*
+  A superficie interna. Encolhida em 1px, com o chanfro proporcionalmente
+  menor para a diagonal ficar paralela a de fora — chanfro igual em tamanho
+  menor daria uma moldura mais grossa no canto que nos lados.
+*/
+.tile::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  background: var(--bg-surface);
+  clip-path: polygon(
+    calc(var(--chanfro) - 1px) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro) + 1px),
+    calc(100% - var(--chanfro) + 1px) 100%,
+    0 100%,
+    0 calc(var(--chanfro) - 1px)
+  );
+  pointer-events: none;
+}
+
+/* Tudo que e conteudo fica acima da superficie interna. */
+.tile > * {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+  Quem fala acende a moldura inteira, diagonal incluida.
+
+  Sem `box-shadow`: o clip-path corta sombra junto, entao o brilho antigo
+  aparecia recortado nos cantos. A moldura acesa faz o trabalho e e mais
+  limpa — le como estado, nao como enfeite.
+*/
+.tile.speaking {
+  background: var(--optic);
+}
+
+/* Em destaque a moldura tambem acende, mais discreta que a de quem fala. */
+.tile.spot {
+  background: var(--border-forte);
 }
 
 .tile:hover {
   border-color: var(--line-strong);
 }
 
-.tile.speaking {
-  border-color: var(--optic);
-  box-shadow:
-    0 0 0 1px var(--optic),
-    0 0 14px var(--optic-glow);
-}
 
 /* Quem esta sem camera nao precisa de 16/9: o rosto e redondo e o espaco
    vazio dos lados so empurra os outros para longe. */
@@ -2269,7 +2492,7 @@ a:hover {
   align-items: center;
   gap: 5px;
   padding: 2px 7px;
-  background: var(--red);
+  background: var(--red-solido);
   color: #fff;
   font-family: var(--font-ui);
   font-size: 10px;
@@ -2455,7 +2678,7 @@ a:hover {
 }
 
 .btn-danger {
-  background: var(--red);
+  background: var(--red-solido);
   color: #fff;
 }
 
@@ -2833,10 +3056,10 @@ input[type='range']:focus {
 }
 
 .settings-title {
-  font-family: var(--font-ui);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--optic);
   margin-bottom: 18px;
@@ -2921,7 +3144,7 @@ input[type='range']:focus {
 }
 
 .menu-item.danger:hover {
-  background: var(--red);
+  background: var(--red-solido);
   color: #fff;
 }
 
@@ -3270,4 +3493,545 @@ button:focus:not(:focus-visible),
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
+}
+
+/* ==========================================================================
+   FORMA E VOZ TECNICA
+
+   O que da a este aplicativo cara de instrumento, e nao de formulario.
+
+   A pesquisa por tras: no Cyberpunk 2077, o menu que todo mundo elogia e
+   MONOCROMATICO e "funcional, desprovido de detalhes superfluos". O clima nao
+   vem de neon — vem da tipografia e da estrutura. Neon em tudo e o erro de
+   quem copia a aparencia sem entender a regra, e e tambem o que cansa em vinte
+   minutos numa janela que fica aberta oito horas.
+
+   Por isso ha tres ferramentas aqui e nada mais: o chanfro, a voz monoespacada
+   e os colchetes de canto. Cada uma entra onde significa alguma coisa.
+   ========================================================================== */
+
+/*
+  Canto cortado na diagonal, no alto-esquerdo e no baixo-direito.
+
+  Dois cantos e nao quatro: cortar os quatro faz um octogono, que le como
+  adesivo. Dois cantos opostos dao direcao a forma — a peca parece encaixada em
+  algo maior, que e exatamente a leitura de painel.
+
+  O clip-path corta a borda junto com o resto, entao quem precisa de contorno
+  pinta a linha por baixo, com um fundo em camadas, em vez de contornar.
+*/
+.chanfro {
+  clip-path: polygon(
+    var(--chanfro) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro)),
+    calc(100% - var(--chanfro)) 100%,
+    0 100%,
+    0 var(--chanfro)
+  );
+}
+
+.chanfro-sm {
+  clip-path: polygon(
+    var(--chanfro-sm) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro-sm)),
+    calc(100% - var(--chanfro-sm)) 100%,
+    0 100%,
+    0 var(--chanfro-sm)
+  );
+}
+
+/*
+  A voz monoespacada: rotulo tecnico.
+
+  Nome de canal, contador, horario, estado, medida — tudo que e DADO usa esta
+  voz. Texto humano continua em Inter. O contraste entre as duas e o que faz a
+  tela parecer instrumento, e sai de graca: as duas fontes ja estao empacotadas.
+
+  Maiuscula com entrelinha aberta porque em corpo pequeno a maiuscula espacada
+  le mais rapido que a minuscula, e porque e a convencao de painel tecnico desde
+  os anos 80.
+*/
+.tecnico {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/*
+  Colchetes de canto: a mira.
+
+  Quatro cantos desenhados a linha, sem contornar os lados. E a forma de
+  destacar de painel tecnico — diz "este e o alvo" sem desenhar uma caixa em
+  volta e sem competir com o conteudo.
+
+  So em foco e em destaque, nunca no estado parado: mira permanente em tudo
+  vira moldura, e moldura foi exatamente o que saiu daqui.
+*/
+.mira {
+  position: relative;
+}
+
+.mira::before,
+.mira::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--optic);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.mira::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.mira::after {
+  right: -1px;
+  bottom: -1px;
+  border-left: none;
+  border-top: none;
+}
+
+/* ==========================================================================
+   VOCABULARIO DE CONTROLE
+
+   Botao, campo e chave. E a parte que a mao toca, e por isso a que mais
+   precisa RESPONDER — estado parado, sobrevoo e pressionado tem que ser tres
+   coisas visivelmente diferentes. Antes eram quase a mesma.
+   ========================================================================== */
+
+/*
+  O botao chanfrado.
+
+  Chanfro pequeno: o botao e pequeno, e chanfro grande num retangulo baixo
+  come o texto. `clip-path` corta a borda junto, entao o contorno dos botoes
+  que precisam dele vem de fundo em camadas, como no quadro de chamada.
+*/
+.btn {
+  font-family: var(--font-ui);
+  padding: 9px 16px;
+  border: none;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  position: relative;
+  clip-path: polygon(
+    var(--chanfro-sm) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro-sm)),
+    calc(100% - var(--chanfro-sm)) 100%,
+    0 100%,
+    0 var(--chanfro-sm)
+  );
+  transition:
+    background 0.1s var(--curva),
+    color 0.1s var(--curva),
+    transform 0.06s var(--curva);
+}
+
+/*
+  Pressionar afunda um pixel.
+
+  E o retorno mais barato que existe e o que mais falta numa interface que
+  parece morta: sem ele, clicar e apertar um desenho. Um pixel basta — dois ja
+  viram gangorra.
+*/
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: var(--optic);
+  color: #04201e;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--optic-bright);
+}
+
+/*
+  O fantasma ganha moldura em camadas para o chanfro nao comer o contorno:
+  o fundo pinta a moldura, o `::before` encolhido pinta o miolo.
+*/
+.btn-ghost {
+  background: var(--line);
+  color: var(--text-dim);
+}
+
+.btn-ghost::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  background: var(--bg-sidebar);
+  clip-path: polygon(
+    calc(var(--chanfro-sm) - 1px) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro-sm) + 1px),
+    calc(100% - var(--chanfro-sm) + 1px) 100%,
+    0 100%,
+    0 calc(var(--chanfro-sm) - 1px)
+  );
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--optic-dim);
+  color: var(--text-primary);
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--text-faint);
+  clip-path: none;
+  padding: 4px 6px;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  color: var(--optic);
+  background: var(--optic-wash);
+}
+
+/*
+  O campo afunda.
+
+  Superficie mais escura que o entorno, com uma linha so embaixo em vez de
+  caixa fechada: e a convencao de painel tecnico, e tira quatro linhas de cada
+  campo de uma tela que ja tinha linha demais.
+
+  A linha de baixo acende no foco. Isso substitui o anel de foco padrao do
+  navegador, entao continua havendo indicacao visivel de foco — sem ela, quem
+  navega por teclado se perde.
+*/
+.field input,
+.field textarea,
+.field select,
+input[type='text'],
+input[type='password'],
+input[type='email'],
+textarea {
+  background: var(--input);
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  font-family: var(--font-ui);
+  transition: border-color 0.12s var(--curva), background 0.12s var(--curva);
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+input[type='text']:focus,
+input[type='password']:focus,
+input[type='email']:focus,
+textarea:focus {
+  outline: none;
+  border-bottom-color: var(--optic);
+  background: var(--bg-sidebar);
+}
+
+/*
+  A chave vira interruptor de painel: retangular, com o cursor deslizando
+  entre dois extremos. Cantos arredondados aqui davam a ela cara de ajuste de
+  celular, que e exatamente a leitura que este aplicativo nao quer.
+*/
+.switch {
+  border-radius: 0;
+  clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+}
+
+.switch::after {
+  border-radius: 0 !important;
+}
+
+/* ==========================================================================
+   NAVEGACAO: TRILHO, CANAIS E PRESENCA
+
+   A coluna que fica aberta o tempo todo. Aqui densidade importa mais que em
+   qualquer outro lugar: e a lista que se le de relance, dezenas de vezes por
+   sessao, sem foco.
+   ========================================================================== */
+
+/*
+  Nome de canal na voz tecnica.
+
+  Canal e ENDERECO, nao prosa — a mesma categoria de "pessoa 1" no quadro de
+  chamada. Monoespacada tambem alinha os nomes na vertical, que numa lista de
+  quinze canais e a diferenca entre varrer e ler um por um.
+*/
+.channel-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+/*
+  A barra de estado mora na esquerda, e nao em volta.
+
+  Dois pixels acesos na lateral dizem "voce esta aqui" sem desenhar caixa
+  nenhuma. Ja existia como `border-left` transparente; passou a ser usada.
+*/
+.channel {
+  padding: 5px 8px;
+  border-radius: 0;
+  border-left: 2px solid transparent;
+  transition:
+    background 0.1s var(--curva),
+    border-color 0.1s var(--curva),
+    color 0.1s var(--curva);
+}
+
+.channel:hover {
+  background: var(--hover);
+  color: var(--text-secondary);
+}
+
+.channel.active {
+  background: var(--optic-wash);
+  border-left-color: var(--optic);
+  color: var(--text-primary);
+}
+
+/*
+  Categoria na voz tecnica, como os outros cabecalhos de secao. Era o mesmo
+  desenho em Inter — a troca de fonte e o que o faz ler como divisao de painel
+  em vez de titulo de formulario.
+*/
+.category {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* A pessoa na lista segue a mesma gramatica do canal: barra a esquerda. */
+.member {
+  border-radius: 0;
+  border-left: 2px solid transparent;
+  transition: background 0.1s var(--curva), border-color 0.1s var(--curva);
+}
+
+.member:hover {
+  background: var(--hover);
+  border-left-color: var(--line-strong);
+}
+
+/*
+  Titulo do canal aberto: tambem endereco, tambem monoespacado. E a unica
+  palavra grande da barra superior, entao ela define o tom da tela inteira.
+*/
+.chat-title {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+/*
+  O trilho de servidores perde o contorno e ganha profundidade: ele e a
+  camada mais AO FUNDO da janela, e afundar e o que o separa do resto sem
+  precisar de linha.
+*/
+.rail {
+  background: #0a0f16;
+  border-right: none;
+  box-shadow: inset -1px 0 0 var(--line);
+}
+
+/* ==========================================================================
+   BARRAS DE ROLAGEM
+
+   Finas e sem trilho. A barra padrao do Chromium e larga, clara e desenha um
+   canal cinza no meio de toda lista — num painel escuro ela e a coisa mais
+   visivel da tela, o que e exatamente o oposto do que deveria ser.
+   ========================================================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--optic-dim);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ==========================================================================
+   VOZ DE PLACA E ROTULO DE SECAO
+
+   A gramatica que faltava. Ate aqui o sistema tinha forma (chanfro, canto
+   vivo, moldura) e nao tinha VOZ: todo texto de estrutura — nome de
+   categoria, titulo de ajuste, rotulo de campo — era a mesma Inter maiuscula
+   em tamanhos ligeiramente diferentes, escolhidos um a um sem regra.
+
+   Agora sao tres vozes com trabalhos separados:
+
+     PLACA    (Rajdhani)  — o que se ve antes de ler. Titulo de tela vazia,
+                            nome do aplicativo. Aparece uma vez por tela.
+     COMANDO  (mono)      — o que marca territorio ou aciona. Rotulo de secao,
+                            botao de confirmar.
+     LEITURA  (Inter)     — tudo que se le de verdade.
+
+   O criterio para escolher: se o texto e para ser LIDO, e Inter. Se e para
+   ser LOCALIZADO, e mono. Se e para ser VISTO, e Rajdhani.
+   ========================================================================== */
+
+/*
+  Placa. Condensada, caixa alta, apertada.
+
+  O espacamento negativo e o que separa titulo de "texto grande": ele junta as
+  letras num bloco unico que o olho pega inteiro, sem ler letra a letra.
+*/
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: var(--tk-display);
+  text-transform: uppercase;
+  line-height: 1.05;
+}
+
+/*
+  Rotulo de secao: `// NOME`.
+
+  As duas barras nao sao enfeite — elas resolvem um problema real de leitura
+  numa coluna estreita. Sem elas, um rotulo de secao em caixa alta pequena e
+  um item de lista em caixa alta pequena tem exatamente a mesma silhueta, e a
+  pessoa so descobre qual e qual lendo. A marca da a diferenca de relance, e
+  ocupa 14px em vez de uma linha inteira de separador.
+
+  Em ciano e com opacidade: precisa ser vista, nao lida. Quem le "barra barra"
+  perdeu tempo.
+*/
+.rotulo-secao,
+.settings-title,
+.category:not(.category-acao) > span,
+.category-alternar > span {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-larga);
+  text-transform: uppercase;
+}
+
+.rotulo-secao::before,
+.settings-title::before,
+.category:not(.category-acao) > span::before,
+.category-alternar > span::before {
+  content: '// ';
+  color: var(--optic);
+  opacity: 0.55;
+}
+
+/*
+  O tamanho de cada um muda; a voz nao.
+
+  `settings-title` encabeca uma tela inteira e pode ser maior. `category` vive
+  numa coluna de 256px ao lado de dezenas de canais e precisa desaparecer
+  quando nao se olha para ela.
+*/
+.settings-title {
+  font-size: 14px;
+  letter-spacing: var(--tk-mono-larga);
+  color: var(--optic);
+  margin-bottom: 18px;
+}
+
+.category:not(.category-acao) > span,
+.category-alternar > span {
+  font-size: 10px;
+  letter-spacing: var(--tk-mono-media);
+  color: var(--text-ghost);
+}
+
+/*
+  Rotulo de campo na voz tecnica, sem as barras.
+
+  Mono porque rotulo de campo e instrucao de instrumento, nao frase. Sem `//`
+  porque ha trinta deles: a marca existe para distinguir secao de item, e um
+  formulario nao tem itens com quem confundir. Repetida trinta vezes ela
+  viraria textura, que e o oposto de sinal.
+*/
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-media);
+}
+
+/*
+  Tela vazia: o unico lugar onde ha espaco de sobra, entao e onde a placa cabe.
+
+  E tambem onde ela mais serve. Tela vazia e a primeira coisa que alguem ve ao
+  abrir um canal novo, e "Nenhuma mensagem ainda" em Inter 17px nao diz nada
+  sobre o produto. Com a mira em volta e a placa no meio, o vazio deixa de ser
+  falta e vira area reservada.
+*/
+.empty h3 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: var(--tk-display);
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+/*
+  Botao de confirmar fala como COMANDO.
+
+  So o primario. Os outros setenta botoes continuam em Inter: "Cancelar" em
+  caixa alta monoespacada grita o mesmo tanto que "Excluir conta", e quando
+  tudo grita nada se ouve. A diferenca de voz entre o botao que COMETE e o
+  que desiste e o que faz o primeiro ser notado.
+*/
+.btn-primary,
+.btn-danger {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-media);
+  text-transform: uppercase;
+}
+
+/*
+  Movimento curto onde a mao ja esta.
+
+  Passar o mouse e afundar respondem a um gesto em andamento: a 120ms o
+  realce chega depois do cursor e se percebe como atraso. 80ms chega junto.
+*/
+.btn,
+.menu-item,
+.tab,
+.settings-item,
+.channel,
+.member {
+  transition:
+    background var(--mov-rapida) var(--curva),
+    color var(--mov-rapida) var(--curva),
+    border-color var(--mov-rapida) var(--curva);
 }

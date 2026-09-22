@@ -733,8 +733,14 @@
   max-width: calc(100% - 16px);
   padding: 3px 8px;
   border-radius: var(--r-sm);
-  background: rgba(8, 12, 18, 0.72);
+  background: rgba(8, 12, 18, 0.78);
+  /*
+    O nome de quem esta no quadro e DADO, nao prosa: vai na voz monoespacada,
+    como tudo que se le de relance num painel.
+  */
+  font-family: var(--font-mono);
   font-size: var(--t-tecnico);
+  letter-spacing: 0.04em;
   color: var(--text-primary);
 }
 
@@ -906,12 +912,29 @@
   Como botao ela herda estilo de formulario do navegador; estas regras a
   devolvem a aparencia de linha da lista, sem abrir mao do foco por teclado.
 */
+/*
+  "Criar canal" mora na classe `.category` e NAO e uma categoria.
+
+  O `font: inherit` que estava aqui parecia inofensivo e nao era. O atalho
+  `font` reescreve familia, tamanho, peso e altura de linha de uma vez — entao
+  ele desfazia os 10px em peso 600 que `.category` define e devolvia o texto
+  ao 14px da Inter herdado do corpo. Mas `letter-spacing` NAO faz parte do
+  atalho, e o 0.14em de `.category` sobrevivia: aplicado a 14px em vez de
+  10px, virava quase 2px por letra.
+
+  O resultado na tela era um botao de acao em caixa alta, largo e espacado,
+  MAIOR que os rotulos de secao de verdade que ele deveria acompanhar. Ficou
+  invisivel enquanto tudo em volta era parecido; so apareceu quando as secoes
+  ganharam a marca `//` e este continuou sem ela, do lado, gritando mais alto.
+
+  O botao so precisa perder a aparencia de botao. A tipografia quem da e
+  `.category`, que e o que ele acompanha.
+*/
 .category-acao {
   width: 100%;
   border: none;
   background: transparent;
   color: var(--text-ghost);
-  font: inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -1057,7 +1080,7 @@
 }
 
 .chamada-controles .act.danger:hover {
-  background: var(--status-danger);
+  background: var(--red-solido);
   color: var(--bg-canvas);
 }
 
@@ -1341,7 +1364,7 @@
   transform: translateY(-50%);
   padding: 1px 8px;
   border-radius: var(--r-pill);
-  background: var(--status-danger);
+  background: var(--red-solido);
   color: var(--bg-canvas);
   font-family: var(--font-ui);
   font-size: var(--t-tecnico);
@@ -1392,7 +1415,7 @@
 }
 
 .voltar-ao-fim.com-novidade:hover {
-  background: var(--status-danger);
+  background: var(--red-solido);
   color: var(--bg-canvas);
 }
 
@@ -1522,7 +1545,7 @@
   height: 17px;
   padding: 0 5px;
   border-radius: var(--r-pill);
-  background: var(--status-danger);
+  background: var(--red-solido);
   color: var(--bg-canvas);
   font-size: var(--t-tecnico);
   font-weight: 700;
@@ -1618,7 +1641,7 @@
 }
 
 .inicio-botoes .act.ruim:hover {
-  background: var(--status-danger);
+  background: var(--red-solido);
   color: var(--bg-canvas);
 }
 
@@ -2114,4 +2137,147 @@ button.mention:disabled {
   font-size: var(--t-tecnico);
   color: var(--status-danger);
   text-align: center;
+}
+
+/* ==========================================================================
+   CAMADAS DE CIMA: DIALOGO, MENU, BALAO, AVISO
+
+   O que aparece POR CIMA de tudo e onde a forma fala mais alto: sao pecas
+   que entram em cena sozinhas, sem contexto em volta para ajudar a ler. Se
+   ha um lugar para o chanfro aparecer, e aqui.
+   ========================================================================== */
+
+/*
+  Dialogo: placa chanfrada com moldura em camadas, igual ao quadro de chamada.
+
+  Chanfro cheio e nao o pequeno: o dialogo e grande, e num retangulo grande o
+  corte pequeno some. A moldura clara e mais forte que a dos cartoes de fundo
+  porque o dialogo precisa se destacar de tudo que ficou atras dele.
+*/
+.dialogo {
+  border: none;
+  border-radius: 0;
+  background: var(--line-strong);
+  position: relative;
+  clip-path: polygon(
+    var(--chanfro) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro)),
+    calc(100% - var(--chanfro)) 100%,
+    0 100%,
+    0 var(--chanfro)
+  );
+}
+
+.dialogo::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  background: var(--bg-surface);
+  clip-path: polygon(
+    calc(var(--chanfro) - 1px) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro) + 1px),
+    calc(100% - var(--chanfro) + 1px) 100%,
+    0 100%,
+    0 calc(var(--chanfro) - 1px)
+  );
+  pointer-events: none;
+}
+
+.dialogo > * {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+  Titulo de dialogo na voz tecnica.
+
+  Dialogo pergunta uma coisa e espera resposta — le como comando de painel, e
+  a maiuscula monoespacada e a voz certa para comando.
+*/
+.dialogo-titulo {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/*
+  Menu de contexto: chanfro pequeno e canto reto.
+
+  Sem moldura em camadas de proposito. O menu ja tem sombra forte e aparece
+  colado ao cursor; moldura acesa nele seria a terceira coisa disputando
+  atencao num elemento que existe para ser lido em meio segundo.
+*/
+.menu {
+  border-radius: 0;
+  border-color: var(--line-strong);
+  clip-path: polygon(
+    var(--chanfro-sm) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro-sm)),
+    calc(100% - var(--chanfro-sm)) 100%,
+    0 100%,
+    0 var(--chanfro-sm)
+  );
+}
+
+/* Balao e aviso seguem a mesma forma, em escala menor. */
+.balao,
+.aviso,
+.toast {
+  border-radius: 0;
+  clip-path: polygon(
+    var(--chanfro-sm) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro-sm)),
+    calc(100% - var(--chanfro-sm)) 100%,
+    0 100%,
+    0 var(--chanfro-sm)
+  );
+}
+
+/*
+  O cartao da pessoa: a peca mais "ficha tecnica" do aplicativo. Chanfro cheio
+  e moldura, como o dialogo — e um painel de leitura sobre alguem, nao um
+  cartao de visita.
+*/
+.cartao-pessoa {
+  border-radius: 0;
+  clip-path: polygon(
+    var(--chanfro) 0,
+    100% 0,
+    100% calc(100% - var(--chanfro)),
+    calc(100% - var(--chanfro)) 100%,
+    0 100%,
+    0 var(--chanfro)
+  );
+}
+
+/*
+  O valor do volume ja estava em monoespacada por causa da classe `mono`.
+  O rotulo do controle acompanha: os dois sao leitura de instrumento.
+*/
+.cartao-volume-valor {
+  letter-spacing: 0.04em;
+}
+
+/* ==========================================================================
+   AVATAR
+
+   Quadrado com canto cortado, nao circulo.
+
+   O circulo e a forma padrao de rede social — amigavel, organica, generica.
+   O quadrado chanfrado le como CREDENCIAL, que e a leitura certa num
+   aplicativo chamado Kiroshi. E, na pratica, aproveita melhor a foto: um
+   circulo joga fora os quatro cantos de toda imagem.
+   ========================================================================== */
+
+.avatar,
+.avatar-fallback {
+  border-radius: 0 !important;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
