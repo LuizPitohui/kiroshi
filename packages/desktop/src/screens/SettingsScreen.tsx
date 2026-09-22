@@ -1054,11 +1054,28 @@ function VoiceSection() {
       </div>
 
       {/*
-        Vem ANTES da supressao de ruido porque e o mais forte dos dois, e
-        porque a descricao de um explica o outro: quem ler os dois em ordem
-        entende por que existem separados.
+        A limpeza reforcada vem primeiro e as outras duas aparecem esmaecidas
+        quando ela esta ligada. E honesto: ligada, ela SUBSTITUI as duas, e
+        mostrar tres interruptores ativos sugeriria que se somam.
       */}
       <div className="row">
+        <div className="row-text">
+          <div className="row-title">Limpeza reforcada de ruido</div>
+          <div className="row-desc">
+            Um modelo que reconhece voz e descarta o resto — inclusive teclado e
+            clique de mouse, que a limpeza do navegador nao pega. Substitui as
+            duas opcoes abaixo enquanto estiver ligada.
+          </div>
+        </div>
+        <button
+          className={`switch ${settings.limpezaDeRuido ? 'on' : ''}`}
+          onClick={() => void update({ limpezaDeRuido: !settings.limpezaDeRuido })}
+          aria-pressed={settings.limpezaDeRuido}
+          aria-label="Limpeza reforcada de ruido"
+        />
+      </div>
+
+      <div className="row" style={settings.limpezaDeRuido ? { opacity: 0.45 } : undefined}>
         <div className="row-text">
           <div className="row-title">Isolamento de voz</div>
           <div className="row-desc">
@@ -1069,12 +1086,13 @@ function VoiceSection() {
         <button
           className={`switch ${settings.voiceIsolation ? 'on' : ''}`}
           onClick={() => void update({ voiceIsolation: !settings.voiceIsolation })}
+          disabled={settings.limpezaDeRuido}
           aria-pressed={settings.voiceIsolation}
           aria-label="Isolamento de voz"
         />
       </div>
 
-      <div className="row">
+      <div className="row" style={settings.limpezaDeRuido ? { opacity: 0.45 } : undefined}>
         <div className="row-text">
           <div className="row-title">Supressao de ruido</div>
           <div className="row-desc">
@@ -1086,6 +1104,7 @@ function VoiceSection() {
         <button
           className={`switch ${settings.noiseSuppression ? 'on' : ''}`}
           onClick={() => void update({ noiseSuppression: !settings.noiseSuppression })}
+          disabled={settings.limpezaDeRuido}
           aria-pressed={settings.noiseSuppression}
           aria-label="Supressao de ruido"
         />

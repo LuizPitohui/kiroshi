@@ -7,10 +7,25 @@
       A interface nao carrega nada de fora: scripts e estilos sao empacotados.
       As unicas origens externas sao imagens e midia dos anexos do proprio
       servidor, e as conexoes de API, gateway e SFU.
+
+      `wasm-unsafe-eval` permite compilar WebAssembly, e NADA alem disso.
+
+      E preciso para a limpeza de ruido do microfone, que roda um modelo
+      compilado em WASM dentro de um AudioWorklet. Sem esta diretiva o
+      Chromium recusa: "Refused to compile or instantiate WebAssembly module
+      because 'unsafe-eval' is not an allowed source of script".
+
+      A alternativa seria `unsafe-eval`, que tambem liberaria `eval()` e
+      `new Function()` de JavaScript — a porta classica de execucao de codigo
+      injetado. `wasm-unsafe-eval` existe justamente para separar as duas
+      coisas: o WASM passa, o eval continua barrado.
+
+      O binario do modelo e empacotado junto, nao baixado: `script-src 'self'`
+      continua valendo e nao ha origem nova liberada.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:; frame-src 'none'; object-src 'none'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:; frame-src 'none'; object-src 'none'"
     />
     <title>Kiroshi</title>
   </head>

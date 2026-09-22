@@ -589,6 +589,49 @@ check(
 check('e a imagem cabe inteira, sem cortar', encaixe.fit === 'contain', encaixe.fit);
 
 // ---------------------------------------------------------------------------
+console.log('\n--- A LIMPEZA DE RUIDO PODE RODAR ---');
+
+/*
+  As precondicoes do RNNoise, que quebram em silencio.
+
+  O modelo e WebAssembly rodando dentro de um AudioWorklet. A CSP do app tem
+  `script-src 'self'`, que por padrao PROIBE compilar WebAssembly — foi
+  preciso acrescentar `'wasm-unsafe-eval'`, que libera WASM sem liberar
+  `eval()` de JavaScript.
+
+  Se alguem apertar a CSP de novo sem saber disso, a limpeza para de
+  funcionar sem erro nenhum na tela: o microfone continua publicando, so que
+  sujo. Esta verificacao existe para isso doer aqui, e nao na chamada.
+*/
+const limpeza = JSON.parse(
+  await avaliar(`(async () => {
+    const out = { worklet: typeof AudioWorkletNode === "function" };
+    try {
+      await WebAssembly.instantiate(new Uint8Array([0,97,115,109,1,0,0,0]));
+      out.wasm = true;
+    } catch (e) { out.wasm = false; out.motivo = String(e.message).slice(0, 80); }
+    try { eval("1+1"); out.evalBarrado = false; } catch { out.evalBarrado = true; }
+    return JSON.stringify(out);
+  })()`),
+);
+
+check('o AudioWorklet existe', limpeza.worklet === true);
+check(
+  'a CSP permite compilar WebAssembly',
+  limpeza.wasm === true,
+  limpeza.motivo ?? '',
+);
+
+/*
+  E a outra metade: liberar WASM nao pode ter liberado `eval()`.
+
+  `unsafe-eval` resolveria o WASM e abriria junto `eval()` e `new Function()`,
+  que e a porta classica de execucao de codigo injetado. Se este teste passar
+  a reprovar, alguem trocou a diretiva estreita pela larga.
+*/
+check('e eval() de JavaScript continua barrado', limpeza.evalBarrado === true);
+
+// ---------------------------------------------------------------------------
 console.log('\n--- O VOLUME PASSA DE 100% DE VERDADE ---');
 
 /*

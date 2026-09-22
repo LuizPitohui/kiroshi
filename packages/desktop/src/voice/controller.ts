@@ -20,6 +20,7 @@ import { lerCaminhos, type CaminhosDisponiveis } from './caminhos.js';
 import { bitrateDeTela, restricoesDeTela, camadasDeTela } from './qualidade.js';
 import { explicarFalhaDeMidia } from './falhas.js';
 import { SaidaDeAudio } from './saida.js';
+import { LimpezaDeRuido, limpezaDisponivel } from './ruido.js';
 
 /**
  * Controle de voz, video e compartilhamento de tela.
@@ -79,6 +80,17 @@ export interface VoiceSettings {
    * a captura continua funcionando sem ele em vez de falhar.
    */
   voiceIsolation: boolean;
+  /**
+   * Limpeza reforcada com RNNoise, no lugar da do navegador.
+   *
+   * SUBSTITUI, nao soma. Ligada, a captura desliga `noiseSuppression` e
+   * `voiceIsolation`: modelos sao treinados em audio cru, e alimentar um com
+   * a saida do outro da voz robotica e gasta processador duas vezes.
+   *
+   * Ligada por padrao porque foi medido que a do navegador nao basta — os
+   * quatro ajustes confirmados ligados, e teclado ainda passando.
+   */
+  limpezaDeRuido: boolean;
   /** Volume de saida geral, 0 a 1. */
   outputVolume: number;
   /** Volume da VOZ de cada pessoa, 0 a 2. */
@@ -121,6 +133,7 @@ const DEFAULT_SETTINGS: VoiceSettings = {
   echoCancellation: true,
   autoGainControl: true,
   voiceIsolation: true,
+  limpezaDeRuido: true,
   outputVolume: 1,
   userVolumes: {},
   screenVolumes: {},
@@ -370,9 +383,7 @@ class VoiceController {
       audioCaptureDefaults: {
         deviceId: this.settings.inputDeviceId ?? undefined,
         echoCancellation: this.settings.echoCancellation,
-        noiseSuppression: this.settings.noiseSuppression,
-        autoGainControl: this.settings.autoGainControl,
-        voiceIsolation: this.settings.voiceIsolation,
+        ...this.limpezaDoNavegador(),
       },
       videoCaptureDefaults: { resolution: { width: 1920, height: 1080, frameRate: 30 } },
     };
@@ -713,6 +724,30 @@ class VoiceController {
   // Microfone
   // ---------------------------------------------------------------------------
 
+  /**
+   * A limpeza que o NAVEGADOR faz, conforme quem esta no comando.
+   *
+   * Com o RNNoise ligado, a do navegador sai de cena inteira. Deixar as duas
+   * seria empilhar dois modelos sobre o mesmo sinal — o segundo recebe algo
+   * que ja nao parece a voz humana em que foi treinado, e o resultado e pior
+   * que qualquer um dos dois sozinho.
+   *
+   * O ganho automatico fica em ambos os casos: ele nivela volume, nao remove
+   * ruido, entao nao disputa com ninguem.
+   */
+  private limpezaDoNavegador(): {
+    noiseSuppression: boolean;
+    autoGainControl: boolean;
+    voiceIsolation: boolean;
+  } {
+    const comRnnoise = this.settings.limpezaDeRuido && limpezaDisponivel();
+    return {
+      noiseSuppression: comRnnoise ? false : this.settings.noiseSuppression,
+      voiceIsolation: comRnnoise ? false : this.settings.voiceIsolation,
+      autoGainControl: this.settings.autoGainControl,
+    };
+  }
+
   private async publishMicrophone(): Promise<void> {
     const room = this.room;
     if (!room) return;
@@ -720,10 +755,24 @@ class VoiceController {
     this.micTrack = await createLocalAudioTrack({
       deviceId: this.settings.inputDeviceId ?? undefined,
       echoCancellation: this.settings.echoCancellation,
-      noiseSuppression: this.settings.noiseSuppression,
-      autoGainControl: this.settings.autoGainControl,
-      voiceIsolation: this.settings.voiceIsolation,
+      ...this.limpezaDoNavegador(),
     });
+
+    /*
+      O processador entra ANTES de publicar.
+
+      Depois de publicada, a faixa ja esta indo para o codificador: trocar o
+      processamento ali no meio produz um corte audivel em quem esta ouvindo.
+    */
+    if (this.settings.limpezaDeRuido && limpezaDisponivel()) {
+      try {
+        await this.micTrack.setProcessor(new LimpezaDeRuido());
+      } catch (erro) {
+        // Falhar aqui nao pode calar o microfone: sem limpeza e muito melhor
+        // do que sem voz. Fica o ruido, que e o problema que ja existia.
+        console.warn('limpeza de ruido indisponivel nesta maquina', erro);
+      }
+    }
 
     await room.localParticipant.publishTrack(this.micTrack, {
       source: Track.Source.Microphone,
