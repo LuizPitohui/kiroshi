@@ -2,9 +2,9 @@ import { useState } from 'react';
 import type { Attachment, Message } from '@kiroshi/shared';
 import { api, ApiRequestError } from '../api/client.js';
 import { useStore, selectors } from '../store/index.js';
-import { useDensidade, tamanhoDoAvatar } from '../hooks/useDensidade.js';
 import { Avatar } from './Avatar.js';
 import { MessageContent } from './MessageContent.js';
+import { diaDaMensagem } from '../lib/tempo.js';
 import { Download, Edit, File, Pin, Reply, Smile, Trash } from './Icons.js';
 import { EmojiPicker } from './EmojiPicker.js';
 import { Lightbox } from './ui/Lightbox.js';
@@ -19,7 +19,6 @@ interface Props {
 export function MessageItem({ message, grouped, guildId, onReply }: Props) {
   const state = useStore();
   const selfId = useStore((s) => s.user?.id);
-  const densidade = useDensidade();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [pickingEmoji, setPickingEmoji] = useState(false);
@@ -113,17 +112,41 @@ export function MessageItem({ message, grouped, guildId, onReply }: Props) {
           .filter(Boolean)
           .join(' ')}
       >
+        {/*
+          A calha e um CARIMBO DE HORA, nao um lugar para o avatar.
+
+          Antes era o desenho de rede social: avatar grande a esquerda, nome em
+          negrito por cima do texto, hora escondida ate passar o mouse. Custava
+          36px de largura em toda mensagem e escondia a unica informacao da
+          calha que serve para navegar — quando a coisa foi dita.
+
+          Agora a hora fica sempre visivel em monoespacada, e a mensagem le
+          como transcricao de transmissao: da para varrer a coluna da esquerda
+          procurando um momento, que e o que se faz quando alguem pergunta "o
+          que rolou de manha". Numa sequencia da mesma pessoa a hora continua
+          ali, so mais apagada, porque saber que passaram vinte minutos entre
+          duas linhas do mesmo sujeito e informacao.
+
+          O rosto nao sumiu do aplicativo: ele continua na lista de presenca, no
+          cartao de perfil, no palco da chamada e, pequeno, na etiqueta do autor
+          aqui embaixo. O que sumiu foi a coluna dele.
+        */}
         <div className="msg-gutter">
-          {grouped ? (
-            <span className="msg-time-hover">{shortTime(message.createdAt)}</span>
-          ) : (
-            <Avatar
-              url={state.users.get(message.authorId)?.avatarUrl}
-              name={name}
-              size={tamanhoDoAvatar(densidade)}
-              className="msg-avatar"
-            />
-          )}
+          {/*
+            `time` com `dateTime`, e nao um `span` decorativo.
+
+            A primeira versao disto levava `aria-hidden`, por reflexo de que
+            calha e enfeite. Estava errado: numa mensagem agrupada o carimbo e
+            a UNICA pista de quando aquilo foi dito, e escondendo-o o leitor de
+            tela ficaria pior do que estava antes — no desenho antigo a hora ao
+            menos vivia no cabecalho de cada bloco.
+
+            O elemento certo carrega o carimbo legivel por maquina no atributo,
+            enquanto a tela mostra so hora e minuto.
+          */}
+          <time className="msg-carimbo" dateTime={message.createdAt}>
+            {shortTime(message.createdAt)}
+          </time>
         </div>
 
         <div className="msg-body">
@@ -155,10 +178,30 @@ export function MessageItem({ message, grouped, guildId, onReply }: Props) {
 
           {!grouped && (
             <div className="msg-head">
+              {/*
+                O avatar virou uma ficha pequena ao lado do nome, em vez de uma
+                coluna propria. Reconhecer quem falou continua possivel de
+                relance, e o custo cai de 36px de largura em toda mensagem para
+                18px em uma linha a cada bloco.
+              */}
+              <Avatar
+                url={state.users.get(message.authorId)?.avatarUrl}
+                name={name}
+                size={18}
+                className="msg-ficha"
+              />
               <span className="msg-author" style={color ? { color } : undefined}>
                 {name}
               </span>
-              <span className="msg-time">{fullTime(message.createdAt)}</span>
+              {/*
+                A hora cheia nao volta aqui: a calha ja carrega o horario. Duas
+                copias do mesmo dado na mesma linha e ruido, e foi por isso que
+                a hora antiga so aparecia ao passar o mouse — ela disputava com
+                o nome. Agora quem quiser a data completa tem o `title`.
+              */}
+              <span className="msg-time" title={fullTime(message.createdAt)}>
+                {diaDaMensagem(message.createdAt)}
+              </span>
             </div>
           )}
 

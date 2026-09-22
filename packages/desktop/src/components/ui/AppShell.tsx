@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Drawer } from './Drawer.js';
 import { ContextPanel } from './ContextPanel.js';
 import { Users, Chevron } from '../Icons.js';
+import { BarraDeEstado } from '../BarraDeEstado.js';
 
 /**
  * A casca: as regioes da aplicacao e como elas cedem espaco.
@@ -169,6 +170,16 @@ export function AppShell({
       </div>
 
       {dock}
+
+      {/*
+        A faixa vai ABAIXO do dock, encostada no fim da janela.
+
+        O dock e onde se AGE — microfone, camera, sair da chamada. A faixa e
+        onde se LE. Empilhar as duas mantem cada uma com um proposito so, e a
+        de baixo nunca recebe um clique por acidente porque nao ha nada
+        clicavel nela.
+      */}
+      <BarraDeEstado />
 
       {/* As gavetas ficam fora do fluxo: elas cobrem, nao empurram. */}
       {!canaisEmColuna && (

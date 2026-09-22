@@ -1479,6 +1479,267 @@ check(
   razaoSelo.toFixed(2) + ':1',
 );
 
+// ---------------------------------------------------------------------------
+/*
+  A CONVERSA E UM LOG, NAO UM MURAL DE REDE SOCIAL.
+
+  Esta secao guarda a mudanca de ESTRUTURA — a que muda o que o aplicativo e,
+  nao como ele esta pintado. O desenho antigo era o padrao copiado de todo
+  aplicativo de conversa: avatar grande numa coluna a esquerda, nome em negrito
+  como titulo da mensagem, hora escondida ate o mouse passar por cima.
+
+  E facil voltar para la sem querer. Basta alguem "arrumar" a calha, ou uma
+  refatoracao trazer de volta o avatar por parecer que faltava alguma coisa.
+  Os checks abaixo olham para as propriedades que DEFINEM a estrutura: duas
+  trilhas de grade com a primeira rigida, e uma regua vertical no corpo.
+*/
+console.log(String.fromCharCode(10) + '--- ESTRUTURA: A CONVERSA E UM LOG ---');
+
+const log = JSON.parse(
+  await avaliar(`(() => {
+    const palco = document.createElement('div');
+    palco.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px';
+    palco.innerHTML =
+      '<div class="msg first"><div class="msg-gutter"><time class="msg-carimbo">05:12</time></div><div class="msg-body"><div class="msg-head"><span class="msg-author">vartaque</span></div><div>ola</div></div></div>' +
+      '<div class="msg grouped"><div class="msg-gutter"><time class="msg-carimbo">05:13</time></div><div class="msg-body"><div>de novo</div></div></div>' +
+      '<div class="msg first mentioned"><div class="msg-gutter"><time class="msg-carimbo">05:14</time></div><div class="msg-body"><div>te citei</div></div></div>' +
+      '<div class="msg first pinned"><div class="msg-gutter"><time class="msg-carimbo">05:15</time></div><div class="msg-body"><div class="msg-pinned">Fixada</div><div>fica ai</div></div></div>';
+    document.body.appendChild(palco);
+
+    const c = (sel) => {
+      const el = palco.querySelector(sel);
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        display: s.display,
+        trilhas: s.gridTemplateColumns,
+        bordaEsq: s.borderLeftWidth,
+        corBordaEsq: s.borderLeftColor,
+        fundo: s.backgroundColor,
+        fundoImg: s.backgroundImage,
+        sombra: s.boxShadow,
+        fonte: s.fontFamily.split(',')[0].replace(/['"]/g, ''),
+        caixa: s.textTransform,
+        cor: s.color,
+        justificar: s.justifyContent,
+        largura: el.getBoundingClientRect().width,
+      };
+    };
+
+    const r = {
+      linha: c('.msg'),
+      calha: c('.msg-gutter'),
+      carimbo: c('.msg-carimbo'),
+      corpo: c('.msg-body'),
+      autor: c('.msg-author'),
+      corpoMencao: c('.msg.mentioned .msg-body'),
+      linhaFixada: c('.msg.pinned'),
+      corpoFixado: c('.msg.pinned .msg-body'),
+      // O avatar de 36px na calha era a assinatura do desenho antigo.
+      temAvatarNaCalha: !!palco.querySelector('.msg-gutter .avatar, .msg-gutter img'),
+    };
+    palco.remove();
+    return JSON.stringify(r);
+  })()`),
+);
+
+/*
+  Duas trilhas, e a primeira RIGIDA.
+
+  A rigidez e o ponto. Se a coluna de horario acompanhar o conteudo, os
+  carimbos deixam de se alinhar entre mensagens e a coluna deixa de ser uma
+  coluna — vira um recuo irregular, e o beneficio inteiro (varrer a esquerda
+  procurando um momento) desaparece.
+*/
+check('a mensagem e uma grade de duas trilhas', log.linha.display === 'grid', log.linha.display);
+check(
+  'e a coluna do horario tem largura fixa, nao elastica',
+  /^\d+(\.\d+)?px \d/.test(log.linha.trilhas),
+  log.linha.trilhas,
+);
+
+/*
+  O avatar saiu da calha. Este check existe porque a volta dele e a forma mais
+  provavel de a estrutura regredir: parece que "falta alguma coisa" ali.
+*/
+check('a calha nao tem avatar dentro', !log.temAvatarNaCalha);
+
+check(
+  'o horario esta em monoespacada, para alinhar em coluna',
+  log.carimbo.fonte === 'JetBrains Mono',
+  log.carimbo.fonte,
+);
+/*
+  Encostado a direita para os dois-pontos de "05:12" e "11:07" ficarem um
+  embaixo do outro. Centralizado, a coluna deixa de ler como regua.
+*/
+check(
+  'e encostado a direita, onde os dois-pontos se alinham',
+  log.calha.justificar === 'flex-end',
+  log.calha.justificar,
+);
+
+/*
+  A regua vertical e o que transforma duas colunas em transcricao. Sem ela sao
+  duas colunas soltas.
+*/
+check(
+  'o corpo tem a regua vertical que forma o eixo',
+  parseFloat(log.corpo.bordaEsq) >= 1,
+  log.corpo.bordaEsq,
+);
+
+/*
+  MENCAO A MIM PRECISA TER MARCA.
+
+  Antes NAO TINHA NENHUMA: o componente calculava `mentionsMe` — mencao direta,
+  @everyone e mencao a cargo — punha a classe na mensagem, e nenhuma folha de
+  estilo tinha regra para ela. O calculo rodava e o resultado ia para o nada, e
+  quem rolava um canal movimentado procurando onde foi chamado nao tinha nada
+  na tela apontando.
+*/
+check(
+  'mencao a mim acende o eixo',
+  log.corpoMencao.corBordaEsq !== log.corpo.corBordaEsq,
+  log.corpoMencao.corBordaEsq,
+);
+
+/*
+  A MENSAGEM FIXADA NAO LAVA A LINHA INTEIRA.
+
+  A regra antiga pintava o fundo do bloco todo e punha uma barra na borda
+  esquerda. Na estrutura de log a borda esquerda caiu na coluna de horario —
+  longe do texto — e a lavagem cobriu o carimbo, deixando-o ilegivel. Foi visto
+  na tela antes de ser consertado.
+*/
+check(
+  'a fixada nao lava a linha inteira',
+  log.linhaFixada.fundo === 'rgba(0, 0, 0, 0)' && log.linhaFixada.sombra === 'none',
+  'fundo ' + log.linhaFixada.fundo,
+);
+check(
+  'ela marca o eixo, como a mencao',
+  log.corpoFixado.corBordaEsq !== log.corpo.corBordaEsq,
+  log.corpoFixado.corBordaEsq,
+);
+
+/*
+  O nome de quem falou virou ETIQUETA, nao titulo.
+
+  Estava em 14px peso 600 — do tamanho do texto da mensagem e mais pesado que
+  ele. Numa conversa o que importa e o que foi dito, nao quem disse; o nome
+  precisa ser achavel, nao dominante.
+*/
+check(
+  'o nome do autor le como etiqueta tecnica',
+  log.autor.fonte === 'JetBrains Mono' && log.autor.caixa === 'uppercase',
+  log.autor.fonte + ' ' + log.autor.caixa,
+);
+
+// ---------------------------------------------------------------------------
+/*
+  A FAIXA DE ESTADO NAO PODE INVENTAR NUMERO.
+
+  Esta e a regra que justifica a faixa existir. Uma linha tecnica cheia de dado
+  decorativo — uptime que ninguem contou, subnet que ninguem leu — fica bonita
+  e ensina a pessoa a ignorar a faixa inteira. No dia em que a latencia estiver
+  em 400ms, ela vai estar escrita num lugar que ninguem mais olha.
+
+  A vitrine roda SEM CHAMADA — e essa e a parte que da para garantir. O elo com
+  o servidor pode muito bem estar de pe: o login e persistente, entao abrir o
+  aplicativo com uma sessao guardada conecta o gateway mesmo nesta tela. Medido
+  aqui: a faixa mostrou ELO_OK enquanto latencia e voz estavam em traco, e isso
+  esta CERTO — o elo existe, a chamada nao.
+
+  Entao o que se cobra e o que nao pode existir: sem chamada, latencia e
+  contagem de voz tem que sair em traco. Um zero seria pior — uma mentira
+  precisa, "medi e deu zero", que ainda por cima leria como conexao perfeita.
+
+  E o unico lugar onde da para cobrar isso do componente de verdade. Uma
+  imitacao de marcacao passaria sempre, porque quem a escreve escreve os tracos
+  na mao.
+*/
+console.log(String.fromCharCode(10) + '--- FAIXA DE ESTADO: SO O QUE E MEDIDO ---');
+
+const faixa = JSON.parse(
+  await avaliar(`(() => {
+    const raiz = document.querySelector('[data-vitrine="faixa"] .faixa');
+    if (!raiz) return JSON.stringify({ existe: false });
+
+    const itens = [...raiz.querySelectorAll('.faixa-item')].map((el) => ({
+      chave: el.querySelector('.faixa-chave')?.textContent?.trim() ?? '',
+      valor: el.querySelector('.faixa-valor')?.textContent?.trim() ?? '',
+    }));
+
+    const elo = raiz.querySelector('.faixa-elo');
+    const relogio = raiz.querySelector('.faixa-relogio');
+
+    return JSON.stringify({
+      existe: true,
+      itens,
+      eloTexto: elo?.textContent?.trim() ?? '',
+      eloTemPonto: !!elo?.querySelector('.faixa-ponto'),
+      eloTemTitulo: (elo?.getAttribute('title') ?? '').length > 8,
+      relogio: relogio?.textContent?.trim() ?? '',
+      vivo: raiz.getAttribute('aria-live'),
+      papel: raiz.getAttribute('role'),
+      altura: raiz.getBoundingClientRect().height,
+    });
+  })()`),
+);
+
+check('a faixa esta montada na vitrine', faixa.existe);
+
+if (faixa.existe) {
+  /*
+    O check central. Em repouso, todo valor MEDIDO tem que ser traco.
+    Um zero seria pior que o traco: uma mentira precisa — "medi e deu zero" —
+    e zero milissegundos ainda leria como conexao perfeita.
+  */
+  const medidos = faixa.itens.filter((i) => i.chave === 'RTT' || i.chave === 'VOZ');
+  check(
+    'sem chamada, nenhum valor medido vira numero',
+    medidos.length > 0 && medidos.every((i) => i.valor === '--'),
+    medidos.map((i) => i.chave + '=' + i.valor).join(' '),
+  );
+
+  /*
+    Cor sozinha nao comunica: daltonismo vermelho-verde e o caso mais comum, e
+    este ponto distingue exatamente vermelho de verde. Por isso o estado
+    tambem vem escrito ao lado, e com descricao em `title`.
+  */
+  check(
+    'o estado do elo vem escrito, nao so colorido',
+    faixa.eloTexto.length >= 5 && faixa.eloTemPonto,
+    faixa.eloTexto,
+  );
+  check('e tem descricao em texto para quem passar o mouse', faixa.eloTemTitulo);
+
+  check('o relogio esta correndo, com segundos', /^\d{2}:\d{2}:\d{2}$/.test(faixa.relogio), faixa.relogio);
+
+  /*
+    A faixa NAO pode ser uma regiao viva.
+
+    O relogio muda a cada segundo. Com `aria-live` ligado, o leitor de tela
+    falaria a hora sem parar e o aplicativo ficaria inutilizavel para quem
+    depende dele. Quem precisa ser avisado de queda ja e servido pelos
+    anuncios, que falam uma vez e param.
+  */
+  check(
+    'mas nao anuncia sozinha, senao falaria a hora a cada segundo',
+    faixa.vivo === 'off' && faixa.papel === 'status',
+    'aria-live=' + faixa.vivo,
+  );
+
+  /*
+    Altura contada: a faixa divide a janela com a conversa, que e o que a
+    pessoa veio fazer. Passar disso e roubar espaco de leitura para mostrar
+    cromo.
+  */
+  check('e ocupa pouca altura', faixa.altura > 0 && faixa.altura <= 26, Math.round(faixa.altura) + 'px');
+}
+
+
 console.log(`\n=========================================`);
 console.log(`  ${passou} passaram, ${falhou} falharam`);
 console.log(`=========================================\n`);

@@ -2281,3 +2281,418 @@ button.mention:disabled {
   border-radius: 0 !important;
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
+
+/* ==========================================================================
+   A CONVERSA COMO LOG DE TRANSMISSAO
+
+   Esta e a mudanca de ESTRUTURA, nao de pintura.
+
+   O desenho antigo era o de rede social, e nao por escolha: e o que sai
+   quando se copia o que ja existe. Avatar grande numa coluna a esquerda, nome
+   em negrito como titulo, texto embaixo do nome, hora escondida ate o mouse
+   passar. Funciona — e e exatamente igual a qualquer outro aplicativo de
+   conversa, inclusive no que ele tem de ruim.
+
+   O que ele tem de ruim, em numeros: 36px de largura gastos em toda mensagem
+   com uma imagem de 36px que se repete a cada bloco; uma linha inteira gasta
+   so com o nome de quem falou; e o unico dado que serve para NAVEGAR na
+   conversa — a hora — invisivel ate alguem procurar por ele com o cursor.
+
+   Aqui a conversa vira transcricao. Coluna de horario a esquerda, sempre
+   visivel, em monoespacada alinhada; uma regua vertical separando; e o texto
+   ocupando o resto. Da para varrer a coluna da esquerda procurando um momento,
+   que e o que se faz quando alguem pergunta "o que rolou de manha".
+
+   O rosto nao some do aplicativo. Ele sai da CALHA e vira uma ficha de 18px do
+   lado do nome. Continua inteiro na lista de presenca, no cartao de perfil e
+   no palco da chamada, que sao os lugares onde identificar alguem e a tarefa.
+   ========================================================================== */
+
+/*
+  Grade de duas colunas, nao flex com espaco entre.
+
+  Grade porque a coluna de horario precisa ter a MESMA largura em toda
+  mensagem, senao os carimbos nao se alinham e a coluna deixa de ser uma
+  coluna. Com `flex` e um item de largura fixa daria no mesmo, mas a grade diz
+  a intencao: sao duas trilhas, uma delas rigida.
+
+  A largura de 52px cabe "05:12" em 11px de monoespacada com folga, e nao
+  cresce: se um dia entrar segundo ali, e uma mudanca consciente neste numero,
+  nao um empurrao silencioso no texto de todo mundo.
+*/
+.msg {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 0;
+  padding: 1px 46px 1px 0;
+}
+
+/*
+  A calha: horario encostado a DIREITA.
+
+  Alinhado a direita, nao ao centro nem a esquerda. Numero que se compara le em
+  coluna, e com "05:12" e "11:07" centralizados os dois-pontos nao ficam um
+  embaixo do outro. A direita eles ficam, e a coluna vira uma regua.
+*/
+.msg-gutter {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  padding: 3px 10px 0 0;
+  user-select: none;
+}
+
+.msg-carimbo {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-ghost);
+  /*
+    Numeros de largura fixa. Sem isto, "1" e mais estreito que "0" em varias
+    fontes e o carimbo dança de uma linha para a outra — o defeito classico de
+    relogio digital feito com fonte proporcional. A JetBrains ja e mono, mas a
+    substituta do sistema pode nao ser.
+  */
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  A regua vertical, a esquerda do texto.
+
+  E ela que transforma duas colunas em transcricao. Sem ela sao duas colunas
+  soltas; com ela ha um EIXO, e o olho entende que tudo a direita pertence a
+  mesma sequencia.
+
+  Fica no corpo e nao na calha para poder ser continua: mensagens agrupadas nao
+  tem cabecalho, e a linha atravessa todas elas sem interrupcao.
+*/
+.msg-body {
+  min-width: 0;
+  padding: 2px 0 2px 14px;
+  border-left: 1px solid var(--line-soft);
+}
+
+/*
+  Numa sequencia da mesma pessoa o carimbo apaga, mas NAO some.
+
+  Some seria o reflexo: a hora "ja foi dita" no cabecalho do bloco. Mas nao
+  foi — mensagens de um mesmo bloco podem estar a vinte minutos de distancia, e
+  quem le uma sequencia longa de uma pessoa so perde a nocao de tempo. Apagar
+  resolve os dois lados: nao chama atencao na leitura corrida, e esta la quando
+  se procura.
+*/
+.msg.grouped .msg-carimbo {
+  opacity: 0;
+  transition: opacity var(--mov-rapida) var(--curva);
+}
+
+.msg.grouped:hover .msg-carimbo,
+.msg.grouped:focus-within .msg-carimbo {
+  opacity: 1;
+}
+
+/*
+  O cabecalho do bloco vira UMA LINHA baixa, nao um titulo.
+
+  Antes era `font-size: 14px; font-weight: 600` — do tamanho do proprio texto
+  da mensagem e mais pesado que ele. O nome de quem falou competia com o que
+  foi falado, e numa conversa o que importa e o segundo.
+
+  Agora e etiqueta: monoespacada, menor, em caixa alta. Continua achavel de
+  relance pela cor do cargo, que e o que de fato identifica, e para de gritar.
+*/
+.msg-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 2px;
+  line-height: 1.4;
+}
+
+.msg-author {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-justa);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* A ficha do autor: pequena, quadrada, no eixo da linha. */
+.msg-ficha {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  cursor: pointer;
+}
+
+/*
+  O dia, quando nao e hoje. Vazio na maioria das vezes, de proposito — a
+  funcao `diaDaMensagem` devolve string vazia para hoje, e o `gap` da linha
+  nao abre buraco porque um elemento vazio nao ocupa largura.
+*/
+.msg-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-ghost);
+  text-transform: lowercase;
+}
+
+/*
+  Mencao: a regua acende, em vez de o fundo inteiro pintar.
+
+  Pintar o fundo da mensagem e o que todo mundo faz, e cria uma mancha larga
+  que sobrevive a rolagem e cansa. Acender o eixo marca a mesma mensagem com
+  1px e uma lavagem fraca — achavel rolando, e nao incomoda quem esta lendo.
+*/
+.msg.mentioned .msg-body {
+  border-left-color: var(--amber);
+  background: linear-gradient(to right, var(--amber-wash), transparent 220px);
+}
+
+.msg.pinned .msg-body {
+  border-left-color: var(--optic-dim);
+}
+
+/*
+  O primeiro de um bloco ganha ar em cima; os agrupados nao.
+
+  O respiro vai entre PESSOAS, nao entre linhas. Era isso que o desenho antigo
+  fazia com margens em cada mensagem, e o resultado era uma lista frouxa onde
+  cabiam poucas mensagens por tela.
+*/
+.msg.first {
+  margin-top: 10px;
+}
+
+.msg:first-child {
+  margin-top: 4px;
+}
+
+/*
+  A resposta citada volta para dentro do eixo.
+
+  Ela vinha com um recuo proprio, herdado do desenho de calha larga. Com a
+  regua ela nao precisa: ja esta visivelmente dentro da sequencia.
+*/
+.msg-reply {
+  margin-left: 0;
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+
+/*
+  A MARCA DE FIXADO VOLTA PARA O EIXO.
+
+  A regra antiga em `global.css` lavava a LINHA INTEIRA de ambar e punha uma
+  barra de 2px na borda esquerda do bloco. Fazia sentido no desenho de calha
+  larga, onde a borda esquerda do bloco era a borda do avatar. Na estrutura de
+  log ela cai na coluna de horario — longe do texto, sem relacao visual com
+  nada — e a lavagem cobre o carimbo, que fica ilegivel por cima dela.
+
+  Aqui a marcacao passa a acontecer onde ja acontece a de mencao: na regua. Uma
+  peca marcada acende o proprio eixo, e a etiqueta FIXADA diz o resto. A
+  diferenca na tela e grande: uma mancha larga que sobrevive a rolagem vira uma
+  linha de 1px que se acha rolando e nao atrapalha quem esta lendo.
+*/
+.msg.pinned {
+  background: none;
+  box-shadow: none;
+}
+
+/*
+  A etiqueta acompanha a voz do autor: monoespacada, nao Inter.
+
+  As duas ficam na mesma linha de leitura, uma embaixo da outra. Em fontes
+  diferentes elas pareciam vir de dois sistemas.
+*/
+.msg-pinned {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-media);
+}
+
+/*
+  MENCAO A MIM NAO TINHA MARCA NENHUMA.
+
+  Isto nao e ajuste de gosto: o componente ja calculava `mentionsMe` — checando
+  mencao direta, `@everyone` e mencao a cargo do qual a pessoa faz parte — e
+  punha a classe `mentioned` na mensagem. Nenhuma folha de estilo tinha regra
+  para ela. O calculo rodava a cada mensagem e o resultado ia para o nada.
+
+  O sintoma para quem usa: rolar um canal movimentado procurando onde alguem te
+  chamou, sem nada na tela apontando. A regra que acende o eixo em ambar esta
+  em `.msg.mentioned .msg-body`, logo acima.
+*/
+
+/*
+  Fixada e mencao marcam coisas DIFERENTES, e por isso usam cores diferentes:
+
+    ambar  — alguem quer voce. Mencao direta, @everyone, mencao ao seu cargo.
+    ciano  — o canal marcou isto. Fixada.
+
+  O rotulo precisa da cor da PROPRIA regua. Ele estava em ambar por heranca do
+  desenho antigo, sobre uma regua ciano — duas cores na mesma peca, cada uma
+  dizendo uma coisa diferente sobre ela.
+*/
+.msg.pinned .msg-pinned {
+  color: var(--optic-dim);
+}
+
+/* ==========================================================================
+   FAIXA DE ESTADO
+
+   Uma linha de instrumento encostada no fim da janela. Altura de 22px: o
+   suficiente para 10px de monoespacada respirar, e pouco o bastante para nao
+   disputar espaco com a conversa, que e o que a pessoa veio fazer.
+
+   Tudo aqui e LEITURA. Nada e clicavel, nada abre nada. E por isso que ela
+   pode ficar sempre visivel sem virar uma armadilha de clique no canto da
+   tela.
+   ========================================================================== */
+
+.faixa {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 22px;
+  padding: 0 12px;
+  flex: none;
+  background: var(--bg-canvas);
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--tk-mono-justa);
+  color: var(--text-ghost);
+  user-select: none;
+  /*
+    Nao encolhe e nao some. A faixa e o ultimo lugar que continua dizendo a
+    verdade quando o resto da tela esta esquisito; escondê-la em janela
+    estreita seria tirar o instrumento justamente de quem esta com a janela
+    apertada num canto para caber outra coisa.
+  */
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.faixa-elo,
+.faixa-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/*
+  O ponto de estado: cor E posicao fixa.
+
+  Cor sozinha nao serve — daltonismo vermelho-verde e o caso mais comum que
+  existe, e este ponto distingue exatamente vermelho de verde. Por isso o
+  rotulo ao lado muda junto: ELO_OK, RELIGANDO, SEM_ELO. Quem nao distingue a
+  cor le a palavra; quem le a cor nao precisa da palavra. Os dois caminhos
+  existem sempre.
+*/
+.faixa-ponto {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  background: currentColor;
+}
+
+.faixa-elo.bom {
+  color: var(--on);
+}
+
+.faixa-elo.atencao {
+  color: var(--amber);
+}
+
+.faixa-elo.ruim {
+  color: var(--red);
+}
+
+/*
+  Chave e valor tem pesos diferentes: a chave e etiqueta, o valor e o dado.
+
+  Sem essa diferenca "RTT 42MS" le como uma palavra so de cinco silabas. Com
+  ela o olho pula direto para o numero, que e o que muda.
+*/
+.faixa-chave {
+  color: var(--text-ghost);
+  opacity: 0.75;
+}
+
+.faixa-valor {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  O grau da latencia so pinta quando ha o que pintar. Fora de chamada o valor
+  e um traco, e um traco verde afirmaria uma medicao que nao existe.
+*/
+.faixa-valor.bom {
+  color: var(--on);
+}
+
+.faixa-valor.atencao {
+  color: var(--amber);
+}
+
+.faixa-valor.ruim {
+  color: var(--red);
+}
+
+.faixa-ativo {
+  color: var(--red);
+}
+
+/*
+  O ponto de transmitindo PULSA, e e o unico que pulsa.
+
+  Transmitir a propria tela e a coisa mais facil de esquecer que esta ligada, e
+  a de consequencia mais cara. Movimento e o que o olho pega na periferia sem
+  estar olhando — que e exatamente a situacao de quem esqueceu.
+*/
+.faixa-ponto.vivo {
+  animation: faixa-pulso 1.6s ease-in-out infinite;
+}
+
+@keyframes faixa-pulso {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/*
+  Quem pediu menos movimento no sistema nao quer um ponto piscando no rodape a
+  noite inteira. A informacao nao se perde: o rotulo TRANSMITINDO continua
+  escrito, em vermelho, do lado.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .faixa-ponto.vivo {
+    animation: none;
+  }
+}
+
+.faixa-sep {
+  width: 1px;
+  height: 10px;
+  background: var(--line-strong);
+  flex: none;
+}
+
+.faixa-espaco {
+  flex: 1;
+}
+
+.faixa-relogio {
+  color: var(--text-ghost);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tk-mono-media);
+}

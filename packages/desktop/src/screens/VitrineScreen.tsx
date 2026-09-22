@@ -15,6 +15,7 @@ import { CallControls } from '../components/CallControls.js';
 import { ProfileCard } from '../components/ui/ProfileCard.js';
 import { UnsavedBar } from '../components/ui/UnsavedBar.js';
 import { Avatar } from '../components/Avatar.js';
+import { BarraDeEstado } from '../components/BarraDeEstado.js';
 import { anunciar } from '../lib/anunciar.js';
 import { useToast } from '../components/ui/Toast.js';
 import { Trash, Edit, Link, Chevron, Users, Mic, Monitor, Plus } from '../components/Icons.js';
@@ -510,6 +511,31 @@ export function VitrineScreen() {
             A barra chamou quem salva.
           </InlineAlert>
         )}
+      </SettingsSection>
+
+      <SettingsSection
+        titulo="Faixa de estado"
+        descricao="A linha de instrumento do rodape, com o estado real do aplicativo."
+      >
+        {/*
+          A faixa DE VERDADE, nao uma imitacao.
+
+          Ela le a store e o controlador de voz direto. O elo pode aparecer de
+          pe aqui — o login e persistente, entao abrir com sessao guardada
+          conecta o gateway mesmo nesta tela. O que NAO existe na vitrine e
+          chamada, e por isso latencia e contagem de voz tem que sair em traco.
+
+          E o teste mais importante que a faixa tem, e so da para faze-lo com o
+          componente real: uma imitacao de marcacao passaria sempre, porque quem
+          a escreve escreve os tracos na mao.
+        */}
+        <div className="vitrine-linha" data-vitrine="faixa" style={{ display: 'block' }}>
+          <BarraDeEstado />
+        </div>
+        <p className="vitrine-nota">
+          O elo pode estar de pe aqui, porque o login e persistente. Chamada nao ha — entao
+          latencia e voz saem em traco. Numero ali seria invencao.
+        </p>
       </SettingsSection>
 
       <Dialog
