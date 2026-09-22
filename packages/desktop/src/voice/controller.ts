@@ -559,14 +559,17 @@ class VoiceController {
   /** Reaplica o volume em tudo que esta tocando. */
   private aplicarVolumes(): void {
     for (const a of this.audioElements.values()) {
-      const volume = this.volumeDe(a.identidade, a.fonte);
-      if (this.saida.ativa) {
-        this.saida.ajustar(a.elemento, volume);
-      } else {
-        // Sem Web Audio, volta ao elemento — e ao teto de 100%. Ouvir baixo
-        // e melhor do que nao ouvir.
-        a.elemento.volume = Math.min(1, volume);
-      }
+      /*
+        Tenta ligar de novo a cada passada.
+
+        Quem ficou de fora na primeira vez — fluxo que ainda nao tinha
+        chegado, contexto suspenso esperando um gesto — entra agora. E
+        `ligar` ja devolve cedo para quem esta ligado, entao repetir nao
+        custa.
+      */
+      this.saida.ligar(a.elemento);
+      // `ajustar` cuida dos dois caminhos: no grafo ou no proprio elemento.
+      this.saida.ajustar(a.elemento, this.volumeDe(a.identidade, a.fonte));
     }
   }
 
@@ -578,14 +581,10 @@ class VoiceController {
     const element = track.attach() as HTMLAudioElement;
     element.autoplay = true;
 
-    const volume = this.volumeDe(participant.identity, fonte);
-    if (this.saida.ligar(element)) {
-      this.saida.ajustar(element, volume);
-      if (this.settings.outputDeviceId) {
-        void this.saida.trocarSaida(this.settings.outputDeviceId);
-      }
-    } else {
-      element.volume = Math.min(1, volume);
+    this.saida.ligar(element);
+    this.saida.ajustar(element, this.volumeDe(participant.identity, fonte));
+    if (this.settings.outputDeviceId) {
+      void this.saida.trocarSaida(this.settings.outputDeviceId);
     }
 
     if (this.settings.outputDeviceId && 'setSinkId' in element) {
@@ -1120,15 +1119,24 @@ class VoiceController {
   // ---------------------------------------------------------------------------
 
   /** A publicacao de tela de alguem, quando ela e remota. */
-  private publicacaoDeTela(userId: string): RemoteTrackPublication | null {
+  /**
+   * As faixas da transmissao de alguem: imagem E som.
+   *
+   * Devolve as duas porque assistir e uma decisao so. A versao anterior
+   * devolvia so o video, e o som ficava assinado por conta propria — quem nao
+   * tinha pedido para assistir ouvia o jogo dos outros sem imagem e sem saber
+   * de onde vinha.
+   */
+  private publicacoesDeTela(userId: string): RemoteTrackPublication[] {
     const room = this.room;
-    if (!room) return null;
+    if (!room) return [];
     for (const p of room.remoteParticipants.values()) {
       if (p.identity !== userId) continue;
-      const pub = p.getTrackPublication(Track.Source.ScreenShare);
-      return (pub as RemoteTrackPublication | undefined) ?? null;
+      return [Track.Source.ScreenShare, Track.Source.ScreenShareAudio]
+        .map((fonte) => p.getTrackPublication(fonte) as RemoteTrackPublication | undefined)
+        .filter((pub): pub is RemoteTrackPublication => Boolean(pub));
     }
-    return null;
+    return [];
   }
 
   estouAssistindo(userId: string): boolean {
@@ -1146,7 +1154,7 @@ class VoiceController {
   async assistirTransmissao(userId: string): Promise<void> {
     if (this.assistindo.has(userId)) return;
     this.assistindo.add(userId);
-    this.publicacaoDeTela(userId)?.setSubscribed(true);
+    for (const pub of this.publicacoesDeTela(userId)) pub.setSubscribed(true);
     this.emit({ assistindo: [...this.assistindo] });
   }
 
@@ -1159,7 +1167,7 @@ class VoiceController {
       chegando pela rede, que e o custo que mais pesa em quem tem internet
       apertada. Quem nao esta assistindo nao deve baixar nada.
     */
-    this.publicacaoDeTela(userId)?.setSubscribed(false);
+    for (const pub of this.publicacoesDeTela(userId)) pub.setSubscribed(false);
     this.emit({ assistindo: [...this.assistindo] });
   }
 
@@ -1178,12 +1186,23 @@ class VoiceController {
     if (!room) return;
 
     for (const p of room.remoteParticipants.values()) {
-      const pub = p.getTrackPublication(Track.Source.ScreenShare) as
-        | RemoteTrackPublication
-        | undefined;
-      if (!pub) continue;
       const querido = this.assistindo.has(p.identity);
-      if (pub.isSubscribed !== querido) pub.setSubscribed(querido);
+
+      /*
+        Video E SOM. A primeira versao so recusava o video.
+
+        Sao duas faixas separadas no LiveKit, e cuidar de uma so produzia o
+        pior resultado possivel: a pessoa nao via a transmissao, nao tinha
+        pedido para ver, e mesmo assim OUVIA o jogo dos outros. Sem imagem, sem
+        ter escolhido, e sem entender de onde vinha o som.
+
+        O som vem junto da imagem ou nao vem: assistir e uma decisao so.
+      */
+      for (const fonte of [Track.Source.ScreenShare, Track.Source.ScreenShareAudio]) {
+        const pub = p.getTrackPublication(fonte) as RemoteTrackPublication | undefined;
+        if (!pub) continue;
+        if (pub.isSubscribed !== querido) pub.setSubscribed(querido);
+      }
     }
 
     // Quem parou de transmitir sai da lista: guardar a escolha para uma

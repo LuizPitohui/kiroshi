@@ -181,7 +181,13 @@ export class SaidaDeAudio {
         Nao removido porque ele continua util — e o que satisfaz a politica de
         reproducao automatica do navegador e mantem o fluxo remoto vivo.
       */
+      /*
+        Silencia o elemento porque quem toca agora e o grafo. `volume = 1`
+        junto: se o LiveKit desfizer o `muted`, o elemento volta em volume
+        cheio e o `ajustar` corrige na proxima passada.
+      */
       elemento.muted = true;
+      elemento.volume = 1;
       this.faixas.set(elemento, { origem, ganho });
       return true;
     } catch {
@@ -189,11 +195,41 @@ export class SaidaDeAudio {
     }
   }
 
-  /** Ajusta o volume de um elemento ja ligado. Ignora o que nao esta. */
+  /**
+   * Ajusta o volume. Mexe nos DOIS caminhos, sempre.
+   *
+   * Parece redundante e nao e. O elemento e o grafo sao dois caminhos
+   * possiveis para o mesmo som, e ja se viu na pratica os dois estarem vivos
+   * ao mesmo tempo: o `attachToElement` do LiveKit escreve
+   * `element.muted = false` por conta propria sempre que reanexa uma faixa, e
+   * desfaz o silenciamento que este modulo tinha posto.
+   *
+   * A versao anterior so mexia no grafo e saia calada quando o elemento nao
+   * estava registrado. Resultado: quem zerava o volume de alguem continuava
+   * ouvindo a pessoa — e o controle parecia simplesmente nao existir.
+   *
+   * Agora zerar zera, custe o que custar: o ganho vai a zero E o elemento vai
+   * a zero. Qual dos dois esta realmente tocando deixa de importar.
+   */
   ajustar(elemento: HTMLMediaElement, volume: number): void {
+    const alvo = Math.max(0, Math.min(GANHO_MAXIMO, volume));
+
     const faixa = this.faixas.get(elemento);
-    if (!faixa) return;
-    faixa.ganho.gain.value = Math.max(0, Math.min(GANHO_MAXIMO, volume));
+    if (faixa) {
+      faixa.ganho.gain.value = alvo;
+      // Reafirma o silenciamento: o LiveKit pode te-lo desfeito.
+      elemento.muted = true;
+      elemento.volume = 1;
+      return;
+    }
+
+    /*
+      Fora do grafo — porque `ligar` falhou, ou porque o elemento chegou sem
+      fluxo. Aqui vale o teto de 100% do proprio elemento, e e melhor ouvir
+      baixo com controle do que alto sem.
+    */
+    elemento.muted = alvo === 0;
+    elemento.volume = Math.min(1, alvo);
   }
 
   /** Solta um elemento. Sem isto os nos ficam no grafo depois de a pessoa sair. */
