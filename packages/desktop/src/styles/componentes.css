@@ -2696,3 +2696,179 @@ button.mention:disabled {
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--tk-mono-media);
 }
+
+/* ==========================================================================
+   OS DOIS TRILHOS: CABECALHO E COMPOSITOR
+
+   Com a faixa de estado no rodape e a conversa em log, sobraram duas pecas
+   falando a lingua antiga: o cabecalho do canal, que era um titulo de pagina,
+   e o compositor, que era uma caixa de formulario.
+
+   A ideia que amarra as duas: o aplicativo passa a ser emoldurado por trilhos
+   de instrumento. Em cima, ONDE voce esta. Embaixo, COMO o sistema esta. E,
+   entre eles, o log — que agora comeca e termina na mesma lingua, em vez de
+   ter uma borda de formulario no meio do caminho.
+   ========================================================================== */
+
+/*
+  O cabecalho do canal: identificacao, nao titulo de pagina.
+
+  O `#` ganha a cor de acento e o nome vai para monoespacada. Nao e capricho
+  de tema: o nome de canal e um IDENTIFICADOR — se digita, se copia, se
+  compara com o que esta na coluna ao lado. A mesma razao pela qual os nomes na
+  navegacao ja estao em mono. Antes a coluna dizia `geral` em monoespacada e o
+  cabecalho dizia `# geral` em Inter, os dois apontando para a mesma coisa em
+  duas vozes.
+*/
+.chat-head {
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--bg-canvas);
+}
+
+.chat-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-media);
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/*
+  A cerquilha e do sistema, nao do nome.
+
+  Em acento e mais apagada: ela diz o TIPO do lugar (canal de texto), e o tipo
+  e sempre o mesmo. Quem precisa ser lido e o nome. Pintar as duas coisas com
+  o mesmo peso faz o olho ler "cerquilha geral" toda vez.
+*/
+.chat-head .channel-icon {
+  color: var(--optic);
+  opacity: 0.8;
+}
+
+/*
+  O assunto do canal le como nota tecnica, e para de ter parede.
+
+  A borda a esquerda dele era um separador vertical entre nome e assunto —
+  mais uma linha numa tela que ja tem regua na conversa, regra no cabecalho e
+  faixa no rodape. A diferenca de tamanho e de cor ja separa os dois.
+*/
+.chat-topic {
+  font-size: 11px;
+  color: var(--text-ghost);
+  border-left: none;
+  padding-left: 0;
+  margin-left: 2px;
+}
+
+/* ==========================================================================
+   O COMPOSITOR COMO ULTIMA LINHA DO LOG
+
+   Era uma caixa com borda nos quatro lados, flutuando sobre o fundo: o desenho
+   de campo de formulario. Com a conversa em log, isso criava uma fronteira
+   visual exatamente onde a pessoa NAO esta trocando de contexto — ela terminou
+   de ler a ultima mensagem e vai escrever a proxima.
+
+   Agora ele e a base do log: regra em cima, sinal de entrada a esquerda, e
+   nada em volta.
+   ========================================================================== */
+
+.composer-wrap {
+  padding: 0;
+}
+
+.composer {
+  background: none;
+  /*
+    So a regra de cima. As outras tres bordas existiam para desenhar uma caixa,
+    e a caixa e o que estava errado.
+  */
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  padding: 0 12px;
+  gap: 2px;
+  transition: border-color var(--mov-rapida) var(--curva);
+}
+
+/*
+  O foco acende a regra inteira.
+
+  Numa caixa, o foco acende a borda e fica claro. Sem caixa era preciso achar
+  outro jeito de dizer "e aqui que o que voce digitar vai parar" — e a regra
+  acesa diz isso por toda a largura, que e mais visivel que uma borda fina, nao
+  menos.
+*/
+.composer:focus-within {
+  border-top-color: var(--optic);
+}
+
+.composer-sinal {
+  flex: none;
+  padding: 0 7px 0 3px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 40px;
+  color: var(--text-ghost);
+  user-select: none;
+  transition: color var(--mov-rapida) var(--curva);
+}
+
+/* O sinal acende junto: ele e o ponto de entrada, e aponta para o cursor. */
+.composer:focus-within .composer-sinal {
+  color: var(--optic);
+}
+
+/*
+  O texto que se digita continua em Inter, e isto e deliberado.
+
+  A tentacao seria por tudo em monoespacada e fechar o tema. Mas o que se
+  escreve aqui sao FRASES, que depois vao aparecer em Inter na conversa. Se o
+  compositor usasse outra fonte, a mensagem mudaria de cara ao ser enviada — e
+  a quebra de linha cairia em lugar diferente do que a pessoa viu ao escrever.
+
+  A dica, sim, e tecnica: ela e rotulo do campo, nao conteudo dele.
+*/
+.composer textarea::placeholder {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: var(--tk-mono-justa);
+  color: var(--text-ghost);
+}
+
+/*
+  Com resposta ou anexo pendente, a regra vira ambar.
+
+  E o unico estado em que enviar faz mais do que mandar texto: vai junto uma
+  citacao ou um arquivo. O aviso ja existia como conteudo acima do campo;
+  agora a propria regra participa, e o estado fica visivel mesmo com o olho na
+  linha de escrita.
+*/
+.composer.with-reply {
+  border-top-color: var(--amber);
+}
+
+.composer.with-reply .composer-sinal {
+  color: var(--amber);
+}
+
+/*
+  O foco ganha um segundo pixel, por dentro.
+
+  A regra de 1px acesa e visivel, mas o que ela substituiu era uma caixa
+  inteira mudando de cor — e trocar um indicador de foco por um mais discreto e
+  o tipo de perda que passa batida em quem usa mouse e atrapalha todo dia quem
+  anda de Tab.
+
+  `box-shadow` interno em vez de engrossar a borda: engrossar mudaria a altura
+  do compositor em 1px a cada foco, e a conversa inteira acima dele pularia
+  junto. A sombra ocupa espaco que ja existe.
+*/
+.composer:focus-within {
+  box-shadow: inset 0 1px 0 var(--optic);
+}
+
+.composer.with-reply:focus-within {
+  box-shadow: inset 0 1px 0 var(--amber);
+}

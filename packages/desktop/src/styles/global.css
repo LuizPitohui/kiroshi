@@ -294,7 +294,24 @@
   --nav-w: 256px;
   --nav-w-min: 224px;
   --nav-w-max: 320px;
-  --head-h: 64px;
+  /*
+    44px, e nao 64.
+
+    Os quatro cabecalhos do aplicativo usam este numero — conversa, navegacao,
+    gaveta e painel — e existem para alinhar entre si, entao ele se muda em um
+    lugar so.
+
+    64px e a altura que um cabecalho tem quando ninguem perguntou quanto ele
+    precisa. O que mora ali dentro e o nome do lugar e tres botoes de 32px;
+    28px de folga em volta e mais do que qualquer um deles pede. E o preco nao
+    e cobrado uma vez: sao 20px por cabecalho, em toda tela, para sempre — numa
+    janela com cabecalho em cima e faixa de estado embaixo, isso e quase uma
+    mensagem inteira de conversa trocada por ar.
+
+    44px ainda deixa 6px em volta do botao de 32px, que e folga de sobra para
+    o alvo do mouse.
+  */
+  --head-h: 44px;
   --panel-w: 320px;
   --presence-w: 224px;
   /* A conversa do canal de voz e mais larga que a lista de membros: ali se le

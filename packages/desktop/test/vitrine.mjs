@@ -1740,6 +1740,243 @@ if (faixa.existe) {
 }
 
 
+// ---------------------------------------------------------------------------
+/*
+  OS DOIS TRILHOS: CABECALHO E COMPOSITOR
+
+  As duas ultimas pecas que ainda falavam a lingua de formulario. O cabecalho
+  era um titulo de pagina de 64px; o compositor, uma caixa com borda nos quatro
+  lados flutuando sobre o fundo — exatamente onde a pessoa NAO troca de
+  contexto, porque ela acabou de ler a ultima mensagem e vai escrever a
+  proxima.
+
+  O que se cobra aqui sao as propriedades que definem a mudanca, e nao o
+  visual: a altura recuperada, e a AUSENCIA das tres bordas que faziam a caixa.
+  Ausencia e o tipo de coisa que volta sozinha numa refatoracao — ninguem
+  percebe que acrescentou uma borda de volta.
+*/
+console.log(String.fromCharCode(10) + '--- OS DOIS TRILHOS ---');
+
+const trilhos = JSON.parse(
+  await avaliar(`(async () => {
+    const palco = document.createElement('div');
+    palco.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px';
+    palco.innerHTML =
+      '<header class="chat-head"><span class="channel-icon">#</span>' +
+        '<span class="chat-title">geral</span>' +
+        '<span class="chat-topic">onde tudo acontece</span></header>' +
+      '<div class="composer-wrap"><div class="composer">' +
+        '<span class="composer-sinal">x</span>' +
+        '<textarea rows="1" placeholder="Conversar em #geral"></textarea>' +
+      '</div></div>';
+    document.body.appendChild(palco);
+
+    const cs = (sel) => {
+      const el = palco.querySelector(sel);
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        altura: el.getBoundingClientRect().height,
+        bordaTopo: parseFloat(s.borderTopWidth),
+        bordaDir: parseFloat(s.borderRightWidth),
+        bordaBaixo: parseFloat(s.borderBottomWidth),
+        bordaEsq: parseFloat(s.borderLeftWidth),
+        corTopo: s.borderTopColor,
+        fundo: s.backgroundColor,
+        raio: s.borderRadius,
+        fonte: s.fontFamily.split(',')[0].replace(/['"]/g, ''),
+        caixa: s.textTransform,
+        cor: s.color,
+      };
+    };
+
+    const composer = palco.querySelector('.composer');
+    const area = palco.querySelector('.composer textarea');
+    const antesDoFoco = getComputedStyle(composer).borderTopColor;
+    /*
+      A cor de repouso do sinal e lida AQUI, antes de focar.
+
+      Lia-la depois do blur parecia equivalente e nao e: o blur dispara a mesma
+      invalidacao adiada que o foco, entao a leitura logo em seguida ainda
+      devolvia a cor ACESA. O check comparava ciano com ciano e reprovava.
+    */
+    const sinalEmRepouso = getComputedStyle(palco.querySelector('.composer-sinal')).color;
+    const alturaEmRepouso = composer.getBoundingClientRect().height;
+    area.focus();
+    /*
+      DOIS QUADROS ENTRE FOCAR E MEDIR. Nao e superstição — foi medido.
+
+      'getComputedStyle' normalmente forca o recalculo de estilo, e por isso a
+      primeira versao deste check lia a cor no instante seguinte ao 'focus()'.
+      Ela reprovava com "rgb(38,50,67) -> rgb(38,50,67)": a cor de repouso nas
+      duas leituras, como se a regra de foco nao existisse.
+
+      E existia. Na mesma medicao, 'composer.matches(':focus-within')' ja
+      devolvia 'true' e a regra estava na folha, na ordem certa e com a
+      especificidade maior — so o VALOR COMPUTADO ainda nao tinha mudado. A
+      invalidacao que o foco dispara nao entra no mesmo recalculo sincrono; ela
+      espera o proximo quadro. Depois de dois, a cor virou o ciano.
+
+      Custou uma investigacao no cascade inteiro atras de um defeito de CSS que
+      nao existia. Fica escrito para o proximo check de foco nao repetir.
+    */
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const alturaComFoco = composer.getBoundingClientRect().height;
+    const sombraComFoco = getComputedStyle(composer).boxShadow;
+    const comFoco = getComputedStyle(composer).borderTopColor;
+    const sinalComFoco = getComputedStyle(palco.querySelector('.composer-sinal')).color;
+    area.blur();
+
+    const r = {
+      cabecalho: cs('.chat-head'),
+      titulo: cs('.chat-title'),
+      cerquilha: cs('.chat-head .channel-icon'),
+      compositor: cs('.composer'),
+      sinal: cs('.composer-sinal'),
+      tokenAltura: getComputedStyle(document.documentElement).getPropertyValue('--head-h').trim(),
+      antesDoFoco,
+      comFoco,
+      sinalComFoco,
+      sinalEmRepouso,
+      alturaEmRepouso,
+      alturaComFoco,
+      sombraComFoco,
+      optic: getComputedStyle(document.documentElement).getPropertyValue('--optic').trim(),
+    };
+    palco.remove();
+    return JSON.stringify(r);
+  })()`),
+);
+
+/*
+  A altura vem do TOKEN, e o token vale para os quatro cabecalhos do
+  aplicativo — conversa, navegacao, gaveta e painel. Eles existem para alinhar
+  entre si; um valor solto em qualquer um deles quebra o alinhamento sem
+  quebrar nada mais, que e o jeito mais facil de nao ser notado.
+*/
+check(
+  'o cabecalho vem do token compartilhado, nao de um numero solto',
+  Math.abs(trilhos.cabecalho.altura - parseFloat(trilhos.tokenAltura)) < 1,
+  Math.round(trilhos.cabecalho.altura) + 'px, token ' + trilhos.tokenAltura,
+);
+/*
+  64px era a altura que um cabecalho tem quando ninguem perguntou quanto ele
+  precisa: um nome e tres botoes de 32px. O corte devolve 20px por cabecalho em
+  toda tela, para sempre.
+*/
+check(
+  'e ele nao voltou aos 64px de antes',
+  trilhos.cabecalho.altura <= 48,
+  Math.round(trilhos.cabecalho.altura) + 'px',
+);
+
+/*
+  Nome de canal e IDENTIFICADOR: digita-se, copia-se, compara-se com o que
+  esta na coluna ao lado — que ja esta em monoespacada. Antes a coluna dizia
+  `geral` em mono e o cabecalho dizia `# geral` em Inter, os dois apontando
+  para a mesma coisa em duas vozes.
+*/
+check(
+  'o nome do canal fala a mesma lingua da coluna de canais',
+  trilhos.titulo.fonte === 'JetBrains Mono',
+  trilhos.titulo.fonte,
+);
+/*
+  A cerquilha diz o TIPO do lugar, e o tipo e sempre o mesmo. Quem precisa ser
+  lido e o nome. Com o mesmo peso nos dois, o olho le "cerquilha geral" toda
+  vez.
+*/
+check(
+  'e a cerquilha fica em acento, atras do nome',
+  trilhos.cerquilha !== null && trilhos.cerquilha.cor !== trilhos.titulo.cor,
+  trilhos.cerquilha ? trilhos.cerquilha.cor : 'ausente',
+);
+
+/*
+  O CHECK CENTRAL DO COMPOSITOR: so a regra de cima.
+
+  As outras tres bordas existiam para desenhar uma caixa, e a caixa e o que
+  estava errado — ela punha uma fronteira visual bem onde a conversa continua.
+  Com a conversa em log, o compositor e a ULTIMA LINHA dele, nao um formulario
+  no rodape.
+*/
+check(
+  'o compositor tem regra em cima e mais nenhuma borda',
+  trilhos.compositor.bordaTopo >= 1 &&
+    trilhos.compositor.bordaDir === 0 &&
+    trilhos.compositor.bordaBaixo === 0 &&
+    trilhos.compositor.bordaEsq === 0,
+  `topo ${trilhos.compositor.bordaTopo} dir ${trilhos.compositor.bordaDir} baixo ${trilhos.compositor.bordaBaixo} esq ${trilhos.compositor.bordaEsq}`,
+);
+check(
+  'e nao flutua sobre o fundo como uma caixa',
+  trilhos.compositor.fundo === 'rgba(0, 0, 0, 0)' && trilhos.compositor.raio === '0px',
+  'fundo ' + trilhos.compositor.fundo,
+);
+
+/*
+  Sem caixa, o foco precisa de outro jeito de dizer "e aqui que o que voce
+  digitar vai parar". A regra acesa diz isso por toda a largura.
+
+  Este check usa foco DE VERDADE — `.focus()` no textarea — porque
+  `:focus-within` nao se simula com classe, e um check que so lesse a regra
+  escrita no CSS nao provaria que ela esta alcancando o elemento.
+*/
+check(
+  'o foco acende a regra inteira, ja que nao ha borda para acender',
+  trilhos.comFoco !== trilhos.antesDoFoco,
+  trilhos.antesDoFoco + ' -> ' + trilhos.comFoco,
+);
+check(
+  'e o sinal de entrada acende junto, apontando para o cursor',
+  trilhos.sinalComFoco !== trilhos.sinalEmRepouso,
+  trilhos.sinalEmRepouso + ' -> ' + trilhos.sinalComFoco,
+);
+
+/*
+  O texto que se DIGITA continua em Inter, de proposito.
+
+  A tentacao seria por tudo em monoespacada e fechar o tema. Mas o que se
+  escreve aqui sao frases, que vao aparecer em Inter na conversa: com outra
+  fonte no campo, a mensagem mudaria de cara ao ser enviada e a quebra de linha
+  cairia em lugar diferente do que a pessoa viu ao escrever.
+*/
+/*
+  E O FOCO NAO PODE EMPURRAR A CONVERSA.
+
+  O indicador ganhou um segundo pixel por dentro, com sombra interna em vez de
+  borda mais grossa. A diferenca importa: engrossar a borda mudaria a altura do
+  compositor a cada foco, e a conversa inteira acima dele pularia junto — a
+  cada clique no campo, a cada Tab. E a "melhoria" mais provavel que alguem faz
+  neste indicador depois, sem perceber o preco.
+*/
+check(
+  'o indicador de foco tem dois pixels, por sombra e nao por borda',
+  trilhos.sombraComFoco.includes('inset'),
+  trilhos.sombraComFoco,
+);
+check(
+  'e o foco nao empurra a conversa nem um pixel',
+  Math.abs(trilhos.alturaComFoco - trilhos.alturaEmRepouso) < 0.01,
+  trilhos.alturaEmRepouso.toFixed(2) + ' -> ' + trilhos.alturaComFoco.toFixed(2),
+);
+
+check(
+  'mas o que se digita continua na fonte de leitura',
+  JSON.parse(
+    await avaliar(`(() => {
+      const t = document.createElement('div');
+      t.style.cssText = 'position:fixed;left:-9999px';
+      t.innerHTML = '<div class="composer"><textarea></textarea></div>';
+      document.body.appendChild(t);
+      const f = getComputedStyle(t.querySelector('textarea')).fontFamily.split(',')[0].replace(/['"]/g, '');
+      t.remove();
+      return JSON.stringify(f);
+    })()`),
+  ) === 'Inter',
+);
+
+
 console.log(`\n=========================================`);
 console.log(`  ${passou} passaram, ${falhou} falharam`);
 console.log(`=========================================\n`);

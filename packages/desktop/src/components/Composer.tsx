@@ -359,6 +359,24 @@ export function Composer({ channelId, channelName, replyTo, onCancelReply, onSen
           }}
         />
 
+        {/*
+          O sinal de entrada, logo a esquerda de onde se escreve.
+
+          Nao e enfeite de terminal. A conversa acima virou log — coluna de
+          horario, regua vertical, autor em etiqueta — e o compositor continuava
+          uma caixa flutuante com borda dos quatro lados, o desenho de campo de
+          formulario. Duas linguagens na mesma tela, e a de baixo dizendo
+          "aqui comeca outra coisa" bem no lugar onde a pessoa continua a mesma
+          conversa.
+
+          Com o sinal e a regra em cima, a caixa vira a ULTIMA LINHA do log: o
+          lugar de onde sai a proxima. O olho desce da ultima mensagem para o
+          ponto de escrita sem atravessar uma borda no meio.
+        */}
+        <span className="composer-sinal" aria-hidden="true">
+          ▸
+        </span>
+
         <textarea
           ref={textareaRef}
           value={text}
