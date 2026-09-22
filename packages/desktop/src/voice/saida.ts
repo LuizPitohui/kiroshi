@@ -13,8 +13,8 @@
  *
  * A cadeia:
  *
- *   <audio> -> MediaElementSource -> Gain (por faixa)
- *                                 -> Compensacao -> Limitador -> saida
+ *   srcObject do <audio> -> MediaStreamSource -> Gain (por faixa)
+ *                                              -> Compensacao -> Limitador
  *
  * O limitador e a compensacao sao compartilhados e trabalham em par. Sozinho,
  * o limitador so DESCE: segura o pico e nunca levanta o que chega baixo — foi
@@ -45,13 +45,22 @@ export const GANHO_MAXIMO = 4;
  * unitario e unitario nao ajuda quem ja chega baixo.
  *
  * Com a compensacao, a cadeia vira niveladora: levanta tudo, e o limitador
- * apara o que passar do teto. +6 dB e o dobro em amplitude, que e audivel sem
- * transformar respiracao em ruido.
+ * apara o que passar do teto.
+ *
+ * 1.4 (+3 dB), e nao 2 (+6 dB), e o numero saiu de medicao. A 2x a voz baixa
+ * sobe mais — 0.237 contra 0.166 —, mas o preco e o controle de volume parar
+ * de significar alguma coisa: para voz media, ir de 100% para 200% rendia
+ * apenas +6%, porque tudo ja batia no limitador. A 1.4x o mesmo passo rende
+ * +48%.
+ *
+ * O compromisso e deliberado: um pouco menos de levantada automatica em troca
+ * de um controle que responde. Perder o controle foi exatamente a reclamacao
+ * que trouxe a cadeia ate aqui.
  */
-const COMPENSACAO = 2;
+const COMPENSACAO = 1.4;
 
 interface Faixa {
-  origem: MediaElementAudioSourceNode;
+  origem: MediaStreamAudioSourceNode;
   ganho: GainNode;
 }
 
@@ -136,30 +145,43 @@ export class SaidaDeAudio {
   /**
    * Liga um elemento na cadeia e devolve se conseguiu.
    *
-   * `createMediaElementSource` so pode ser chamado UMA vez por elemento; a
-   * segunda lanca. Por isso o mapa: um elemento que ja esta ligado apenas
-   * confirma.
+   * PELO FLUXO, NAO PELO ELEMENTO. A primeira versao usava
+   * `createMediaElementSource`, e isso NAO FUNCIONA com elemento alimentado
+   * por `srcObject` — que e exatamente como o LiveKit entrega audio remoto.
+   *
+   * Medido: com `srcObject`, `createMediaElementSource` entrega nivel ZERO ao
+   * grafo, enquanto `createMediaStreamSource` entrega 0.707 do mesmo sinal. A
+   * cadeia inteira — ganho, compensacao, limitador — estava ligada no silencio,
+   * e o elemento seguia tocando por fora em volume fixo. O sintoma para quem
+   * usava: o volume nunca mudava, e zerar alguem continuava deixando a pessoa
+   * audivel.
    */
   ligar(elemento: HTMLMediaElement): boolean {
     if (this.faixas.has(elemento)) return true;
+
+    const fluxo = elemento.srcObject;
+    if (!(fluxo instanceof MediaStream)) return false;
 
     const ctx = this.garantirContexto();
     if (!ctx || !this.compensacao) return false;
 
     try {
-      const origem = ctx.createMediaElementSource(elemento);
+      const origem = ctx.createMediaStreamSource(fluxo);
       const ganho = ctx.createGain();
       origem.connect(ganho);
       // Entra na compensacao, nao no limitador: ele e o ultimo da fila.
       ganho.connect(this.compensacao);
 
       /*
-        O elemento passa a tocar em 1 e quem controla o volume e o ganho.
+        O elemento e silenciado, nao removido.
 
-        Deixar os dois mexendo no mesmo sinal multiplicaria um pelo outro e
-        tornaria impossivel saber qual esta valendo.
+        Silenciado porque agora quem toca e o grafo: deixar os dois soando
+        daria o som em dobro, um deles fora de qualquer controle de volume.
+
+        Nao removido porque ele continua util — e o que satisfaz a politica de
+        reproducao automatica do navegador e mantem o fluxo remoto vivo.
       */
-      elemento.volume = 1;
+      elemento.muted = true;
       this.faixas.set(elemento, { origem, ganho });
       return true;
     } catch {
@@ -184,6 +206,8 @@ export class SaidaDeAudio {
     } catch {
       // Ja desconectado.
     }
+    // Devolve o som ao elemento: se a cadeia sair de cena, e ele quem toca.
+    elemento.muted = false;
     this.faixas.delete(elemento);
   }
 

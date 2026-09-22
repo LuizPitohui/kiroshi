@@ -589,6 +589,109 @@ check(
 check('e a imagem cabe inteira, sem cortar', encaixe.fit === 'contain', encaixe.fit);
 
 // ---------------------------------------------------------------------------
+console.log('\n--- ZERAR O VOLUME DE ALGUEM SILENCIA MESMO ---');
+
+/*
+  A cadeia de saida tem que sair do FLUXO, nao do elemento.
+
+  Isto chegou aos usuarios: a primeira versao usava
+  `createMediaElementSource`, que NAO funciona com elemento alimentado por
+  `srcObject` — que e como o LiveKit entrega audio remoto. Medido: o grafo
+  recebia nivel ZERO enquanto o elemento seguia tocando por fora, em volume
+  fixo. Para quem usava, o volume parou de responder e zerar alguem continuava
+  deixando a pessoa audivel.
+
+  Um teste que so mede ganho em senoide nao pega isso: o defeito esta em COMO
+  o audio entra no grafo. Por isso aqui se monta um elemento com `srcObject`
+  de verdade, igual ao do LiveKit.
+*/
+const silencio = JSON.parse(
+  await avaliar(`(async () => {
+    const ger = new AudioContext();
+    const osc = ger.createOscillator();
+    osc.frequency.value = 440;
+    const sd = ger.createMediaStreamDestination();
+    osc.connect(sd);
+    osc.start();
+
+    const el = document.createElement('audio');
+    el.srcObject = sd.stream;
+    el.autoplay = true;
+    document.body.appendChild(el);
+    await el.play().catch(() => {});
+
+    const ctx = new AudioContext();
+    // O caminho que NAO funciona com srcObject, para registro.
+    let peloElemento = null;
+    try {
+      const an0 = ctx.createAnalyser();
+      ctx.createMediaElementSource(el).connect(an0);
+      await new Promise((r) => setTimeout(r, 400));
+      const b0 = new Float32Array(an0.fftSize);
+      an0.getFloatTimeDomainData(b0);
+      let s0 = 0;
+      for (let i = 0; i < b0.length; i++) s0 += b0[i] * b0[i];
+      peloElemento = Math.sqrt(s0 / b0.length);
+    } catch { peloElemento = -1; }
+
+    const origem = ctx.createMediaStreamSource(sd.stream);
+    const ganho = ctx.createGain();
+    const an = ctx.createAnalyser();
+    const mudo = ctx.createGain();
+    mudo.gain.value = 0;
+    origem.connect(ganho); ganho.connect(an); an.connect(mudo); mudo.connect(ctx.destination);
+    el.muted = true;
+
+    async function nivel(g) {
+      ganho.gain.value = g;
+      await new Promise((r) => setTimeout(r, 400));
+      const buf = new Float32Array(an.fftSize);
+      let soma = 0, n = 0;
+      for (let k = 0; k < 10; k++) {
+        an.getFloatTimeDomainData(buf);
+        for (let i = 0; i < buf.length; i++) { soma += buf[i] * buf[i]; n++; }
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      return Math.sqrt(soma / n);
+    }
+
+    const out = {
+      peloElemento,
+      zerado: await nivel(0),
+      cheio: await nivel(1),
+      elementoSilenciado: el.muted,
+    };
+    el.remove(); osc.stop(); await ger.close(); await ctx.close();
+    return JSON.stringify(out);
+  })()`),
+);
+
+check(
+  'pelo fluxo, o audio chega ao grafo',
+  silencio.cheio > 0.1,
+  `nivel ${silencio.cheio.toFixed(3)}`,
+);
+check(
+  'e zerar o ganho silencia de verdade',
+  silencio.zerado === 0,
+  `nivel ${silencio.zerado}`,
+);
+check(
+  'o elemento e silenciado, para nao tocar em dobro',
+  silencio.elementoSilenciado === true,
+);
+
+/*
+  O registro do defeito: pelo ELEMENTO, com srcObject, o grafo recebe zero.
+  Se um dia isto passar a entregar sinal, o navegador mudou e vale reavaliar.
+*/
+check(
+  'e pelo elemento, com srcObject, nao chega nada — era este o defeito',
+  silencio.peloElemento === 0,
+  `nivel ${silencio.peloElemento}`,
+);
+
+// ---------------------------------------------------------------------------
 console.log('\n--- A LIMPEZA DE RUIDO PODE RODAR ---');
 
 /*
@@ -664,7 +767,7 @@ const ganho = JSON.parse(
         lim.attack.value = 0.003; lim.release.value = 0.25;
         // A compensacao vem ANTES do limitador, como na cadeia de verdade:
         // ganho depois do limitador anularia o limitador.
-        const comp = ctx.createGain(); comp.gain.value = 2;
+        const comp = ctx.createGain(); comp.gain.value = 1.4;
         g.connect(comp); comp.connect(lim); ultimo = lim;
       }
       osc.connect(base); base.connect(g); ultimo.connect(ctx.destination);
