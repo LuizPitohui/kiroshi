@@ -957,7 +957,9 @@ function VoiceSection() {
                 supressao nao funciona" e opiniao contra opiniao — com ela, e
                 um dado que a pessoa le na tela e manda.
               */}
-              {aplicado && <LimpezaAtiva aplicado={aplicado} />}
+              {aplicado && (
+                <LimpezaAtiva aplicado={aplicado} reforcada={settings.limpezaDeRuido} />
+              )}
             </>
           )}
         </div>
@@ -978,11 +980,12 @@ function VoiceSection() {
       <div className="row">
         <div className="row-text">
           <div className="row-title">Volume geral</div>
+          <div className="row-desc">Acima de 100% amplifica; o limitador evita distorcer.</div>
         </div>
         <input
           type="range"
           min={0}
-          max={100}
+          max={200}
           value={settings.outputVolume * 100}
           onChange={(e) => void update({ outputVolume: Number(e.target.value) / 100 })}
         />
@@ -1556,13 +1559,47 @@ function LinhaDeAtualizacao() {
  * true` e pode entregar `false`, sem erro e sem aviso, dependendo do driver
  * e do aparelho.
  */
-function LimpezaAtiva({ aplicado }: { aplicado: MediaTrackSettings }) {
-  const itens: { rotulo: string; ligado: boolean | undefined }[] = [
-    { rotulo: 'Isolamento de voz', ligado: aplicado.voiceIsolation },
-    { rotulo: 'Supressao de ruido', ligado: aplicado.noiseSuppression },
-    { rotulo: 'Cancelamento de eco', ligado: aplicado.echoCancellation },
-    { rotulo: 'Ganho automatico', ligado: aplicado.autoGainControl },
+function LimpezaAtiva({
+  aplicado,
+  reforcada,
+}: {
+  aplicado: MediaTrackSettings;
+  reforcada: boolean;
+}) {
+  /*
+    Com a limpeza reforcada ligada, os dois ajustes do navegador aparecem
+    desligados — e isso e o CERTO, nao defeito: o RNNoise substitui os dois.
+
+    Sem esta distincao a linha dizia um "NAO" seco em cima de algo funcionando
+    como projetado, e quem lesse concluiria que quebrou. Aconteceu: a primeira
+    versao desta tela foi mostrada ao grupo justamente para relatarem estas
+    linhas.
+  */
+  const itens: { rotulo: string; estado: 'sim' | 'nao' | 'ausente' | 'substituido' }[] = [
+    ...(reforcada
+      ? ([{ rotulo: 'Limpeza reforcada (RNNoise)', estado: 'sim' }] as const)
+      : []),
+    {
+      rotulo: 'Isolamento de voz',
+      estado: reforcada ? 'substituido' : estadoDe(aplicado.voiceIsolation),
+    },
+    {
+      rotulo: 'Supressao de ruido',
+      estado: reforcada ? 'substituido' : estadoDe(aplicado.noiseSuppression),
+    },
+    { rotulo: 'Cancelamento de eco', estado: estadoDe(aplicado.echoCancellation) },
+    { rotulo: 'Ganho automatico', estado: estadoDe(aplicado.autoGainControl) },
   ];
+
+  const texto = {
+    sim: 'sim',
+    nao: 'NAO',
+    // Tres estados nao bastavam: "o aparelho nem conhece esse ajuste" e
+    // diferente de "esta desligado", e ambos sao diferentes de "outra coisa
+    // esta cuidando disso".
+    ausente: '—',
+    substituido: 'nao precisa',
+  } as const;
 
   return (
     <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
@@ -1570,15 +1607,23 @@ function LimpezaAtiva({ aplicado }: { aplicado: MediaTrackSettings }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
         {itens.map((i) => (
           <span key={i.rotulo}>
-            {/*
-              Tres estados, nao dois: ligado, desligado, e "o aparelho nem
-              conhece esse ajuste". O terceiro e informacao util — significa
-              que nao adianta insistir nele nesta maquina.
-            */}
-            {i.ligado === undefined ? '—' : i.ligado ? 'sim' : 'NAO'} &middot; {i.rotulo}
+            {texto[i.estado]} &middot; {i.rotulo}
           </span>
         ))}
       </div>
+      {reforcada && (
+        <div style={{ marginTop: 6 }}>
+          Os dois marcados como &quot;nao precisa&quot; estao desligados de proposito: a
+          limpeza reforcada faz o trabalho dos dois, e empilhar supressores deixa a
+          voz robotica.
+        </div>
+      )}
     </div>
   );
+}
+
+/** Ligado, desligado, ou o aparelho nem conhece o ajuste. */
+function estadoDe(valor: boolean | undefined): 'sim' | 'nao' | 'ausente' {
+  if (valor === undefined) return 'ausente';
+  return valor ? 'sim' : 'nao';
 }

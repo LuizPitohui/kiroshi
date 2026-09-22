@@ -660,9 +660,12 @@ const ganho = JSON.parse(
       let ultimo = g;
       if (comLimitador) {
         const lim = ctx.createDynamicsCompressor();
-        lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20;
+        lim.threshold.value = -6; lim.knee.value = 0; lim.ratio.value = 20;
         lim.attack.value = 0.003; lim.release.value = 0.25;
-        g.connect(lim); ultimo = lim;
+        // A compensacao vem ANTES do limitador, como na cadeia de verdade:
+        // ganho depois do limitador anularia o limitador.
+        const comp = ctx.createGain(); comp.gain.value = 2;
+        g.connect(comp); comp.connect(lim); ultimo = lim;
       }
       osc.connect(base); base.connect(g); ultimo.connect(ctx.destination);
       osc.start(0); osc.stop(1);
