@@ -589,6 +589,86 @@ check(
 check('e a imagem cabe inteira, sem cortar', encaixe.fit === 'contain', encaixe.fit);
 
 // ---------------------------------------------------------------------------
+console.log('\n--- O VOLUME PASSA DE 100% DE VERDADE ---');
+
+/*
+  O cartao da pessoa deixa levar o volume a 200%. Isto verifica que os 200%
+  EXISTEM.
+
+  Nao e hipotese: a primeira versao usava `HTMLAudioElement.volume`, que a
+  especificacao limita a 1 — atribuir 1.5 lanca `IndexSizeError`. O codigo
+  fazia `Math.min(1, ...)`, o que evitava a excecao e escondia o defeito: o
+  deslizante andava, mostrava "150%", e o som continuava em 100%. Ninguem
+  percebe um controle que mente em silencio.
+
+  Mede a MESMA cadeia de `voice/saida.ts` num contexto offline. Web Audio
+  existe aqui porque a vitrine roda no renderer de verdade, nao em Node.
+*/
+const ganho = JSON.parse(
+  await avaliar(`(async () => {
+    async function pico(ganhoValor, comLimitador, entrada) {
+      const ctx = new OfflineAudioContext(1, 44100, 44100);
+      const osc = ctx.createOscillator();
+      osc.frequency.value = 440;
+      const base = ctx.createGain();
+      base.gain.value = entrada;
+      const g = ctx.createGain();
+      g.gain.value = ganhoValor;
+      let ultimo = g;
+      if (comLimitador) {
+        const lim = ctx.createDynamicsCompressor();
+        lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20;
+        lim.attack.value = 0.003; lim.release.value = 0.25;
+        g.connect(lim); ultimo = lim;
+      }
+      osc.connect(base); base.connect(g); ultimo.connect(ctx.destination);
+      osc.start(0); osc.stop(1);
+      const d = (await ctx.startRendering()).getChannelData(0);
+      let maior = 0, estourados = 0;
+      for (let i = 8820; i < d.length; i++) {
+        const v = Math.abs(d[i]);
+        if (v > maior) maior = v;
+        if (v >= 0.999) estourados++;
+      }
+      return { pico: maior, estourados };
+    }
+    return JSON.stringify({
+      cem: (await pico(1, false, 0.3)).pico,
+      cemECinquenta: (await pico(1.5, false, 0.3)).pico,
+      duzentos: (await pico(2, false, 0.3)).pico,
+      altoSemLimitador: await pico(2, false, 0.8),
+      altoComLimitador: await pico(2, true, 0.8),
+    });
+  })()`),
+);
+
+check(
+  '150% soa mais alto que 100%',
+  ganho.cemECinquenta > ganho.cem * 1.4,
+  `${ganho.cem.toFixed(2)} -> ${ganho.cemECinquenta.toFixed(2)}`,
+);
+check(
+  'e 200% mais alto ainda',
+  ganho.duzentos > ganho.cemECinquenta * 1.2,
+  `${ganho.cemECinquenta.toFixed(2)} -> ${ganho.duzentos.toFixed(2)}`,
+);
+
+/*
+  A outra metade: so tirar o teto trocaria "baixo demais" por "distorcido".
+  Voz ja alta empurrada a 200% chega a 1.6, e tudo acima de 1 vira estalo.
+*/
+check(
+  'sem limitador, voz alta a 200% estouraria',
+  ganho.altoSemLimitador.estourados > 1000,
+  `${ganho.altoSemLimitador.estourados} amostras`,
+);
+check(
+  'com o limitador, nenhuma amostra estoura',
+  ganho.altoComLimitador.estourados === 0 && ganho.altoComLimitador.pico < 1,
+  `pico ${ganho.altoComLimitador.pico.toFixed(2)}, ${ganho.altoComLimitador.estourados} estouradas`,
+);
+
+// ---------------------------------------------------------------------------
 console.log('\n--- CARTAO DA PESSOA: DOIS VOLUMES SEPARADOS ---');
 
 /*

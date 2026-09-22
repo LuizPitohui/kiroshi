@@ -29,6 +29,16 @@ export interface UnsavedBarProps {
   /** Mensagem de erro da ultima tentativa, no lugar do texto normal. */
   erro?: string | null;
   texto?: string;
+  /**
+   * Avisar antes de fechar a janela. Ligado, que e o que o produto quer.
+   *
+   * Existe para poder ser DESLIGADO na vitrine. La a barra aparece como
+   * demonstracao, sem nada de verdade para perder — e o guarda de saida, que
+   * nao sabe disso, travava o recarregamento da pagina inteira. Custou uma
+   * hora de investigacao achando que o empacotador e que estava servindo
+   * codigo velho.
+   */
+  avisarAoSair?: boolean;
 }
 
 export function UnsavedBar({
@@ -38,6 +48,7 @@ export function UnsavedBar({
   salvando = false,
   erro,
   texto = 'Voce tem alteracoes nao salvas.',
+  avisarAoSair = true,
 }: UnsavedBarProps) {
   /*
     Avisa antes de fechar a janela com algo pendente.
@@ -47,14 +58,14 @@ export function UnsavedBar({
     aplicativo com o perfil pela metade perde tudo sem uma palavra.
   */
   useEffect(() => {
-    if (!visivel) return;
+    if (!visivel || !avisarAoSair) return;
     const aoSair = (e: BeforeUnloadEvent): void => {
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', aoSair);
     return () => window.removeEventListener('beforeunload', aoSair);
-  }, [visivel]);
+  }, [visivel, avisarAoSair]);
 
   if (!visivel) return null;
 

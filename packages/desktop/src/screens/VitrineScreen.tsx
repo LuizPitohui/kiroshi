@@ -488,6 +488,7 @@ export function VitrineScreen() {
 
         <div data-vitrine="barra-pendente">
           <UnsavedBar
+            avisarAoSair={false}
             visivel
             aoSalvar={() => setSalvouNaVitrine(true)}
             aoDescartar={() => setSalvouNaVitrine(false)}
@@ -496,6 +497,7 @@ export function VitrineScreen() {
 
         <div data-vitrine="barra-erro">
           <UnsavedBar
+            avisarAoSair={false}
             visivel
             erro="Esse nome de usuario ja esta em uso por outra pessoa neste servidor."
             aoSalvar={() => undefined}

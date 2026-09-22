@@ -1,0 +1,161 @@
+/**
+ * A cadeia de saida do audio da chamada.
+ *
+ * Existe por um defeito concreto: o controle de volume por pessoa vai ate
+ * 200%, mas `HTMLAudioElement.volume` e LIMITADO A 1 pela especificacao —
+ * atribuir 1.5 lanca `IndexSizeError`. O codigo antigo fazia
+ * `Math.min(1, ...)`, o que evitava a excecao e escondia o problema: o
+ * deslizante andava, mostrava "150%", e nao fazia nada acima de 100%.
+ *
+ * Para passar de 1 e preciso sair do elemento e entrar no Web Audio, onde
+ * `GainNode.gain` aceita qualquer valor. Foi medido nesta versao do Electron:
+ * o elemento recusa 1.5, o ganho aceita 2.
+ *
+ * A cadeia:
+ *
+ *   <audio> -> MediaElementSource -> Gain (por faixa) -> Limitador -> saida
+ *
+ * O limitador e compartilhado e existe por causa do proprio ganho: somar tres
+ * pessoas a 180% estoura o sinal, e sinal estourado nao e alto, e distorcido.
+ * Ele segura os picos e deixa o resto passar, que e o que permite levantar o
+ * volume de quem fala baixo sem transformar a chamada em chiado.
+ */
+
+/** Ate onde o ganho pode ir. Bate com o maximo do deslizante do cartao. */
+export const GANHO_MAXIMO = 2;
+
+interface Faixa {
+  origem: MediaElementAudioSourceNode;
+  ganho: GainNode;
+}
+
+export class SaidaDeAudio {
+  private contexto: AudioContext | null = null;
+  private limitador: DynamicsCompressorNode | null = null;
+  private readonly faixas = new Map<HTMLMediaElement, Faixa>();
+
+  /**
+   * Verdadeiro quando a cadeia esta de pe.
+   *
+   * Quem chama precisa saber: se o Web Audio nao subiu, o volume volta a ser
+   * o do elemento, limitado a 100%. E melhor ouvir baixo do que nao ouvir.
+   */
+  get ativa(): boolean {
+    return this.contexto !== null;
+  }
+
+  private garantirContexto(): AudioContext | null {
+    if (this.contexto) {
+      if (this.contexto.state === 'suspended') void this.contexto.resume();
+      return this.contexto;
+    }
+
+    try {
+      const ctx = new AudioContext();
+
+      /*
+        Limitador, nao compressor de mixagem.
+
+        Joelho zero e razao alta: abaixo do limiar nao mexe em nada, acima
+        segura firme. Ataque de 3 ms pega o pico antes de ele estourar;
+        soltura de 250 ms evita o efeito de bombeamento que se ouve quando o
+        ganho sobe e desce junto com cada silaba.
+      */
+      const limitador = ctx.createDynamicsCompressor();
+      limitador.threshold.value = -3;
+      limitador.knee.value = 0;
+      limitador.ratio.value = 20;
+      limitador.attack.value = 0.003;
+      limitador.release.value = 0.25;
+      limitador.connect(ctx.destination);
+
+      this.contexto = ctx;
+      this.limitador = limitador;
+      return ctx;
+    } catch {
+      // Sem saida de audio no sistema. Quem chama cai para o volume do
+      // elemento.
+      return null;
+    }
+  }
+
+  /**
+   * Liga um elemento na cadeia e devolve se conseguiu.
+   *
+   * `createMediaElementSource` so pode ser chamado UMA vez por elemento; a
+   * segunda lanca. Por isso o mapa: um elemento que ja esta ligado apenas
+   * confirma.
+   */
+  ligar(elemento: HTMLMediaElement): boolean {
+    if (this.faixas.has(elemento)) return true;
+
+    const ctx = this.garantirContexto();
+    if (!ctx || !this.limitador) return false;
+
+    try {
+      const origem = ctx.createMediaElementSource(elemento);
+      const ganho = ctx.createGain();
+      origem.connect(ganho);
+      ganho.connect(this.limitador);
+
+      /*
+        O elemento passa a tocar em 1 e quem controla o volume e o ganho.
+
+        Deixar os dois mexendo no mesmo sinal multiplicaria um pelo outro e
+        tornaria impossivel saber qual esta valendo.
+      */
+      elemento.volume = 1;
+      this.faixas.set(elemento, { origem, ganho });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Ajusta o volume de um elemento ja ligado. Ignora o que nao esta. */
+  ajustar(elemento: HTMLMediaElement, volume: number): void {
+    const faixa = this.faixas.get(elemento);
+    if (!faixa) return;
+    faixa.ganho.gain.value = Math.max(0, Math.min(GANHO_MAXIMO, volume));
+  }
+
+  /** Solta um elemento. Sem isto os nos ficam no grafo depois de a pessoa sair. */
+  desligar(elemento: HTMLMediaElement): void {
+    const faixa = this.faixas.get(elemento);
+    if (!faixa) return;
+    try {
+      faixa.origem.disconnect();
+      faixa.ganho.disconnect();
+    } catch {
+      // Ja desconectado.
+    }
+    this.faixas.delete(elemento);
+  }
+
+  /**
+   * Manda o som para outro aparelho de saida.
+   *
+   * Quando o audio passa pelo Web Audio, `setSinkId` do ELEMENTO nao vale
+   * mais — quem toca e o contexto. Trocar so no elemento faria o seletor de
+   * dispositivo parecer quebrado.
+   */
+  async trocarSaida(deviceId: string): Promise<boolean> {
+    const ctx = this.contexto;
+    if (!ctx || typeof (ctx as { setSinkId?: unknown }).setSinkId !== 'function') return false;
+    try {
+      await (ctx as AudioContext & { setSinkId(id: string): Promise<void> }).setSinkId(deviceId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Desfaz tudo: ao sair da chamada. */
+  fechar(): void {
+    for (const elemento of [...this.faixas.keys()]) this.desligar(elemento);
+    this.limitador?.disconnect();
+    void this.contexto?.close().catch(() => undefined);
+    this.limitador = null;
+    this.contexto = null;
+  }
+}

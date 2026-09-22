@@ -19,6 +19,7 @@ import { api, ApiRequestError } from '../api/client.js';
 import { lerCaminhos, type CaminhosDisponiveis } from './caminhos.js';
 import { bitrateDeTela, restricoesDeTela, camadasDeTela } from './qualidade.js';
 import { explicarFalhaDeMidia } from './falhas.js';
+import { SaidaDeAudio } from './saida.js';
 
 /**
  * Controle de voz, video e compartilhamento de tela.
@@ -197,6 +198,15 @@ class VoiceController {
    */
   private readonly audioElements = new Map<string, AudioRemoto>();
 
+  /*
+    A cadeia de saida existe porque o volume do ELEMENTO para em 100%.
+
+    Ver `voice/saida.ts`: o controle por pessoa vai a 200%, e passar de 1 no
+    elemento lanca excecao. Sem isto, tudo acima de cem por cento era
+    silenciosamente descartado.
+  */
+  private readonly saida = new SaidaDeAudio();
+
   /** Enquanto true, o push-to-talk esta com a tecla pressionada. */
   private pttActive = false;
 
@@ -341,7 +351,19 @@ class VoiceController {
       publishDefaults: {
         simulcast: true,
         videoSimulcastLayers: undefined,
-        audioPreset: { maxBitrate: 32_000 },
+        /*
+          64 kbps, e nao 32.
+
+          Bitrate nao e volume — nao resolve "a voz esta baixa" —, mas resolve
+          a voz fina e abafada que se confunde com baixa. A 32 kbps o Opus
+          corta os agudos, e consoante sem agudo vira sopro: da para ouvir que
+          a pessoa falou e nao o que ela disse.
+
+          64 kbps e tambem o padrao do Discord para canal de voz. Com DTX
+          ligado nao se transmite silencio, entao o custo real fica bem abaixo
+          do numero em quase toda conversa.
+        */
+        audioPreset: { maxBitrate: 64_000 },
         dtx: true,
         red: true,
       },
@@ -408,7 +430,11 @@ class VoiceController {
         // tras deixava um elemento de audio orfao preso no documento.
         for (const fonte of ['voz', 'tela'] as const) {
           const chave = `${participant.identity}|${fonte}`;
-          this.audioElements.get(chave)?.elemento.remove();
+          const saindo = this.audioElements.get(chave)?.elemento;
+          if (saindo) {
+            this.saida.desligar(saindo);
+            saindo.remove();
+          }
           this.audioElements.delete(chave);
         }
         this.refreshParticipants();
@@ -508,13 +534,28 @@ class VoiceController {
       fonte === 'tela'
         ? (this.settings.screenVolumes[identidade] ?? 1)
         : (this.settings.userVolumes[identidade] ?? 1);
-    return Math.min(1, this.settings.outputVolume * individual);
+    /*
+      Sem `Math.min(1, ...)` aqui.
+
+      Aquele limite nao era protecao: era o defeito. O elemento de audio recusa
+      valores acima de 1, e o `min` escondia isso em vez de resolver — quem
+      punha 150% no cartao continuava ouvindo 100%. Quem segura o teto agora e
+      a cadeia de saida, ate `GANHO_MAXIMO`.
+    */
+    return this.settings.outputVolume * individual;
   }
 
   /** Reaplica o volume em tudo que esta tocando. */
   private aplicarVolumes(): void {
     for (const a of this.audioElements.values()) {
-      a.elemento.volume = this.volumeDe(a.identidade, a.fonte);
+      const volume = this.volumeDe(a.identidade, a.fonte);
+      if (this.saida.ativa) {
+        this.saida.ajustar(a.elemento, volume);
+      } else {
+        // Sem Web Audio, volta ao elemento — e ao teto de 100%. Ouvir baixo
+        // e melhor do que nao ouvir.
+        a.elemento.volume = Math.min(1, volume);
+      }
     }
   }
 
@@ -525,7 +566,16 @@ class VoiceController {
   ): void {
     const element = track.attach() as HTMLAudioElement;
     element.autoplay = true;
-    element.volume = this.volumeDe(participant.identity, fonte);
+
+    const volume = this.volumeDe(participant.identity, fonte);
+    if (this.saida.ligar(element)) {
+      this.saida.ajustar(element, volume);
+      if (this.settings.outputDeviceId) {
+        void this.saida.trocarSaida(this.settings.outputDeviceId);
+      }
+    } else {
+      element.volume = Math.min(1, volume);
+    }
 
     if (this.settings.outputDeviceId && 'setSinkId' in element) {
       void (element as HTMLAudioElement & { setSinkId(id: string): Promise<void> })
@@ -1162,12 +1212,21 @@ class VoiceController {
     }
 
     if (patch.outputDeviceId !== undefined) {
-      for (const { elemento } of this.audioElements.values()) {
-        if (!('setSinkId' in elemento)) continue;
-        void (elemento as HTMLAudioElement & { setSinkId(id: string): Promise<void> })
-          .setSinkId(patch.outputDeviceId ?? 'default')
-          .catch(() => undefined);
-      }
+      const destino = patch.outputDeviceId ?? 'default';
+
+      /*
+        Com a cadeia ativa, quem toca e o CONTEXTO, nao o elemento — trocar so
+        no elemento faria o seletor de dispositivo parecer quebrado.
+      */
+      void this.saida.trocarSaida(destino).then((trocou) => {
+        if (trocou) return;
+        for (const { elemento } of this.audioElements.values()) {
+          if (!('setSinkId' in elemento)) continue;
+          void (elemento as HTMLAudioElement & { setSinkId(id: string): Promise<void> })
+            .setSinkId(destino)
+            .catch(() => undefined);
+        }
+      });
     }
 
     if (
@@ -1278,6 +1337,7 @@ class VoiceController {
    * sair do documento na mao, senao sobram mudos e invisiveis a cada queda.
    */
   private descartarSala(): void {
+    this.saida.fechar();
     for (const { elemento } of this.audioElements.values()) elemento.remove();
     this.audioElements.clear();
 
