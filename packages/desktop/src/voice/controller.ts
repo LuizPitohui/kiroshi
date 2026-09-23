@@ -22,7 +22,11 @@ import { bitrateDeTela, restricoesDeTela, camadasDeTela } from './qualidade.js';
 import { explicarFalhaDeMidia } from './falhas.js';
 import { SaidaDeAudio } from './saida.js';
 import { LimpezaDeRuido, limpezaDisponivel } from './ruido.js';
-import { jaEstouIndoPara } from './entrada.js';
+import {
+  devoAtenderTokenDoGateway,
+  devoIgnorarEntrada,
+  type SituacaoDeEntrada,
+} from './entrada.js';
 
 /**
  * Controle de voz, video e compartilhamento de tela.
@@ -177,6 +181,17 @@ export interface VoiceState {
 }
 
 class VoiceController {
+  /**
+   * O canal cuja entrada esta em voo agora.
+   *
+   * Escrito por quem COMECA uma entrada e limpo no fim, aconteca o que
+   * acontecer. E a unica coisa que distingue "ja existe alguem entrando aqui"
+   * de "esta e a minha propria entrada" — distincao que o `connecting` do
+   * estado publico nao faz, e cuja confusao travou a tela em "Entrando na
+   * chamada..." numa versao publicada.
+   */
+  private entradaEmVoo: string | null = null;
+
   private room: Room | null = null;
   private micTrack: LocalAudioTrack | null = null;
   private cameraTrack: LocalVideoTrack | null = null;
@@ -318,16 +333,30 @@ class VoiceController {
    * Quem sabe se ha conexao de midia e quem a mantem. Entao a decisao e daqui.
    */
   async joinChannel(channelId: string, guildId: string | null): Promise<void> {
-    // Mesma regra do `connect`: clicar de novo no canal em que ja se esta
-    // entrando nao acrescenta nada, e pedir um segundo token ao servidor era
-    // metade da corrida que derrubava a chamada.
-    if (jaEstouIndoPara(this.state, channelId)) return;
+    if (devoIgnorarEntrada(this.situacaoDeEntrada(), channelId)) return;
 
+    /*
+      A marca de voo e escrita AQUI, no clique — nao la dentro, depois de a API
+      responder.
+
+      Entre pedir o token e receber passa-se um tempo, e e nele que o eco do
+      gateway costuma chegar. Marcar so na hora de abrir a sala deixaria essa
+      janela descoberta, que e a corrida inteira de volta.
+    */
+    this.entradaEmVoo = channelId;
     this.emit({ connecting: true, error: null, channelId, guildId });
 
     try {
       const info = await api.post<VoiceServerUpdateEvent>('/voice/join', { channelId });
-      await this.connect({ ...info, channelId, guildId });
+      /*
+        Vai direto ao trabalho, sem passar pelo `connect` publico.
+
+        Passar por ele era o defeito publicado na versao anterior: a guarda de
+        la via a marca de voo que ESTA funcao tinha acabado de escrever,
+        concluia que alguem ja estava entrando e desistia. A tela ficava em
+        "Entrando na chamada..." sem fim.
+      */
+      await this.entrarNaSala({ ...info, channelId, guildId });
     } catch (error) {
       this.emit({
         connecting: false,
@@ -338,31 +367,71 @@ class VoiceController {
           error instanceof ApiRequestError ? error.message : 'Nao consegui entrar no canal de voz.',
       });
       throw error;
+    } finally {
+      // Sempre, inclusive na falha: uma marca presa impediria a proxima
+      // tentativa para sempre, e a pessoa ficaria sem chamada ate reiniciar.
+      this.entradaEmVoo = null;
     }
   }
 
+  /** O que a guarda de entrada precisa saber, num lugar so. */
+  private situacaoDeEntrada(): SituacaoDeEntrada {
+    return {
+      emVoo: this.entradaEmVoo,
+      connected: this.state.connected,
+      channelId: this.state.channelId,
+      naSala: this.room !== null,
+    };
+  }
+
+  /**
+   * A entrada pedida pelo GATEWAY, pelo aviso `VOICE_SERVER_UPDATE`.
+   *
+   * Ele existe de proposito — e por ele que um moderador move alguem de sala —
+   * e tambem chega como eco alguns milissegundos depois de a pessoa entrar por
+   * conta propria. Esse eco e a corrida que derrubava chamadas: os dois
+   * caminhos abriam sala, o servidor via duas conexoes com a mesma identidade
+   * e fechava a primeira.
+   *
+   * A guarda mora em `entrada.ts`, com teste, porque ela ja errou dos dois
+   * lados em versoes publicadas: frouxa demais derruba a chamada, apertada
+   * demais trava a tela em "Entrando na chamada..." para sempre.
+   */
   async connect(payload: VoiceServerUpdateEvent): Promise<void> {
     /*
-      O servidor tambem manda token pelo gateway, e depois de entrar por conta
-      propria esse aviso chega como eco. Reconectar ali derruba uma chamada que
-      ja esta funcionando.
+      PRIMEIRO: este token e para mim?
 
-      A guarda antiga perguntava so "ja estou CONECTADO a este canal?", e isso
-      nao bastava: entre o clique e a conexao ha de um a seis segundos em que o
-      estado e `connecting: true, connected: false`, e e exatamente nessa
-      janela que o eco chega. Ele passava, o `connect` rodava de novo, saia da
-      sala meio aberta e entrava outra vez — duas conexoes com a mesma
-      identidade, e o LiveKit fechando a primeira.
+      O servidor emite com `emitToUser`, que entrega a todas as sessoes da
+      conta. Sem esta guarda, entrar numa chamada pelo computador faz qualquer
+      outro aparelho logado entrar junto — eles se derrubam em circulo por
+      identidade duplicada, e um deles comeca a transmitir o microfone de outro
+      comodo sem ninguem ter tocado nele.
 
-      Medido no log de producao: tres entradas seguidas no mesmo canal,
-      fechando com DUPLICATE_IDENTITY depois de 1,3s e 5,9s.
-
-      A regra mora em `entrada.ts`, com teste, porque ela tem dois lados e
-      errar qualquer um custa caro: deixar passar derruba a chamada, e barrar
-      demais trava quem trocou de canal antes de conectar.
+      Foi visto acontecendo: uma segunda instancia aberta nesta maquina,
+      logada na mesma conta, apareceu dentro da chamada sem um clique.
     */
-    if (jaEstouIndoPara(this.state, payload.channelId)) return;
+    if (!devoAtenderTokenDoGateway(this.situacaoDeEntrada())) return;
 
+    if (devoIgnorarEntrada(this.situacaoDeEntrada(), payload.channelId)) return;
+
+    this.entradaEmVoo = payload.channelId;
+    try {
+      await this.entrarNaSala(payload);
+    } finally {
+      this.entradaEmVoo = null;
+    }
+  }
+
+  /**
+   * O trabalho de entrar, sem guarda nenhuma.
+   *
+   * NAO consulta `devoIgnorarEntrada`, e e isso que o mantem correto: quem
+   * chega aqui ja marcou o proprio voo, e uma guarda neste ponto barraria a
+   * entrada que ela mesma armou. Foi exatamente esse o defeito da versao
+   * anterior — `joinChannel` passava pelo `connect` publico e era bloqueado
+   * por si mesmo.
+   */
+  private async entrarNaSala(payload: VoiceServerUpdateEvent): Promise<void> {
     // Trocar de canal: sai da sala anterior antes de entrar na nova.
     if (this.room) await this.leave();
 

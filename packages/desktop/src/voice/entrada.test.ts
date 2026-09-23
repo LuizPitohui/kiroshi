@@ -1,77 +1,244 @@
 /**
- * A corrida que derrubava chamadas.
+ * A guarda de entrada, nos dois jeitos de errar.
  *
- * O caso central e o segundo teste daqui: um pedido de entrada que chega
- * enquanto o primeiro ainda esta em voo. Ele passava, e o resultado era o
- * cliente se derrubando sozinho — o servidor via duas conexoes com a mesma
- * identidade e fechava a primeira.
+ * Ela ja errou os dois, um em cada versao publicada:
  *
- * O outro lado importa tanto quanto: a guarda NAO pode virar travamento. Quem
- * clica num canal e muda de ideia antes de conectar precisa que o segundo
- * pedido passe.
+ *   FROUXA DEMAIS — o eco do gateway passava durante a conexao, entravamos
+ *   duas vezes na sala e o servidor derrubava a primeira por identidade
+ *   duplicada. A chamada caia ao entrar;
+ *
+ *   APERTADA DEMAIS — a versao seguinte olhou para `connecting`, que
+ *   `joinChannel` liga antes de chamar `connect`. A guarda barrava a propria
+ *   entrada que acabara de comecar, e a tela ficava em "Entrando na
+ *   chamada..." para sempre.
+ *
+ * Por isso aqui nao ha so testes da funcao: ha uma SIMULACAO da sequencia real
+ * do controlador, no fim do arquivo. Foi a sequencia que quebrou, e testar a
+ * funcao isolada nao teria pego — a primeira versao quebrada passava em todos
+ * os testes de unidade que ela tinha.
  */
 import { describe, it, expect } from 'vitest';
-import { jaEstouIndoPara } from './entrada.js';
+import { devoIgnorarEntrada, devoAtenderTokenDoGateway } from './entrada.js';
 
-const PARADO = { connected: false, connecting: false, channelId: null };
+const PARADO = { emVoo: null, connected: false, channelId: null, naSala: false };
 
-describe('o pedido repetido para o mesmo canal', () => {
-  it('ja conectado: ignora, como antes', () => {
-    const estado = { connected: true, connecting: false, channelId: 'geral' };
-    expect(jaEstouIndoPara(estado, 'geral')).toBe(true);
-  });
-
+describe('o que a guarda barra', () => {
   /*
-    O CONSERTO.
-
-    Entre o clique e a conexao ha de um a seis segundos em que o estado e
-    "conectando". O eco `VOICE_SERVER_UPDATE` do gateway chega exatamente ai, e
-    a guarda antiga — que so olhava `connected` — deixava passar.
-
-    Medido no log de producao antes do conserto: tres entradas no mesmo canal,
-    duas fechadas com DUPLICATE_IDENTITY depois de 1,3s e 5,9s.
+    A corrida que derrubava a chamada: o eco do gateway chegando enquanto a
+    entrada da pessoa ainda esta em voo.
   */
-  it('AINDA CONECTANDO: ignora tambem, que e o defeito consertado', () => {
-    const estado = { connected: false, connecting: true, channelId: 'geral' };
-    expect(jaEstouIndoPara(estado, 'geral')).toBe(true);
+  it('pedido para um canal que ja tem entrada em voo', () => {
+    expect(devoIgnorarEntrada({ ...PARADO, emVoo: 'play' }, 'play')).toBe(true);
   });
 
-  it('e durante uma reconexao do LiveKit, que marca os dois', () => {
-    const estado = { connected: true, connecting: true, channelId: 'geral' };
-    expect(jaEstouIndoPara(estado, 'geral')).toBe(true);
+  it('e pedido para um canal em que ja estou conectado', () => {
+    expect(
+      devoIgnorarEntrada({ emVoo: null, connected: true, channelId: 'play', naSala: true }, 'play'),
+    ).toBe(true);
   });
 });
 
-describe('trocar de canal continua passando', () => {
-  /*
-    O limite do conserto. A comparacao e por CANAL, nao por "estou ocupado" —
-    senao a guarda viraria travamento: quem clica em Geral e logo em Play
-    durante a conexao ficaria preso no primeiro.
-  */
-  it('conectando em um canal nao bloqueia a entrada em outro', () => {
-    const estado = { connected: false, connecting: true, channelId: 'geral' };
-    expect(jaEstouIndoPara(estado, 'play')).toBe(false);
+describe('o que a guarda DEIXA passar', () => {
+  it('parado, sem nada em voo', () => {
+    expect(devoIgnorarEntrada(PARADO, 'play')).toBe(false);
   });
 
-  it('nem estando conectado em outro', () => {
-    const estado = { connected: true, connecting: false, channelId: 'geral' };
-    expect(jaEstouIndoPara(estado, 'play')).toBe(false);
+  /*
+    O limite que impede a guarda de virar travamento: a comparacao e por
+    CANAL. Quem clica em Geral e muda de ideia para Play durante a conexao
+    precisa que o segundo pedido passe.
+  */
+  it('entrada em voo para OUTRO canal nao bloqueia', () => {
+    expect(devoIgnorarEntrada({ ...PARADO, emVoo: 'geral' }, 'play')).toBe(false);
+  });
+
+  it('nem estar conectado em outro canal', () => {
+    expect(
+      devoIgnorarEntrada({ emVoo: null, connected: true, channelId: 'geral', naSala: true }, 'play'),
+    ).toBe(false);
+  });
+
+  /*
+    ESTE E O TESTE DA REGRESSAO QUE FOI PUBLICADA.
+
+    `joinChannel` emite `connecting: true` com o canal antes de chamar
+    `connect`. A versao quebrada olhava para esse `connecting`, via o estado
+    que ela mesma tinha acabado de escrever e desistia da propria entrada.
+
+    A guarda de agora nao olha para `connecting` nenhum: sem marca de voo, o
+    pedido passa.
+  */
+  it('estado dizendo "conectando" NAO basta para barrar', () => {
+    // O mesmo formato que `joinChannel` emite antes de conectar de fato.
+    const logoDepoisDoClique = { emVoo: null, connected: false, channelId: 'play', naSala: false };
+    expect(devoIgnorarEntrada(logoDepoisDoClique, 'play')).toBe(false);
+  });
+
+  /*
+    Canal marcado sem conexao e sem voo acontece depois de uma queda. Entrar
+    tem que funcionar; uma guarda que trava aqui deixa a pessoa sem chamada ate
+    reiniciar o aplicativo.
+  */
+  it('canal que sobrou de uma queda nao bloqueia a volta', () => {
+    expect(
+      devoIgnorarEntrada({ emVoo: null, connected: false, channelId: 'play', naSala: false }, 'play'),
+    ).toBe(false);
   });
 });
 
-describe('parado deixa entrar', () => {
-  it('sem canal nenhum, o pedido passa', () => {
-    expect(jaEstouIndoPara(PARADO, 'geral')).toBe(false);
+/**
+ * A SEQUENCIA DE VERDADE.
+ *
+ * Reproduz o caminho do controlador com as mesmas ordens de operacao — a marca
+ * de voo escrita no clique, a espera da API, o eco do gateway chegando no meio
+ * — e conta quantas vezes a sala foi aberta.
+ *
+ * E o unico teste daqui que pegaria as DUAS versoes quebradas: a frouxa abriria
+ * a sala duas vezes, a apertada nenhuma.
+ */
+function controladorDeMentira() {
+  const situacao = {
+    emVoo: null as string | null,
+    connected: false,
+    channelId: null as string | null,
+    naSala: false,
+  };
+  let salasAbertas = 0;
+
+  /** O trabalho de verdade. Nao consulta a guarda: quem chama ja consultou. */
+  async function entrarNaSala(canal: string): Promise<void> {
+    salasAbertas++;
+    situacao.naSala = true;
+    await Promise.resolve();
+    situacao.connected = true;
+    situacao.channelId = canal;
+  }
+
+  return {
+    situacao,
+    get salasAbertas() {
+      return salasAbertas;
+    },
+
+    /** O clique da pessoa. */
+    async joinChannel(canal: string): Promise<void> {
+      if (devoIgnorarEntrada(situacao, canal)) return;
+      situacao.emVoo = canal;
+      // `joinChannel` anuncia a tentativa ANTES de ter token — e esse estado
+      // que enganava a versao quebrada.
+      situacao.channelId = canal;
+      try {
+        await Promise.resolve(); // a chamada de API
+        await entrarNaSala(canal);
+      } finally {
+        situacao.emVoo = null;
+      }
+    },
+
+    /** O eco do gateway. */
+    async connect(canal: string): Promise<void> {
+      if (devoIgnorarEntrada(situacao, canal)) return;
+      situacao.emVoo = canal;
+      try {
+        await entrarNaSala(canal);
+      } finally {
+        situacao.emVoo = null;
+      }
+    },
+  };
+}
+
+describe('a sequencia real: clique e eco do gateway', () => {
+  it('o eco durante a entrada NAO abre uma segunda sala', async () => {
+    const c = controladorDeMentira();
+    const clique = c.joinChannel('play');
+    // O eco chega enquanto o clique ainda esta em voo.
+    await c.connect('play');
+    await clique;
+
+    expect(c.salasAbertas).toBe(1);
+    expect(c.situacao.connected).toBe(true);
   });
 
   /*
-    Estado impossivel na pratica, mas a guarda nao pode depender disso: se um
-    canal ficou marcado sem conexao nem tentativa — depois de uma queda, por
-    exemplo — entrar tem que funcionar. Uma guarda que trava aqui deixa a
-    pessoa sem chamada ate reiniciar o aplicativo.
+    O outro lado, e o que foi publicado quebrado: a entrada precisa ACONTECER.
+    Uma guarda apertada demais deixa tudo parado sem abrir sala nenhuma, e a
+    tela fica em "Entrando na chamada..." para sempre.
   */
-  it('canal marcado mas sem conexao nem tentativa nao bloqueia', () => {
-    const estado = { connected: false, connecting: false, channelId: 'geral' };
-    expect(jaEstouIndoPara(estado, 'geral')).toBe(false);
+  it('e o clique sozinho abre a sala, sem barrar a si mesmo', async () => {
+    const c = controladorDeMentira();
+    await c.joinChannel('play');
+
+    expect(c.salasAbertas).toBe(1);
+    expect(c.situacao.connected).toBe(true);
+  });
+
+  it('o eco chegando primeiro tambem entra', async () => {
+    const c = controladorDeMentira();
+    await c.connect('play');
+
+    expect(c.salasAbertas).toBe(1);
+    expect(c.situacao.connected).toBe(true);
+  });
+
+  it('e depois de entrar, o eco atrasado nao derruba nada', async () => {
+    const c = controladorDeMentira();
+    await c.joinChannel('play');
+    await c.connect('play');
+
+    expect(c.salasAbertas).toBe(1);
+  });
+
+  it('trocar de canal durante a entrada continua abrindo a nova sala', async () => {
+    const c = controladorDeMentira();
+    const primeiro = c.joinChannel('geral');
+    await c.connect('play');
+    await primeiro;
+
+    expect(c.salasAbertas).toBe(2);
+  });
+});
+
+describe('o token que o gateway manda para TODAS as sessoes', () => {
+  const parado = { emVoo: null, connected: false, channelId: null, naSala: false };
+
+  /*
+    O CASO QUE FOI VISTO ACONTECENDO.
+
+    Uma segunda instancia do aplicativo, aberta na mesma maquina e logada na
+    mesma conta, apareceu dentro da chamada sem receber um clique. O servidor
+    emite o token com `emitToUser`, que entrega a todas as sessoes daquela
+    pessoa — e o cliente parado obedecia.
+
+    Nao e so incomodo: entrar na sala abre a faixa de audio local, entao um
+    aparelho esquecido em outro comodo comeca a transmitir o microfone
+    sozinho.
+  */
+  it('cliente parado, que nao pediu nada, IGNORA o token', () => {
+    expect(devoAtenderTokenDoGateway(parado)).toBe(false);
+  });
+
+  it('mas quem tem entrada em voo atende: e a resposta ao proprio pedido', () => {
+    expect(devoAtenderTokenDoGateway({ ...parado, emVoo: 'play' })).toBe(true);
+  });
+
+  /*
+    O limite que preserva a moderacao. O servidor so emite o segundo token
+    quando move alguem ENTRE canais de voz, e so move quem ja esta na voz —
+    entao estar na sala e o sinal certo de "este token e para mim".
+  */
+  it('e quem ja esta na sala atende, porque pode estar sendo movido', () => {
+    expect(devoAtenderTokenDoGateway({ ...parado, naSala: true })).toBe(true);
+  });
+
+  /*
+    `naSala` e separado de `connected` porque durante uma reconexao do LiveKit
+    a sala existe e `connected` oscila. Um moderador movendo a pessoa nesse
+    intervalo nao pode ser ignorado.
+  */
+  it('sala aberta com a conexao oscilando ainda atende', () => {
+    expect(
+      devoAtenderTokenDoGateway({ emVoo: null, connected: false, channelId: 'play', naSala: true }),
+    ).toBe(true);
   });
 });
