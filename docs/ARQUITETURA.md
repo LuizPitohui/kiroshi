@@ -297,6 +297,30 @@ Todos os seletores de lista passam por `useShallow`, e ficam agrupados em
 hooks nomeados (`useGuildList`, `useChannelsOfGuild`) para que ninguem precise
 lembrar disso ao adicionar o proximo.
 
+### Limpeza de ruido
+
+O microfone passa por uma rede neural (DeepFilterNet3) no computador de quem
+fala, antes do Opus. Tres decisoes que nao sao as obvias:
+
+**Modelo local, e nao o Krisp.** O filtro Krisp do LiveKit so funciona no
+LiveKit Cloud, e o SFU aqui e auto-hospedado. O SDK do Krisp direto e
+comercial. O DeepFilterNet3 e aberto (MIT/Apache) e chega perto.
+
+**Arquivos dentro do instalador, lidos por protocolo proprio.** O pacote de
+integracao baixa o modelo de uma CDN de terceiros por padrao. Aqui ele vem no
+instalador e e servido por `kiroshi-modelos://`, registrado no processo
+principal. Nenhum servidor externo participa de uma chamada.
+
+**Medir o resultado, nao confiar em "nao deu erro".** A versao anterior, com
+RNNoise, nunca rodou: o LiveKit recusava o processador numa faixa ainda nao
+publicada, o erro ia para o console, e a tela dizia que a limpeza estava
+ligada. Agora um autoteste passa ruido pelo modelo e mede a reducao antes de
+oferece-lo, uma cascata (DFN3, GTCRN, navegador) garante que falhar nunca
+deixa o microfone cru, e a tela mostra o motor que roda de fato.
+
+A historia completa, o funcionamento e o diagnostico estao em
+[SUPRESSAO-DE-RUIDO.md](SUPRESSAO-DE-RUIDO.md).
+
 ### Ensurdecer
 
 Nao e "mutar o alto-falante". Cada faixa remota e silenciada individualmente,
@@ -318,6 +342,7 @@ vendo a conversa acontecer.
 | Preview de link | Resolve o DNS antes e recusa endereco privado, de loopback ou de link-local, inclusive apos redirecionamento. Sem isso, postar `http://192.168.0.1` faria o servidor sondar a rede interna. |
 | Anexos | Nome no disco nunca vem do usuario. Servidos com `Content-Security-Policy: sandbox` e `nosniff`, para que um SVG enviado como anexo nao execute script. |
 | Extensoes bloqueadas | `.exe`, `.bat`, `.dll` e companhia sao recusados no upload. |
+| Limpeza de ruido | Audio processado so no computador de quem fala. Modelo vem no instalador, conferido por hash e estrutura; nada e baixado durante o uso. A politica de seguranca libera `blob:` em `script-src` (worklet do modelo) e `kiroshi-modelos:` em `connect-src`; o motivo esta em [SUPRESSAO-DE-RUIDO.md](SUPRESSAO-DE-RUIDO.md#seguranca). |
 | Operacoes sensiveis | Trocar senha, mexer no 2FA, apagar servidor confirmam a sessao no banco, nao so o JWT. |
 
 ---
@@ -334,6 +359,12 @@ ficou pela metade. Para dez pessoas, aceitavel.
 **Busca com `LIKE`.** Funciona bem ate algumas centenas de milhares de
 mensagens. Depois, o caminho e o indice de texto completo do Postgres — nao
 um servico de busca separado.
+
+**Limpeza de ruido pesa no processador.** O DeepFilterNet3 roda no thread de
+audio de quem fala. Maquina fraca cai para o GTCRN no autoteste, mas maquina
+aprovada no limite pode picotar com jogo e transmissao ao mesmo tempo; nao ha
+troca automatica no meio da chamada. Ver
+[SUPRESSAO-DE-RUIDO.md](SUPRESSAO-DE-RUIDO.md#limites-conhecidos).
 
 **Sem entrega garantida de eventos.** Se a sessao expirar durante uma queda
 longa, o cliente refaz o estado do zero em vez de receber o que perdeu. E o

@@ -22,3 +22,9 @@ coverage/
 # O .env.production do cliente so tem o endereco padrao do servidor, sem
 # segredo nenhum, e precisa ir junto para o build sair igual em qualquer maquina.
 !packages/desktop/.env.production
+
+# Arquivos dos modelos de limpeza de ruido: 24 MB de binario (7,6 MB de pesos
+# ONNX e 15,7 MB de WebAssembly), baixados e verificados por `npm run modelos`.
+# So o manifesto (origem + hash) vai para o git. Ver docs/SUPRESSAO-DE-RUIDO.md.
+packages/desktop/resources/modelos/**
+!packages/desktop/resources/modelos/manifesto.json

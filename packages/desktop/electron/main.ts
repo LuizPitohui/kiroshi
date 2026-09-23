@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   app,
   BrowserWindow,
@@ -8,7 +10,9 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  net,
   Notification,
+  protocol,
   session,
   shell,
   Tray,
@@ -35,6 +39,126 @@ const isDev = !app.isPackaged;
 // tela e camera so aparecem aqui, nunca no navegador.
 if (isDev) {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
+}
+
+// ---------------------------------------------------------------------------
+// Arquivos dos modelos de limpeza de ruido
+// ---------------------------------------------------------------------------
+
+/**
+ * Esquema pelo qual a interface le os arquivos do DeepFilterNet3.
+ *
+ * POR QUE UM ESQUEMA PROPRIO, e nao `file://` nem a CDN do pacote:
+ *
+ *   CDN      o pacote `deepfilternet3-noise-filter` baixa o modelo de um
+ *            servidor de terceiros por padrao. O Kiroshi e auto-hospedado:
+ *            a voz de ninguem vai depender de uma maquina que nao e nossa,
+ *            nem avisar a ela quando alguem entra numa chamada.
+ *
+ *   file://  o Chromium recusa `fetch` em `file://`, e e com `fetch` que o
+ *            pacote le os arquivos. Nao ha como trocar isso sem mexer nele.
+ *
+ * Um esquema registrado com `supportFetchAPI` resolve os dois: o pacote
+ * recebe uma URL base (`kiroshi-modelos://dfn3`) e faz `fetch` normalmente,
+ * e quem responde e este processo, lendo do disco.
+ *
+ * Precisa ser registrado ANTES do `ready` — depois disso o Electron ignora.
+ */
+const ESQUEMA_DOS_MODELOS = 'kiroshi-modelos';
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: ESQUEMA_DOS_MODELOS,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      // A interface roda em `file://` (origem nula): sem CORS liberado o
+      // `fetch` dela para este esquema e bloqueado.
+      corsEnabled: true,
+    },
+  },
+]);
+
+/**
+ * Onde moram os arquivos do modelo.
+ *
+ * Instalado: `resources/modelos`, ao lado do app.asar — vem por
+ * `extraResources` no electron-builder.yml, FORA do asar de proposito, para o
+ * modelo ser lido direto do disco sem descompactar o pacote inteiro.
+ *
+ * Empacotado e simples: o `electron-builder` copia a pasta para
+ * `resources/modelos`, ao lado do `app.asar`.
+ *
+ * EM DESENVOLVIMENTO NAO E. A primeira versao disto usava
+ * `join(app.getAppPath(), 'resources', 'modelos')`, e foi MEDIDO que nao
+ * funciona: rodando o main compilado — que e o que tanto o `electron-vite dev`
+ * quanto um `electron out/main/index.js` fazem — `app.getAppPath()` devolve
+ * `packages/desktop/out/main`, e nao a raiz do pacote. O protocolo procurava
+ * em `out/main/resources/modelos` enquanto o `npm run modelos` gravava em
+ * `packages/desktop/resources/modelos`.
+ *
+ * O sintoma: todo `kiroshi-modelos://` respondia 404, o autoteste reprovava
+ * com "nao consegui carregar os arquivos do modelo" e a limpeza caia para o
+ * GTCRN — em desenvolvimento, sempre. Confirmado com um arquivo de teste de
+ * uma linha: so aparecia em `out/main/resources/modelos`.
+ *
+ * Por isso a lista de candidatos em vez de um caminho so. Nao e chute: sao os
+ * dois lugares onde o `getAppPath()` pode cair conforme quem abre o app, e o
+ * primeiro que existir vence. Se nenhum existir, devolve o primeiro mesmo
+ * assim — o 404 e a mensagem do autoteste ja explicam o que falta.
+ */
+function pastaDosModelos(): string {
+  if (app.isPackaged) return join(process.resourcesPath, 'modelos');
+
+  const base = app.getAppPath();
+  const aoLadoDoApp = join(base, 'resources', 'modelos');
+  // De `out/main` de volta para a raiz do pacote, que e onde o
+  // `npm run modelos` grava.
+  const naRaizDoPacote = join(base, '..', '..', 'resources', 'modelos');
+
+  if (existsSync(aoLadoDoApp)) return aoLadoDoApp;
+  if (existsSync(naRaizDoPacote)) return naRaizDoPacote;
+  return aoLadoDoApp;
+}
+
+const TIPOS: Record<string, string> = {
+  '.wasm': 'application/wasm',
+  '.gz': 'application/gzip',
+  '.json': 'application/json',
+};
+
+function registrarProtocoloDosModelos(): void {
+  const raiz = resolve(pastaDosModelos());
+
+  protocol.handle(ESQUEMA_DOS_MODELOS, async (requisicao) => {
+    // kiroshi-modelos://dfn3/v3/pkg/df_bg.wasm -> <raiz>/dfn3/v3/pkg/df_bg.wasm
+    const url = new URL(requisicao.url);
+    const relativo = decodeURIComponent(`${url.hostname}${url.pathname}`);
+    const alvo = resolve(raiz, relativo);
+
+    // Nada fora da pasta dos modelos: `..` na URL nao pode ler o disco.
+    if (!alvo.startsWith(raiz + sep)) {
+      return new Response('fora da pasta dos modelos', { status: 403 });
+    }
+
+    let resposta: Response;
+    try {
+      resposta = await net.fetch(pathToFileURL(alvo).toString());
+    } catch {
+      return new Response(`arquivo ausente: ${relativo}`, { status: 404 });
+    }
+
+    const extensao = alvo.slice(alvo.lastIndexOf('.'));
+    const cabecalhos = new Headers(resposta.headers);
+    cabecalhos.set('Access-Control-Allow-Origin', '*');
+    // O modelo e um .tar.gz que o pacote descompacta sozinho. Se algum
+    // cabecalho disser que a resposta ja vem comprimida, o Chromium
+    // descomprime antes, os bytes chegam trocados e o modelo nao carrega.
+    cabecalhos.delete('Content-Encoding');
+    cabecalhos.set('Content-Type', TIPOS[extensao] ?? 'application/octet-stream');
+    return new Response(resposta.body, { status: resposta.status, headers: cabecalhos });
+  });
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -545,6 +669,8 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('fun.arasaka.kiroshi');
 
   setupAtualizacao();
+  // Antes da janela: o autoteste do modelo roda logo que a interface abre.
+  registrarProtocoloDosModelos();
   setupDisplayMedia();
   registerIpc();
   createWindow();

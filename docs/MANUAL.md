@@ -146,12 +146,57 @@ Funciona de dois jeitos, e vale entender a diferenca:
 
 ---
 
+## Limpeza de ruido
+
+O Kiroshi tira teclado, clique de mouse, ventilador e barulho de fundo do seu
+microfone antes de a voz chegar nos outros. Vem ligado.
+
+Em **Ajustes > Voz e video**:
+
+- **Limpeza de ruido por IA** — liga e desliga. Desligada, sobra so a limpeza
+  do navegador, que nao pega teclado.
+- **Intensidade da limpeza** — no maximo, sai tudo que nao for voz. Se a sua
+  voz soar artificial ou "debaixo d'agua", abaixe um pouco.
+- **Sensibilidade do microfone** (so no modo por atividade de voz) — abaixo
+  desse nivel o microfone fecha. Cortando o comeco ou o fim das frases?
+  Arraste para a esquerda. Barulho abrindo o microfone? Para a direita.
+
+Os dois controles valem na hora, inclusive no meio de uma call.
+
+**Para ouvir como voce soa:** clique em **Testar**, ligue **Ouvir minha voz**
+(com fone) e digite. O que voce ouve ali e exatamente o que os outros ouvem.
+Abaixo da barra aparece **Limpando agora**, com o nome do que esta limpando o
+seu microfone:
+
+| Aparece | Significa |
+|---|---|
+| DeepFilterNet3 | O normal. Limpeza completa |
+| GTCRN (reserva) | Seu computador nao aguentou o principal. Limpa bem, mas passa mais teclado |
+| Navegador | So a limpeza basica. Teclado passa |
+| Nenhum | Tudo desligado, som cru |
+
+Se nao for DeepFilterNet3, clique em **Por que nao esta usando o
+DeepFilterNet3?** e mande o texto para quem cuida do servidor.
+
+A limpeza nao tira **eco**. Se voce usa caixa de som e os outros ouvem a
+propria voz de volta, deixe o **Cancelamento de eco** ligado — ou use fone.
+
 ## Quando algo nao funciona
 
 **Entrei na call mas ninguem me ouve.**
 Veja se o microfone esta vermelho no canto inferior. Se nao estiver, va em
 **Ajustes > Voz e video**, confira se o microfone certo esta selecionado e
 clique em **Testar** — a barra deve se mexer quando voce fala.
+
+**Estao ouvindo meu teclado.**
+Va em **Ajustes > Voz e video**, clique em **Testar** e veja o que aparece em
+**Limpando agora**. Se nao for DeepFilterNet3, abra o **Por que nao esta
+usando...** e mande o texto para quem cuida do servidor. Se for, suba a
+**Intensidade da limpeza** e confira com o **Ouvir minha voz**.
+
+**Minha voz corta no comeco ou no fim das frases.**
+A sensibilidade esta alta demais: em **Ajustes > Voz e video**, arraste
+**Sensibilidade do microfone** para a esquerda.
 
 **Entrei na call e nao ouco ninguem.**
 Va em **Ajustes > Voz e video > Diagnostico** e clique em **Verificar

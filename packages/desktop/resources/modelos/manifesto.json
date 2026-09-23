@@ -1,0 +1,23 @@
+{
+  "_leia": "Arquivos do DeepFilterNet3 que vao dentro do instalador. Gerenciado por scripts/baixar-modelos.mjs; explicado em docs/SUPRESSAO-DE-RUIDO.md. Os binarios NAO vao para o git, so este manifesto.",
+  "pacote": {
+    "nome": "deepfilternet3-noise-filter",
+    "versao": "1.3.0"
+  },
+  "arquivos": [
+    {
+      "caminho": "dfn3/v3/models/DeepFilterNet3_onnx.tar.gz",
+      "descricao": "Pesos do DeepFilterNet3 em ONNX, direto do repositorio do autor, fixados por commit",
+      "origem": "https://raw.githubusercontent.com/Rikorose/DeepFilterNet/d375b2d8309e0935d165700c91da9de862a99c31/models/DeepFilterNet3_onnx.tar.gz",
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+      "tipo": "modelo"
+    },
+    {
+      "caminho": "dfn3/v3/pkg/df_bg.wasm",
+      "descricao": "libDF compilada para WebAssembly, casada com o codigo de cola do pacote 1.3.0",
+      "origem": "https://cdn.mezon.ai/AI/models/datas/noise_suppression/deepfilternet3/v3/pkg/df_bg.wasm",
+      "sha256": "440b5d12b6ea7d95008736f844221d7874ee15de5cb10d3015002470fdba0432",
+      "tipo": "wasm"
+    }
+  ]
+}

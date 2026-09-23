@@ -25,6 +25,19 @@ electronLanguages:
 
 asar: true
 
+# Arquivos dos modelos de limpeza de ruido (DeepFilterNet3), FORA do asar.
+#
+# Vao para `resources/modelos` ao lado do app.asar e sao servidos pelo
+# protocolo `kiroshi-modelos://` (electron/main.ts). Fora do asar para serem
+# lidos direto do disco. A pasta e preenchida por `npm run modelos`, que o
+# `dist:win` roda antes de empacotar — sem ela o instalador sai sem o modelo
+# e todo mundo cai para o GTCRN. Ver docs/SUPRESSAO-DE-RUIDO.md.
+extraResources:
+  - from: resources/modelos
+    to: modelos
+    filter:
+      - '**/*'
+
 win:
   target:
     - target: nsis

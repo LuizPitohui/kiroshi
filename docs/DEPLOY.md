@@ -193,6 +193,26 @@ Os outros comandos:
 
 ## Distribuindo o instalador
 
+### Antes de gerar: os arquivos do modelo
+
+O instalador leva os arquivos do DeepFilterNet3 (limpeza de ruido), que nao
+ficam no git. O `npm run dist:win` verifica se eles estao presentes e
+interrompe o build se nao estiverem. Na primeira vez numa maquina:
+
+```bash
+npm run modelos
+```
+
+Ele baixa e confere cada arquivo (hash, estrutura do WASM, conteudo do
+modelo). **Na primeira execucao do projeto** ele tambem registra o hash
+do WASM no `packages/desktop/resources/modelos/manifesto.json`, que entao
+precisa ir para o git. Detalhes em
+[SUPRESSAO-DE-RUIDO.md](SUPRESSAO-DE-RUIDO.md#os-arquivos-do-modelo).
+
+O instalador fica cerca de 10 MB maior por causa do modelo.
+
+### Publicando
+
 O executavel tem 82 MB, acima do limite de praticamente todo chat. Em vez de
 servico de transferencia com link que expira, o proprio servidor publica:
 

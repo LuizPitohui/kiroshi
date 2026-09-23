@@ -21,7 +21,24 @@ import { lerCaminhos, type CaminhosDisponiveis } from './caminhos.js';
 import { bitrateDeTela, restricoesDeTela, camadasDeTela } from './qualidade.js';
 import { explicarFalhaDeMidia } from './falhas.js';
 import { SaidaDeAudio } from './saida.js';
-import { LimpezaDeRuido, limpezaDisponivel } from './ruido.js';
+import { prepararFaixaParaProcessador, type ProcessadorDeLimpeza } from './ruido.js';
+import {
+  aplicarLimpeza,
+  aquecerLimpeza,
+  planejarLimpeza,
+  planoSemModelos,
+  type LimpezaMontada,
+} from './cadeia.js';
+import {
+  INTENSIDADE_PADRAO,
+  LIMIAR_PADRAO_DB,
+  exigeReabrirMicrofone,
+  intensidadeValida,
+  limiarDoPortao,
+  limiarValido,
+  restricoesDoNavegador,
+  type MotorDeLimpeza,
+} from './limpeza.js';
 import {
   devoAtenderTokenDoGateway,
   devoIgnorarEntrada,
@@ -60,8 +77,15 @@ export interface VoiceSettings {
   inputDeviceId: string | null;
   outputDeviceId: string | null;
   inputMode: InputMode;
-  /** Limiar de deteccao de voz, 0 a 1. */
-  voiceThreshold: number;
+  /**
+   * Limiar do portao no modo por atividade de voz, em dB.
+   *
+   * Substitui o antigo `voiceThreshold` (0 a 1), que era salvo mas nunca lido:
+   * o modo "por voz" transmitia o tempo todo. Nome novo de proposito, para o
+   * valor antigo que ficou guardado nas maquinas nao ser reinterpretado numa
+   * escala que nao e a dele.
+   */
+  limiarDeVozDb: number;
   /**
    * Supressor classico do WebRTC. Bom para ruido CONSTANTE — ventilador,
    * chiado, ar-condicionado — e fraco para transiente: teclado, clique de
@@ -87,16 +111,27 @@ export interface VoiceSettings {
    */
   voiceIsolation: boolean;
   /**
-   * Limpeza reforcada com RNNoise, no lugar da do navegador.
+   * Limpeza por modelo: DeepFilterNet3, com GTCRN de reserva.
    *
-   * SUBSTITUI, nao soma. Ligada, a captura desliga `noiseSuppression` e
-   * `voiceIsolation`: modelos sao treinados em audio cru, e alimentar um com
-   * a saida do outro da voz robotica e gasta processador duas vezes.
+   * SUBSTITUI, nao soma. Com um modelo ativo, a captura desliga
+   * `noiseSuppression` e `voiceIsolation`: modelos sao treinados em audio
+   * cru, e alimentar um com a saida do outro da voz robotica.
    *
    * Ligada por padrao porque foi medido que a do navegador nao basta — os
    * quatro ajustes confirmados ligados, e teclado ainda passando.
+   *
+   * O nome ficou o mesmo da versao com RNNoise para quem desligou continuar
+   * desligado depois de atualizar. Detalhes em docs/SUPRESSAO-DE-RUIDO.md.
    */
   limpezaDeRuido: boolean;
+  /**
+   * Intensidade do DeepFilterNet3, 0 a 100: o limite de atenuacao em dB.
+   *
+   * 100 = sem limite, o modelo remove tudo que julgar ruido. Abaixo disso,
+   * um pouco do som original volta misturado: voz mais natural, fundo junto.
+   * Muda ao vivo. O GTCRN ignora.
+   */
+  intensidadeDaLimpeza: number;
   /** Volume de saida geral, 0 a 1. */
   outputVolume: number;
   /** Volume da VOZ de cada pessoa, 0 a 2. */
@@ -134,12 +169,13 @@ const DEFAULT_SETTINGS: VoiceSettings = {
   inputDeviceId: null,
   outputDeviceId: null,
   inputMode: 'voice-activity',
-  voiceThreshold: 0.02,
+  limiarDeVozDb: LIMIAR_PADRAO_DB,
   noiseSuppression: true,
   echoCancellation: true,
   autoGainControl: true,
   voiceIsolation: true,
   limpezaDeRuido: true,
+  intensidadeDaLimpeza: INTENSIDADE_PADRAO,
   outputVolume: 1,
   userVolumes: {},
   screenVolumes: {},
@@ -178,6 +214,21 @@ export interface VoiceState {
    * `Set` por identidade nao detecta mudanca de conteudo.
    */
   assistindo: string[];
+  /**
+   * O que esta REALMENTE limpando o microfone agora, e nao o que foi pedido.
+   *
+   * `null` sem microfone aberto. Existe porque a tela antiga dizia "limpeza
+   * reforcada: sim" olhando para o interruptor, enquanto o processador
+   * falhava em todas as maquinas. Pedido e resultado sao coisas diferentes.
+   */
+  limpeza: EstadoDaLimpeza | null;
+}
+
+export interface EstadoDaLimpeza {
+  motor: MotorDeLimpeza;
+  portao: boolean;
+  /** Por que motores preferidos ficaram de fora. Vazio quando o DFN3 pegou. */
+  falhas: string[];
 }
 
 class VoiceController {
@@ -213,7 +264,11 @@ class VoiceController {
     ping: null,
     mediaVersion: 0,
     assistindo: [],
+    limpeza: null,
   };
+
+  /** O processador de limpeza plugado no microfone agora, para ajustes ao vivo. */
+  private limpeza: ProcessadorDeLimpeza | null = null;
 
   private readonly listeners = new Set<Listener>();
 
@@ -273,7 +328,12 @@ class VoiceController {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       if (!raw) return { ...DEFAULT_SETTINGS };
-      return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<VoiceSettings>) };
+      const lido = { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<VoiceSettings>) };
+      // Valor fora da faixa (editado na mao, ou de versao futura) nao pode
+      // virar um portao que nunca abre ou uma intensidade que nao existe.
+      lido.limiarDeVozDb = limiarValido(lido.limiarDeVozDb);
+      lido.intensidadeDaLimpeza = intensidadeValida(lido.intensidadeDaLimpeza);
+      return lido;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
@@ -470,10 +530,14 @@ class VoiceController {
         dtx: true,
         red: true,
       },
+      /*
+        So um padrao de reserva: o microfone de verdade e aberto em
+        `publishMicrophone`, com as restricoes que a cascata de limpeza decide
+        ali. Isto vale apenas se o proprio LiveKit precisar abrir a captura.
+      */
       audioCaptureDefaults: {
         deviceId: this.settings.inputDeviceId ?? undefined,
-        echoCancellation: this.settings.echoCancellation,
-        ...this.limpezaDoNavegador(),
+        ...restricoesDoNavegador(this.settings, this.settings.limpezaDeRuido),
       },
       videoCaptureDefaults: { resolution: { width: 1920, height: 1080, frameRate: 30 } },
     };
@@ -806,6 +870,7 @@ class VoiceController {
       screenSharing: false,
       ping: null,
       assistindo: [],
+      limpeza: null,
     });
   }
 
@@ -814,53 +879,57 @@ class VoiceController {
   // ---------------------------------------------------------------------------
 
   /**
-   * A limpeza que o NAVEGADOR faz, conforme quem esta no comando.
+   * Abre o microfone, pluga a limpeza de ruido e publica.
    *
-   * Com o RNNoise ligado, a do navegador sai de cena inteira. Deixar as duas
-   * seria empilhar dois modelos sobre o mesmo sinal — o segundo recebe algo
-   * que ja nao parece a voz humana em que foi treinado, e o resultado e pior
-   * que qualquer um dos dois sozinho.
+   * A ordem importa e cada passo existe por um motivo:
    *
-   * O ganho automatico fica em ambos os casos: ele nivela volume, nao remove
-   * ruido, entao nao disputa com ninguem.
+   *   1. PLANEJAR antes de abrir: se vai haver modelo, o supressor do
+   *      navegador tem que ser pedido DESLIGADO na captura (nunca dois
+   *      supressores empilhados).
+   *
+   *   2. PREPARAR a faixa para aceitar processador. Sem isto o LiveKit recusa
+   *      qualquer processador numa faixa ainda nao publicada — e esse era o
+   *      bug que deixava o teclado passar. Ver `prepararFaixaParaProcessador`.
+   *
+   *   3. APLICAR a cascata antes de publicar. Depois de publicada a faixa ja
+   *      esta indo para o codificador, e trocar o processamento no meio causa
+   *      um corte audivel em quem esta ouvindo.
+   *
+   *   4. RESGATAR se nenhum modelo pegou: reabrir o microfone com o supressor
+   *      do navegador ligado. Falhar nunca pode significar microfone cru.
    */
-  private limpezaDoNavegador(): {
-    noiseSuppression: boolean;
-    autoGainControl: boolean;
-    voiceIsolation: boolean;
-  } {
-    const comRnnoise = this.settings.limpezaDeRuido && limpezaDisponivel();
-    return {
-      noiseSuppression: comRnnoise ? false : this.settings.noiseSuppression,
-      voiceIsolation: comRnnoise ? false : this.settings.voiceIsolation,
-      autoGainControl: this.settings.autoGainControl,
-    };
-  }
-
   private async publishMicrophone(): Promise<void> {
     const room = this.room;
     if (!room) return;
 
+    const ajustes = this.settings;
+    const plano = await planejarLimpeza(ajustes);
+
     this.micTrack = await createLocalAudioTrack({
-      deviceId: this.settings.inputDeviceId ?? undefined,
-      echoCancellation: this.settings.echoCancellation,
-      ...this.limpezaDoNavegador(),
+      deviceId: ajustes.inputDeviceId ?? undefined,
+      ...plano.restricoes,
     });
+    const faixa = this.micTrack;
+    prepararFaixaParaProcessador(faixa);
 
-    /*
-      O processador entra ANTES de publicar.
+    const aplicar = (p: ProcessadorDeLimpeza): Promise<void> => faixa.setProcessor(p);
+    let montada: LimpezaMontada = await aplicarLimpeza(plano, ajustes, aplicar);
 
-      Depois de publicada, a faixa ja esta indo para o codificador: trocar o
-      processamento ali no meio produz um corte audivel em quem esta ouvindo.
-    */
-    if (this.settings.limpezaDeRuido && limpezaDisponivel()) {
-      try {
-        await this.micTrack.setProcessor(new LimpezaDeRuido());
-      } catch (erro) {
-        // Falhar aqui nao pode calar o microfone: sem limpeza e muito melhor
-        // do que sem voz. Fica o ruido, que e o problema que ja existia.
-        console.warn('limpeza de ruido indisponivel nesta maquina', erro);
-      }
+    if (montada.precisaReabrir) {
+      console.error('[limpeza] nenhum modelo pegou; voltando para o navegador', montada.falhas);
+      await faixa.restartTrack({
+        deviceId: ajustes.inputDeviceId ?? undefined,
+        ...montada.restricoesDeResgate,
+      });
+      montada = await aplicarLimpeza(planoSemModelos(ajustes, montada.falhas), ajustes, aplicar);
+    }
+
+    this.limpeza = montada.processador;
+    this.emit({
+      limpeza: { motor: montada.motor, portao: montada.portao, falhas: montada.falhas },
+    });
+    if (montada.falhas.length > 0) {
+      console.warn(`[limpeza] motor em uso: ${montada.motor}`, montada.falhas);
     }
 
     await room.localParticipant.publishTrack(this.micTrack, {
@@ -1360,12 +1429,40 @@ class VoiceController {
     this.settings = { ...this.settings, ...patch };
     this.saveSettings();
 
-    // Trocar de microfone exige republicar a faixa.
-    if (patch.inputDeviceId !== undefined && patch.inputDeviceId !== previous.inputDeviceId) {
+    /*
+      Ajustes de captura exigem reabrir o microfone; os de limpeza mudam ao
+      vivo.
+
+      Antes, so a troca de aparelho valia durante a chamada. Ligar ou
+      desligar a limpeza no meio de uma conversa nao fazia nada ate sair e
+      entrar de novo — e quem testasse assim concluiria que ela nao existe.
+    */
+    if (exigeReabrirMicrofone(patch, { ...previous })) {
       if (this.room && this.micTrack) {
         await this.room.localParticipant.unpublishTrack(this.micTrack);
         this.micTrack.stop();
+        await this.limpeza?.destroy().catch(() => undefined);
+        this.limpeza = null;
         await this.publishMicrophone();
+      }
+    } else {
+      if (patch.intensidadeDaLimpeza !== undefined) {
+        this.settings.intensidadeDaLimpeza = intensidadeValida(patch.intensidadeDaLimpeza);
+        this.saveSettings();
+        this.limpeza?.definirIntensidade(this.settings.intensidadeDaLimpeza);
+      }
+      if (patch.limiarDeVozDb !== undefined || patch.inputMode !== undefined) {
+        this.settings.limiarDeVozDb = limiarValido(this.settings.limiarDeVozDb);
+        this.saveSettings();
+        const limiar = limiarDoPortao(this.settings);
+        if (this.limpeza) {
+          await this.limpeza.definirPortao(limiar).catch((erro: unknown) => {
+            console.warn('[limpeza] nao consegui ajustar o portao', erro);
+          });
+          if (this.state.limpeza) {
+            this.emit({ limpeza: { ...this.state.limpeza, portao: limiar !== null } });
+          }
+        }
       }
     }
 
@@ -1503,6 +1600,9 @@ class VoiceController {
 
     this.micTrack?.stop();
     this.micTrack = null;
+    // O LiveKit ja desfaz o processador ao parar a faixa; soltar a referencia
+    // evita ajustar ao vivo um processador morto.
+    this.limpeza = null;
 
     /*
       As escolhas de quem assistir morrem com a sala.
@@ -1770,6 +1870,10 @@ class VoiceController {
 }
 
 export const voice = new VoiceController();
+
+// O autoteste do DeepFilterNet3 roda com o aplicativo ocioso, para a primeira
+// entrada em chamada nao esperar por ele.
+aquecerLimpeza();
 
 // ---------------------------------------------------------------------------
 // Falhas de midia, em portugues

@@ -57,6 +57,8 @@ permissoes, usado pelas duas pontas. O servidor autoriza com a mesma funcao que
 o cliente usa para decidir o que mostrar.
 
 As decisoes e o motivo de cada uma estao em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+A limpeza de ruido do microfone, e como diagnostica-la, esta em
+[docs/SUPRESSAO-DE-RUIDO.md](docs/SUPRESSAO-DE-RUIDO.md).
 
 ---
 

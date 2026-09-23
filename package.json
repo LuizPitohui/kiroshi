@@ -18,7 +18,8 @@
     "db:push": "npm run db:push -w @kiroshi/server",
     "db:migrate": "npm run db:migrate -w @kiroshi/server",
     "db:seed": "npm run db:seed -w @kiroshi/server",
-    "dist:win": "npm run dist:win -w @kiroshi/desktop"
+    "dist:win": "npm run dist:win -w @kiroshi/desktop",
+    "modelos": "npm run modelos -w @kiroshi/desktop"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

@@ -20,12 +20,21 @@
       injetado. `wasm-unsafe-eval` existe justamente para separar as duas
       coisas: o WASM passa, o eval continua barrado.
 
-      O binario do modelo e empacotado junto, nao baixado: `script-src 'self'`
-      continua valendo e nao ha origem nova liberada.
+      O binario do modelo e empacotado junto, nao baixado.
+
+      `blob:` em script-src: o worklet do DeepFilterNet3 chega embutido no
+      pacote como texto e e carregado por uma URL blob — o pacote nao oferece
+      outro jeito. O risco que isto abre e pequeno: uma URL blob so pode ser
+      criada por codigo que JA esta rodando nesta pagina, e esse codigo ja
+      poderia fazer o que quisesse. Nao libera nenhuma origem de fora.
+
+      `kiroshi-modelos:` em connect-src: os arquivos do modelo sao lidos do
+      disco pelo processo principal por esse esquema (ver electron/main.ts).
+      Detalhes das duas escolhas em docs/SUPRESSAO-DE-RUIDO.md.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:; frame-src 'none'; object-src 'none'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; font-src 'self' data:; connect-src 'self' ws: wss: http: https: kiroshi-modelos:; frame-src 'none'; object-src 'none'"
     />
     <title>Kiroshi</title>
   </head>

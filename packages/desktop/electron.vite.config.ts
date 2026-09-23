@@ -40,6 +40,17 @@ export default defineConfig({
     plugins: [react()],
     build: {
       rollupOptions: { input: { index: resolve(__dirname, 'src/index.html') } },
+      /*
+        Worklets NUNCA viram `data:`.
+
+        O Vite embute como `data:` todo arquivo abaixo de 4 KB importado com
+        `?url`. O worklet do portao de voz tem 1 KB e caia nessa regra — e a
+        politica de seguranca (index.html) nao aceita script `data:`. O
+        `addModule` falhava so no build de producao, o portao nao montava, e a
+        cascata de limpeza descartava o modelo junto. Em desenvolvimento os
+        arquivos sao servidos por URL e o problema nao aparece.
+      */
+      assetsInlineLimit: (arquivo) => (/worklet/i.test(arquivo) ? false : undefined),
     },
   },
 });
