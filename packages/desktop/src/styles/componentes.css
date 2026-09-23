@@ -723,26 +723,51 @@
    Cartao de participante
    -------------------------------------------------------------------------- */
 
-.tile-rodape {
+/*
+  A base do quadro: regua encostada na moldura, nao pastilha boiando.
+
+  A pastilha antiga era um retangulo escuro arredondado a 8px das bordas, com
+  o nome dentro — o cracha que todo aplicativo de chamada tem. Dois problemas,
+  e o segundo e o que pesa: ela nao tinha relacao nenhuma com a moldura
+  chanfrada do quadro, entao parecia colada por cima; e, sendo do tamanho do
+  texto, nao sobrava largura para mais nada.
+
+  Encostada e de ponta a ponta, ela passa a ser parte do quadro — e ganha
+  espaco a direita para o elo de quem esta ali.
+
+  O degrade em vez de fundo chapado: a regua cobre a base da imagem, e um
+  retangulo opaco cortaria a cena numa linha reta. O escurecimento progressivo
+  garante contraste no texto sem anunciar onde ele comeca.
+*/
+.tile-regua {
   position: absolute;
-  left: 8px;
-  bottom: 8px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  max-width: calc(100% - 16px);
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  background: rgba(8, 12, 18, 0.78);
+  padding: 10px 9px 6px;
+  background: linear-gradient(to top, rgba(6, 10, 15, 0.88), rgba(6, 10, 15, 0));
   /*
     O nome de quem esta no quadro e DADO, nao prosa: vai na voz monoespacada,
     como tudo que se le de relance num painel.
   */
   font-family: var(--font-mono);
-  font-size: var(--t-tecnico);
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-justa);
+  text-transform: uppercase;
   color: var(--text-primary);
+  pointer-events: none;
 }
+
+/* O nome encolhe; o elo e o icone de mudo nao. */
+.tile-regua-espaco {
+  flex: 1;
+  min-width: 4px;
+}
+
 
 .tile-nome {
   overflow: hidden;
@@ -990,28 +1015,23 @@
    Rodape do cartao
 
    Havia duas implementacoes deste rodape: `.tile-label`, usada pelo palco, e
-   `.tile-rodape`, usada pelo componente compartilhado que ninguem usava. Elas
+   `.tile-regua`, usada pelo componente compartilhado que ninguem usava. Elas
    ja tinham divergido em fonte, recuo e cor do icone de mudo. Sobrou esta, e
    ela herdou o que a outra tinha de melhor: o nome que some na fita, onde o
    quadro tem 148px e o rotulo cobriria a imagem inteira.
    -------------------------------------------------------------------------- */
 
-.tile.mini .tile-rodape {
+.tile.mini .tile-regua {
   opacity: 0;
   transition: opacity var(--mov) var(--curva);
 }
 
-.tile.mini:hover .tile-rodape,
-.tile.mini:focus-visible .tile-rodape,
-.tile.mini:focus-within .tile-rodape {
+.tile.mini:hover .tile-regua,
+.tile.mini:focus-visible .tile-regua,
+.tile.mini:focus-within .tile-regua {
   opacity: 1;
 }
 
-.tile-warn {
-  flex: none;
-  color: var(--status-warning);
-  font-size: var(--t-pequeno);
-}
 
 /* --------------------------------------------------------------------------
    Controles da chamada, abaixo do palco
@@ -2871,4 +2891,75 @@ button.mention:disabled {
 
 .composer.with-reply:focus-within {
   box-shadow: inset 0 1px 0 var(--amber);
+}
+
+/*
+  O ELO DE CADA PESSOA, NA BASE DO QUADRO
+
+  O dado existia por participante desde sempre — `connectionQuality`, do
+  LiveKit — e so virava a palavra "instavel" quando quebrava. O resto do tempo
+  nao aparecia em lugar nenhum.
+
+  E o resto do tempo e o que da a referencia. Sem ver como estava antes,
+  "instavel" nao diz se piorou agora ou se esta assim ha meia hora. E numa
+  chamada de dez pessoas, quando a voz pica, a pergunta e DE QUEM e o problema
+  — sem o dado por pessoa, cada um vai testar o proprio microfone.
+*/
+.tile-elo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  letter-spacing: var(--tk-mono-media);
+}
+
+.tile-elo-ponto {
+  width: 4px;
+  height: 4px;
+  flex: none;
+  background: currentColor;
+}
+
+/* O mesmo vocabulario de grau da faixa de estado, para nao haver dois. */
+.tile-elo.bom {
+  color: var(--on);
+}
+
+.tile-elo.ruim {
+  color: var(--red);
+}
+
+/*
+  Ainda medindo fica cinza, nao vermelho.
+
+  Pintar de alarme o que nao foi medido inventa um problema — e treina a
+  pessoa a ignorar o alarme de verdade quando ele vier.
+*/
+.tile-elo.neutro {
+  color: var(--text-ghost);
+}
+
+/*
+  Na miniatura, so o ponto.
+
+  A fita lateral tem quadros de 148px. Ali "INSTAVEL" escrito cobriria metade
+  da imagem da pessoa; o ponto colorido cabe e continua dizendo. A palavra
+  volta assim que o quadro cresce.
+*/
+.tile.mini .tile-elo-rotulo {
+  display: none;
+}
+
+/*
+  O quadro ao vivo perde o canto arredondado do rotulo e encosta na moldura,
+  como a regua de baixo. As duas marcas do quadro passam a pertencer a ele.
+*/
+.tile-live {
+  top: 0;
+  left: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: var(--tk-mono-media);
 }

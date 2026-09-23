@@ -54,6 +54,15 @@ export interface ParticipantTileProps {
    * de um participante so.
    */
   aviso?: ReactNode;
+  /**
+   * O elo daquela pessoa, lido por `lerQualidade`.
+   *
+   * Vem pronto de fora, e nao como o valor cru do LiveKit, porque a decisao de
+   * QUANDO escrever palavra e quando so pintar o ponto e regra de produto — e
+   * regra de produto merece teste. Esta em `lib/estado.ts`, junto com as
+   * leituras da faixa de estado, que seguem o mesmo vocabulario de grau.
+   */
+  qualidade?: { grau: string; rotulo: string; descricao: string };
   /** Acoes no canto, visiveis no hover e no foco. */
   acoes?: ReactNode;
   onClick?: () => void;
@@ -80,6 +89,7 @@ export const ParticipantTile = forwardRef<HTMLDivElement, ParticipantTileProps>(
       semImagem = false,
       emTelaCheia = false,
       aviso,
+      qualidade,
       acoes,
       onClick,
       onDoubleClick,
@@ -145,10 +155,51 @@ export const ParticipantTile = forwardRef<HTMLDivElement, ParticipantTileProps>(
 
         {aoVivo && <span className="tile-live">AO VIVO</span>}
 
-        <div className="tile-rodape">
+        {/*
+          A base do quadro e uma REGUA, nao uma pastilha de nome.
+
+          Antes era o cracha flutuante que todo aplicativo de chamada tem:
+          um retangulo escuro arredondado no canto de baixo, com o nome dentro.
+          Ele funciona e nao diz mais nada — e, pior, e uma peca solta boiando
+          por cima da imagem, sem relacao com a moldura chanfrada em volta.
+
+          Agora a base pertence ao quadro: vai de ponta a ponta, encostada na
+          moldura, com escurecimento em degrade para o texto ficar legivel
+          sobre qualquer imagem. E, como ela passou a ter largura sobrando,
+          cabe do lado direito o que o aplicativo ja sabia e nao mostrava — o
+          elo daquela pessoa.
+        */}
+        <div className="tile-regua">
           {semMicrofone && <MicOff size={12} className="tile-mudo" aria-hidden="true" />}
           <span className="tile-nome">{nome}</span>
+
+          <span className="tile-regua-espaco" />
+
           {aviso}
+
+          {/*
+            O elo de cada um, sempre presente.
+
+            Estava disponivel por participante desde sempre e so virava a
+            palavra "instavel" quando quebrava. O resto do tempo, nada — e e
+            justamente o resto do tempo que da a referencia: sem saber como
+            estava antes, "instavel" nao diz se piorou agora ou se e assim ha
+            meia hora.
+
+            A palavra so aparece no caso ruim; nos outros fica o ponto. Quem
+            nao distingue a cor tem a frase no `title` e no rotulo acessivel, e
+            o caso que importa — alguem picotando — vem escrito.
+          */}
+          {qualidade && (
+            <span
+              className={`tile-elo ${qualidade.grau}`}
+              title={qualidade.descricao}
+              aria-label={qualidade.descricao}
+            >
+              <span className="tile-elo-ponto" aria-hidden="true" />
+              {qualidade.rotulo && <span className="tile-elo-rotulo">{qualidade.rotulo}</span>}
+            </span>
+          )}
         </div>
 
         {acoes && <div className="tile-tools">{acoes}</div>}

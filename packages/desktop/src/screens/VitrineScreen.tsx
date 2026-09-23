@@ -16,6 +16,7 @@ import { ProfileCard } from '../components/ui/ProfileCard.js';
 import { UnsavedBar } from '../components/ui/UnsavedBar.js';
 import { Avatar } from '../components/Avatar.js';
 import { BarraDeEstado } from '../components/BarraDeEstado.js';
+import { lerQualidade, type QualidadeDoElo } from '../lib/estado.js';
 import { anunciar } from '../lib/anunciar.js';
 import { useToast } from '../components/ui/Toast.js';
 import { Trash, Edit, Link, Chevron, Users, Mic, Monitor, Plus } from '../components/Icons.js';
@@ -238,13 +239,13 @@ export function VitrineScreen() {
       >
         <div className="vitrine-linha" data-vitrine="tiles">
           <div style={{ width: 200, height: 112 }}>
-            <RostoFalso nome="pitohuikun" falando />
+            <RostoFalso nome="pitohuikun" falando elo="excellent" />
           </div>
           <div style={{ width: 200, height: 112 }}>
-            <RostoFalso nome="vartaque" semMicrofone />
+            <RostoFalso nome="vartaque" semMicrofone elo="unknown" />
           </div>
           <div style={{ width: 200, height: 112 }}>
-            <RostoFalso nome="Tela de vartaque" aoVivo aviso />
+            <RostoFalso nome="Tela de vartaque" aoVivo elo="poor" />
           </div>
         </div>
 
@@ -600,14 +601,14 @@ function RostoFalso({
   semMicrofone = false,
   aoVivo = false,
   semImagem = false,
-  aviso = false,
+  elo,
 }: {
   nome: string;
   falando?: boolean;
   semMicrofone?: boolean;
   aoVivo?: boolean;
   semImagem?: boolean;
-  aviso?: boolean;
+  elo?: QualidadeDoElo;
 }) {
   return (
     <ParticipantTile
@@ -616,7 +617,7 @@ function RostoFalso({
       semMicrofone={semMicrofone}
       aoVivo={aoVivo}
       semImagem={semImagem}
-      aviso={aviso ? <span className="mono tile-warn">instavel</span> : undefined}
+      qualidade={elo ? lerQualidade(elo) : undefined}
       onClick={() => undefined}
     >
       {/* 44px e o tamanho que o palco de verdade usa fora do destaque. Com 56

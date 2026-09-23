@@ -410,7 +410,7 @@ const cartoes = JSON.parse(
       mudoTemIcone: Boolean(mudo.querySelector('.tile-mudo')),
       mudoNoRotulo: /microfone desligado/i.test(mudo.getAttribute('aria-label') || ''),
       telaTemSelo: (tela.querySelector('.tile-live')?.textContent || '').trim() === 'AO VIVO',
-      telaTemAviso: Boolean(tela.querySelector('.tile-warn')),
+      telaTemAviso: Boolean(tela.querySelector('.tile-elo.ruim .tile-elo-rotulo')),
       focavel: tiles.every(t => t.tabIndex >= 0 && t.getAttribute('role') === 'button'),
       destaqueNoRotulo: /clique para destacar/i.test(falando.getAttribute('aria-label') || ''),
     });
@@ -423,6 +423,16 @@ check('e "falando" tambem vai no rotulo', cartoes.falandoNoRotulo === true);
 check('mudo tem ICONE, nao so cor', cartoes.mudoTemIcone === true);
 check('e "microfone desligado" vai no rotulo', cartoes.mudoNoRotulo === true);
 check('transmissao tem o selo AO VIVO', cartoes.telaTemSelo === true);
+/*
+  O aviso de conexao continua no cartao DAQUELA pessoa, nao numa barra global.
+
+  A intencao deste check nao mudou; o elemento sim. Era um '<span
+  class="tile-warn">instavel</span>' que so existia no caso ruim; agora e o
+  elo permanente na regua do quadro, que escreve a palavra apenas quando esta
+  ruim. Uma barra no topo do palco diria "a chamada esta instavel" quando o
+  problema e de um participante so — e e exatamente isso que este check impede
+  de voltar.
+*/
 check('o aviso de conexao fica no cartao da pessoa', cartoes.telaTemAviso === true);
 check('cartao clicavel e alcancavel por teclado', cartoes.focavel === true);
 check('o rotulo diz que da para destacar', cartoes.destaqueNoRotulo === true);
@@ -1975,6 +1985,166 @@ check(
     })()`),
   ) === 'Inter',
 );
+
+
+// ---------------------------------------------------------------------------
+/*
+  O PALCO: QUADRO COMO PAINEL, NAO CARTAO COM CRACHA
+
+  A base do quadro era o cracha flutuante que todo aplicativo de chamada tem —
+  um retangulo escuro arredondado a 8px das bordas, com o nome dentro. Ele nao
+  tinha relacao nenhuma com a moldura chanfrada em volta, entao parecia colado
+  por cima; e, sendo do tamanho do texto, nao sobrava largura para mais nada.
+
+  Agora e uma regua encostada na moldura, de ponta a ponta, e a largura que
+  sobrou serve para o dado que o aplicativo ja tinha e nao mostrava: o elo de
+  cada pessoa.
+
+  Os quadros da vitrine sao os de verdade — o mesmo `ParticipantTile` do palco —
+  com os tres estados de elo que importam montados lado a lado.
+*/
+console.log(String.fromCharCode(10) + '--- O PALCO: QUADRO COMO PAINEL ---');
+
+const palcoVitrine = JSON.parse(
+  await avaliar(`(() => {
+    const caixa = document.querySelector('[data-vitrine="tiles"]');
+    if (!caixa) return JSON.stringify({ existe: false });
+
+    const quadros = [...caixa.querySelectorAll('.tile')];
+    const primeiro = quadros[0];
+    const regua = primeiro?.querySelector('.tile-regua');
+    const nome = primeiro?.querySelector('.tile-nome');
+    const s = regua ? getComputedStyle(regua) : null;
+    const rq = primeiro?.getBoundingClientRect();
+    const rr = regua?.getBoundingClientRect();
+
+    // Um elo por quadro, e o rotulo so onde o elo esta ruim.
+    const elos = quadros.map((q) => {
+      const e = q.querySelector('.tile-elo');
+      return e
+        ? {
+            classe: e.className,
+            rotulo: e.querySelector('.tile-elo-rotulo')?.textContent?.trim() ?? '',
+            descricao: e.getAttribute('title') ?? '',
+            temPonto: !!e.querySelector('.tile-elo-ponto'),
+          }
+        : null;
+    });
+
+    return JSON.stringify({
+      existe: true,
+      quadros: quadros.length,
+      regua: s
+        ? {
+            fonte: s.fontFamily.split(',')[0].replace(/['"]/g, ''),
+            caixa: s.textTransform,
+            fundo: s.backgroundColor,
+            fundoImagem: s.backgroundImage,
+            raio: s.borderRadius,
+            eventos: s.pointerEvents,
+          }
+        : null,
+      larguraQuadro: rq ? Math.round(rq.width) : 0,
+      larguraRegua: rr ? Math.round(rr.width) : 0,
+      nomeExiste: !!nome,
+      elos,
+    });
+  })()`),
+);
+
+check('os quadros da vitrine existem', palcoVitrine.existe && palcoVitrine.quadros >= 3, String(palcoVitrine.quadros));
+
+if (palcoVitrine.existe) {
+  /*
+    O CHECK CENTRAL: a regua ocupa a largura do quadro.
+
+    E o que separa "regua" de "cracha". Enquanto ela tiver a largura do texto,
+    e uma pastilha — e nao sobra espaco para o elo, que e o motivo de a
+    mudanca existir.
+  */
+  check(
+    'a base ocupa a largura do quadro, nao a do nome',
+    palcoVitrine.larguraRegua >= palcoVitrine.larguraQuadro - 1,
+    palcoVitrine.larguraRegua + 'px de ' + palcoVitrine.larguraQuadro + 'px',
+  );
+  /*
+    Degrade, e nao fundo chapado: a regua cobre a base da imagem, e um
+    retangulo opaco cortaria a cena numa linha reta.
+  */
+  check(
+    'com escurecimento em degrade, nao um retangulo por cima da imagem',
+    palcoVitrine.regua.fundoImagem.includes('gradient'),
+    palcoVitrine.regua.fundoImagem.slice(0, 30),
+  );
+  check(
+    'e sem canto arredondado, porque ela pertence a moldura',
+    palcoVitrine.regua.raio === '0px',
+    palcoVitrine.regua.raio,
+  );
+  /*
+    A regua fica por cima da imagem e nao pode roubar o clique: o quadro
+    inteiro e clicavel — destacar, ir para tela cheia, abrir o cartao da
+    pessoa com o botao direito. Sem isto, clicar no nome nao faria nada.
+  */
+  check(
+    'e nao rouba o clique do quadro',
+    palcoVitrine.regua.eventos === 'none',
+    'pointer-events: ' + palcoVitrine.regua.eventos,
+  );
+  check(
+    'o nome le como dado, em monoespacada de caixa alta',
+    palcoVitrine.regua.fonte === 'JetBrains Mono' && palcoVitrine.regua.caixa === 'uppercase',
+    palcoVitrine.regua.fonte,
+  );
+
+  /*
+    O ELO DE CADA PESSOA, SEMPRE PRESENTE.
+
+    O dado vinha do LiveKit por participante desde sempre e so virava a palavra
+    "instavel" quando quebrava. O resto do tempo nao aparecia — e e o resto do
+    tempo que da a referencia: sem ver como estava antes, "instavel" nao diz se
+    piorou agora ou se esta assim ha meia hora.
+  */
+  const comElo = palcoVitrine.elos.filter(Boolean);
+  check(
+    'todo quadro mostra o elo, nao so o que esta ruim',
+    comElo.length === palcoVitrine.quadros,
+    comElo.length + ' de ' + palcoVitrine.quadros,
+  );
+
+  /*
+    Mas so o RUIM escreve palavra. "OTIMO" embaixo de cada pessoa numa grade de
+    nove e ruido que ensina a ignorar a regua inteira.
+  */
+  const ruins = comElo.filter((e) => e.classe.includes('ruim'));
+  const bons = comElo.filter((e) => e.classe.includes('bom'));
+  check(
+    'so o elo ruim gasta palavra',
+    ruins.length > 0 && ruins.every((e) => e.rotulo.length > 0) && bons.every((e) => e.rotulo === ''),
+    'ruins com texto: ' + ruins.map((e) => e.rotulo).join(',') + ' | bons: ' + bons.length,
+  );
+
+  /*
+    Ainda medindo NAO e vermelho. Pintar de alarme o que nao foi medido inventa
+    um problema, e treina a pessoa a ignorar o alarme de verdade.
+  */
+  const neutros = comElo.filter((e) => e.classe.includes('neutro'));
+  check(
+    'e o que ainda nao foi medido nao vira alarme',
+    neutros.length > 0 && neutros.every((e) => !e.classe.includes('ruim') && e.rotulo === ''),
+    neutros.length + ' neutro(s)',
+  );
+
+  /*
+    Cor sozinha nao chega ao leitor de tela, e o ponto tem 4px. Todo elo leva
+    uma frase, inclusive os que nao escrevem nada na tela.
+  */
+  check(
+    'todo elo tem frase para leitor de tela, mesmo o que nao escreve',
+    comElo.every((e) => e.descricao.length > 10 && e.temPonto),
+    comElo.map((e) => e.descricao).join(' / ').slice(0, 60),
+  );
+}
 
 
 console.log(`\n=========================================`);

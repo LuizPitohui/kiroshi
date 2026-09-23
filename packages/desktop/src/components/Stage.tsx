@@ -8,6 +8,7 @@ import { Avatar } from './Avatar.js';
 import { ParticipantTile } from './ui/ParticipantTile.js';
 import { CartaoDePessoa } from './CartaoDePessoa.js';
 import { Expand, Collapse, Focus, Chevron, Close, Monitor } from './Icons.js';
+import { lerQualidade } from '../lib/estado.js';
 
 type Fonte = 'camera' | 'tela' | 'avatar';
 
@@ -546,11 +547,19 @@ function QuadroDeVideo({
       miniatura={miniatura}
       semImagem={!temImagem}
       emTelaCheia={cheia}
-      aviso={
-        quadro.participante.connectionQuality === 'poor' ? (
-          <span className="mono tile-warn">instavel</span>
-        ) : undefined
-      }
+      /*
+        O elo vai SEMPRE, e nao so quando quebra.
+
+        Antes daqui saia um `<span>instavel</span>` no caso ruim e nada nos
+        outros. O problema de so mostrar a falha e que falta a referencia:
+        quem ve "instavel" aparecer nao sabe se acabou de piorar ou se esta
+        assim desde o comeco da chamada. Com o ponto sempre presente, a
+        mudanca e que vira o sinal.
+
+        Quem decide o que escrever e `lerQualidade`, que tem teste. Aqui so
+        se entrega o valor cru.
+      */
+      qualidade={lerQualidade(quadro.participante.connectionQuality)}
       // Um convite nao se destaca nem vai para tela cheia: nao ha o que
       // mostrar ate alguem aceitar. O clique nele e aceitar.
       onClick={quadro.aguardandoEscolha ? onAssistir : onDestacar}

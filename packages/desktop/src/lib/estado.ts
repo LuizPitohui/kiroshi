@@ -101,3 +101,51 @@ export function lerRelogio(agora: Date = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(agora.getHours())}:${p(agora.getMinutes())}:${p(agora.getSeconds())}`;
 }
+
+/** Como o LiveKit classifica o elo de cada pessoa na chamada. */
+export type QualidadeDoElo = 'excellent' | 'good' | 'poor' | 'unknown';
+
+export interface LeituraDeQualidade {
+  /** Grau de cor, o mesmo vocabulario da faixa de estado. */
+  grau: 'bom' | 'atencao' | 'ruim' | 'neutro';
+  /**
+   * A palavra na tela. Vazia quando esta tudo bem, de proposito.
+   *
+   * Um quadro de chamada tem doze pixels de altura para escrever coisa, e
+   * "OTIMO" embaixo de toda pessoa numa grade de nove e ruido que ensina a
+   * ignorar a regua inteira. A palavra aparece so quando ela muda uma decisao:
+   * quando alguem esta picotando, e quem esta ouvindo precisa saber que o
+   * problema nao e o proprio ouvido.
+   */
+  rotulo: string;
+  /** Sempre presente. E o que o leitor de tela le, e o que o `title` mostra. */
+  descricao: string;
+}
+
+/**
+ * O elo de UMA pessoa na chamada.
+ *
+ * O dado ja existia — `connectionQuality` vem do LiveKit por participante — e
+ * so era usado para escrever "instavel" quando estava ruim. O resto do tempo
+ * a informacao existia e nao aparecia em lugar nenhum.
+ *
+ * Isso importa porque numa chamada de dez pessoas, quando a voz pica, a
+ * primeira pergunta e DE QUEM e o problema. Sem o dado por pessoa, cada um
+ * testa o proprio microfone.
+ *
+ * `unknown` nao vira "ruim". Ainda nao ha medida — e o mesmo motivo pelo qual
+ * a latencia sem chamada e um traco e nao um zero. Pintar de vermelho o que
+ * nao foi medido e inventar um problema.
+ */
+export function lerQualidade(q: QualidadeDoElo): LeituraDeQualidade {
+  switch (q) {
+    case 'excellent':
+      return { grau: 'bom', rotulo: '', descricao: 'Conexao otima' };
+    case 'good':
+      return { grau: 'bom', rotulo: '', descricao: 'Conexao boa' };
+    case 'poor':
+      return { grau: 'ruim', rotulo: 'INSTAVEL', descricao: 'Conexao instavel — a voz pode picotar' };
+    case 'unknown':
+      return { grau: 'neutro', rotulo: '', descricao: 'Ainda medindo a conexao' };
+  }
+}

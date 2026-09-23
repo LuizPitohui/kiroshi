@@ -8,7 +8,7 @@
  * que esquece de contar voce, o grau que classifica errado.
  */
 import { describe, it, expect } from 'vitest';
-import { lerElo, lerLatencia, lerVoz, lerRelogio } from './estado.js';
+import { lerElo, lerLatencia, lerVoz, lerRelogio, lerQualidade } from './estado.js';
 
 describe('o elo com o servidor', () => {
   it('conectado le como bom', () => {
@@ -115,5 +115,49 @@ describe('o relogio', () => {
 
   it('meia-noite nao vira 24', () => {
     expect(lerRelogio(new Date(2026, 8, 22, 0, 0, 0))).toBe('00:00:00');
+  });
+});
+
+describe('o elo de cada pessoa na chamada', () => {
+  /*
+    O caso que justifica a funcao existir. Numa chamada de dez pessoas, quando
+    a voz pica, a primeira pergunta e DE QUEM e o problema — e sem o dado por
+    pessoa cada um vai testar o proprio microfone.
+  */
+  it('instavel e o unico que escreve palavra no quadro', () => {
+    expect(lerQualidade('poor').rotulo).toBe('INSTAVEL');
+    expect(lerQualidade('excellent').rotulo).toBe('');
+    expect(lerQualidade('good').rotulo).toBe('');
+  });
+
+  /*
+    "OTIMO" embaixo de cada pessoa numa grade de nove e ruido que ensina a
+    ignorar a regua inteira. A palavra so aparece quando muda uma decisao.
+  */
+  it('conexao boa nao gasta pixel dizendo que esta boa', () => {
+    expect(lerQualidade('excellent').grau).toBe('bom');
+    expect(lerQualidade('good').grau).toBe('bom');
+  });
+
+  /*
+    Mesmo principio da latencia sem chamada: o que nao foi medido nao vira
+    numero, e aqui nao vira vermelho. Pintar de alarme o desconhecido e
+    inventar um problema — e treina a pessoa a ignorar o alarme de verdade.
+  */
+  it('ainda medindo NAO e ruim', () => {
+    expect(lerQualidade('unknown').grau).toBe('neutro');
+    expect(lerQualidade('unknown').grau).not.toBe('ruim');
+    expect(lerQualidade('unknown').rotulo).toBe('');
+  });
+
+  /*
+    A cor sozinha nao chega ao leitor de tela, e o ponto colorido e pequeno.
+    Todo estado precisa de uma frase — inclusive os que nao escrevem nada na
+    tela, porque e ela que vai para o `title` e para o rotulo acessivel.
+  */
+  it('todo estado tem frase, mesmo os que nao escrevem na tela', () => {
+    for (const q of ['excellent', 'good', 'poor', 'unknown'] as const) {
+      expect(lerQualidade(q).descricao.length).toBeGreaterThan(10);
+    }
   });
 });
