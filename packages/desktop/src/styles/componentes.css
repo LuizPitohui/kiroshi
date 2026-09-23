@@ -2361,6 +2361,27 @@ button.mention:disabled {
   align-items: baseline;
   padding: 3px 10px 0 0;
   user-select: none;
+  /*
+    LARGURA AUTOMATICA, e este `auto` e um conserto, nao um enfeite.
+
+    A regra antiga em `global.css` fixava `width: 36px` — a largura do avatar
+    que morava aqui. Com a calha virando coluna de horario, a grade passou a
+    reservar 52px para a trilha, mas o ITEM continuava com 36px de largura
+    propria dentro dela.
+
+    O estrago: com o texto encostado a direita dentro de 36px menos 10px de
+    recuo, "05:12" (33px) nao cabia e vazava 7px para a ESQUERDA — para fora
+    da lista, que tem `overflow-x: hidden`. Na tela o horario aparecia
+    cortado pela metade: ":12" em vez de "05:12".
+
+    Medido ao consertar: calha de 36px com o carimbo comecando 7px antes da
+    borda da lista.
+
+    Nao basta apagar a regra antiga: `width` de item de grade sobrepoe a
+    trilha, e outro valor solto em qualquer lugar traria o defeito de volta.
+    Aqui a intencao fica escrita — quem manda na largura e a grade.
+  */
+  width: auto;
 }
 
 .msg-carimbo {
@@ -2962,4 +2983,27 @@ button.mention:disabled {
   font-size: 9px;
   font-weight: 500;
   letter-spacing: var(--tk-mono-media);
+}
+
+/*
+  A TELA VAZIA DO COMPONENTE, NA MESMA VOZ DA OUTRA.
+
+  Ha duas implementacoes de tela vazia nesta base: a classe `.empty`, escrita a
+  mao em ChatArea, GuildSettingsModal e PinsModal, e o componente `EmptyState`,
+  que usa `.vazio`. Quando a fonte de placa entrou, ela foi so para `.empty` —
+  e o resultado apareceu na tela do canal de voz, que usa a OUTRA: "Ninguem em
+  Geral ainda" saiu em Inter enquanto "Nenhuma mensagem ainda", na conversa ao
+  lado, saia em Rajdhani.
+
+  Duas pecas que fazem a mesma coisa vao divergir; ja divergiram. O certo seria
+  uma so, e isso e uma faxina maior do que cabe aqui. O que nao pode e a
+  divergencia CHEGAR NA TELA, entao as duas passam a ler igual.
+*/
+.vazio-titulo {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: var(--tk-display);
+  text-transform: uppercase;
+  line-height: 1.05;
 }

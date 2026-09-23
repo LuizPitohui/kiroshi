@@ -1,6 +1,7 @@
 import {
   VideoPreset,
   ConnectionQuality,
+  DisconnectReason,
   LocalAudioTrack,
   LocalVideoTrack,
   Room,
@@ -21,6 +22,7 @@ import { bitrateDeTela, restricoesDeTela, camadasDeTela } from './qualidade.js';
 import { explicarFalhaDeMidia } from './falhas.js';
 import { SaidaDeAudio } from './saida.js';
 import { LimpezaDeRuido, limpezaDisponivel } from './ruido.js';
+import { jaEstouIndoPara } from './entrada.js';
 
 /**
  * Controle de voz, video e compartilhamento de tela.
@@ -316,7 +318,10 @@ class VoiceController {
    * Quem sabe se ha conexao de midia e quem a mantem. Entao a decisao e daqui.
    */
   async joinChannel(channelId: string, guildId: string | null): Promise<void> {
-    if (this.isConnectedTo(channelId)) return;
+    // Mesma regra do `connect`: clicar de novo no canal em que ja se esta
+    // entrando nao acrescenta nada, e pedir um segundo token ao servidor era
+    // metade da corrida que derrubava a chamada.
+    if (jaEstouIndoPara(this.state, channelId)) return;
 
     this.emit({ connecting: true, error: null, channelId, guildId });
 
@@ -337,10 +342,26 @@ class VoiceController {
   }
 
   async connect(payload: VoiceServerUpdateEvent): Promise<void> {
-    // O servidor tambem manda token pelo gateway, e depois de entrar por conta
-    // propria esse aviso chega como eco. Reconectar ali derrubaria uma chamada
-    // que ja esta funcionando, entao ignoramos quando ja estamos na sala.
-    if (this.isConnectedTo(payload.channelId)) return;
+    /*
+      O servidor tambem manda token pelo gateway, e depois de entrar por conta
+      propria esse aviso chega como eco. Reconectar ali derruba uma chamada que
+      ja esta funcionando.
+
+      A guarda antiga perguntava so "ja estou CONECTADO a este canal?", e isso
+      nao bastava: entre o clique e a conexao ha de um a seis segundos em que o
+      estado e `connecting: true, connected: false`, e e exatamente nessa
+      janela que o eco chega. Ele passava, o `connect` rodava de novo, saia da
+      sala meio aberta e entrava outra vez — duas conexoes com a mesma
+      identidade, e o LiveKit fechando a primeira.
+
+      Medido no log de producao: tres entradas seguidas no mesmo canal,
+      fechando com DUPLICATE_IDENTITY depois de 1,3s e 5,9s.
+
+      A regra mora em `entrada.ts`, com teste, porque ela tem dois lados e
+      errar qualquer um custa caro: deixar passar derruba a chamada, e barrar
+      demais trava quem trocou de canal antes de conectar.
+    */
+    if (jaEstouIndoPara(this.state, payload.channelId)) return;
 
     // Trocar de canal: sai da sala anterior antes de entrar na nova.
     if (this.room) await this.leave();
@@ -1370,9 +1391,6 @@ class VoiceController {
     await audio.play().catch(() => undefined);
   }
 
-  isConnectedTo(channelId: string): boolean {
-    return this.state.connected && this.state.channelId === channelId;
-  }
 
   /**
    * Sai porque um moderador desconectou, nao porque a pessoa clicou.
@@ -1451,6 +1469,40 @@ class VoiceController {
    * que faz desistir do aplicativo.
    */
   private async explicarQueda(motivo?: unknown): Promise<void> {
+    /*
+      QUEDA QUE O PROPRIO CLIENTE CAUSOU NAO E CULPA DA REDE.
+
+      Tudo abaixo desta guarda investiga o CAMINHO — IPv6, rede virtual, UDP
+      bloqueado — e manda a pessoa conferir o roteador ou o Tailscale. Isso so
+      faz sentido quando a midia de fato nao passou.
+
+      `CLIENT_INITIATED` quer dizer o contrario: fomos nos que fechamos. Foi
+      exatamente o que aconteceu no defeito da corrida de entrada — um
+      `connect` reentrante chamava `leave()` na sala meio aberta, e o evento de
+      desconexao chegava depois de a marca de saida intencional ter sido
+      limpa. Resultado na tela: "A conexao de voz caiu (1). Sua internet tem
+      IPv6, entao provavelmente foi instabilidade ou algo bloqueando UDP na sua
+      rede."
+
+      Mandar alguem procurar defeito no proprio roteador por causa de uma
+      corrida no cliente e pior do que nao explicar nada: alem de nao
+      consertar, gasta o tempo da pessoa e a ensina a desconfiar da propria
+      internet.
+
+      A corrida esta consertada em `entrada.ts`. Esta guarda fica porque a
+      classe de erro continua possivel, e o proximo caso nao pode voltar a sair
+      disfarcado de problema de rede — a mensagem honesta e a que me diz onde
+      procurar.
+    */
+    if (motivo === DisconnectReason.CLIENT_INITIATED) {
+      this.emit({
+        error:
+          'A chamada caiu por um problema do proprio aplicativo, nao da sua internet. ' +
+          'Tente entrar de novo; se repetir, avise que isso e defeito para consertar aqui.',
+      });
+      return;
+    }
+
     const { temIPv6, naVpn } = await this.caminhosDisponiveis();
 
     if (!temIPv6 && !naVpn) {

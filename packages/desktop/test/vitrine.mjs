@@ -1282,6 +1282,12 @@ const visual = JSON.parse(
       tituloAjusteMarca: s('.settings-title', '::before'),
       rotuloCampo: s('.field-label'),
       telaVazia: s('.empty h3'),
+      telaVaziaDoComponente: (() => {
+        const el = document.querySelector('.vazio-titulo');
+        if (!el) return null;
+        const c = getComputedStyle(el);
+        return { fonte: c.fontFamily.split(',')[0].replace(/['\"]/g, ''), caixa: c.textTransform };
+      })(),
       botaoPrimario: s('.btn-primary'),
       botaoComum: s('.btn:not(.btn-primary)'),
       categoria: s('.category:not(.category-acao) span'),
@@ -1335,6 +1341,29 @@ check(
   Titulo grande vai com espacamento NEGATIVO — e o sinal trocado e justamente
   o tipo de coisa que se perde numa refatoracao sem ninguem perceber.
 */
+/*
+  E A OUTRA TELA VAZIA TAMBEM.
+
+  Ha duas implementacoes nesta base: a classe .empty, escrita a mao em tres
+  telas, e o componente EmptyState, que usa .vazio. Quando a fonte de placa
+  entrou, foi so para a primeira — e a divergencia apareceu na tela do canal
+  de voz: "Ninguem em Geral ainda" em Inter, do lado de "Nenhuma mensagem
+  ainda" em Rajdhani.
+
+  O check anterior media so uma das duas e passava, porque aquela metade
+  estava certa. Duas pecas que fazem a mesma coisa divergem; medir so uma
+  garante que a divergencia passa batida.
+*/
+check(
+  'o componente de tela vazia usa a mesma voz da outra',
+  visual.telaVaziaDoComponente !== null &&
+    visual.telaVaziaDoComponente.fonte === 'Rajdhani' &&
+    visual.telaVaziaDoComponente.caixa === 'uppercase',
+  visual.telaVaziaDoComponente
+    ? visual.telaVaziaDoComponente.fonte
+    : 'nao encontrado na vitrine',
+);
+
 check(
   'e o titulo grande fecha as letras, em vez de abrir',
   visual.telaVazia.espaco < 0,
@@ -1508,7 +1537,16 @@ console.log(String.fromCharCode(10) + '--- ESTRUTURA: A CONVERSA E UM LOG ---');
 const log = JSON.parse(
   await avaliar(`(() => {
     const palco = document.createElement('div');
+    /*
+      O palco e um '.messages' DE VERDADE, nao um div solto.
+
+      A primeira versao montava as mensagens num div qualquer, e por isso nao
+      viu o defeito que chegou aos usuarios: '.messages' tem
+      'overflow-x: hidden', e era ele que cortava o horario que vazava da
+      calha. Fora do container o vazamento existia e nao aparecia.
+    */
     palco.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px';
+    palco.className = 'messages';
     palco.innerHTML =
       '<div class="msg first"><div class="msg-gutter"><time class="msg-carimbo">05:12</time></div><div class="msg-body"><div class="msg-head"><span class="msg-author">vartaque</span></div><div>ola</div></div></div>' +
       '<div class="msg grouped"><div class="msg-gutter"><time class="msg-carimbo">05:13</time></div><div class="msg-body"><div>de novo</div></div></div>' +
@@ -1545,6 +1583,11 @@ const log = JSON.parse(
       corpoMencao: c('.msg.mentioned .msg-body'),
       linhaFixada: c('.msg.pinned'),
       corpoFixado: c('.msg.pinned .msg-body'),
+      calhaLargura: palco.querySelector('.msg-gutter').getBoundingClientRect().width,
+      trilhaDeclarada: parseFloat(getComputedStyle(palco.querySelector('.msg')).gridTemplateColumns),
+      carimboVaza: [...palco.querySelectorAll('.msg-carimbo')].some(
+        (c) => c.getBoundingClientRect().left < palco.getBoundingClientRect().left - 0.5,
+      ),
       // O avatar de 36px na calha era a assinatura do desenho antigo.
       temAvatarNaCalha: !!palco.querySelector('.msg-gutter .avatar, .msg-gutter img'),
     };
@@ -1573,6 +1616,34 @@ check(
   provavel de a estrutura regredir: parece que "falta alguma coisa" ali.
 */
 check('a calha nao tem avatar dentro', !log.temAvatarNaCalha);
+
+/*
+  E A CALHA PRECISA PREENCHER A TRILHA QUE A GRADE RESERVOU.
+
+  Este check nasceu de um defeito que chegou aos usuarios. A grade passou a
+  reservar 52px para o horario, mas sobrou em `global.css` um
+  `.msg-gutter { width: 36px }` — a largura do avatar que morava ali. Largura
+  propria de item de grade SOBREPOE a trilha, entao o item ficou com 36px
+  dentro de um espaco de 52.
+
+  Com o texto encostado a direita em 36px menos 10 de recuo, "05:12" nao cabia
+  e vazava 7px para a esquerda, para fora da lista, que corta. Na tela: ":12"
+  em vez de "05:12", em toda mensagem.
+
+  Nenhuma ferramenta pega isso. Nao ha erro, nao ha aviso, o typecheck passa, e
+  a verificacao antiga passava tambem — ela conferia que a TRILHA era fixa, e
+  era mesmo. Faltava conferir que a calha OCUPA a trilha, e que nada vaza da
+  lista.
+*/
+check(
+  'e ela preenche a trilha inteira, sem largura propria sobrando',
+  Math.abs(log.calhaLargura - log.trilhaDeclarada) < 1,
+  Math.round(log.calhaLargura) + 'px de ' + Math.round(log.trilhaDeclarada) + 'px',
+);
+check(
+  'e nenhum horario vaza para fora da lista, que corta',
+  log.carimboVaza === false,
+);
 
 check(
   'o horario esta em monoespacada, para alinhar em coluna',
