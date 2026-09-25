@@ -55,31 +55,30 @@ no start do container (`prisma migrate deploy`).
 multipart ate 100 MB, CORS `CORS_ORIGINS ?? true`, erro central no formato
 `{error:{code,message,details?}}` (`S/errors.ts:78-86`), limite global por IP.
 
-## Rotas REST (110 + WebSocket)
+## Rotas REST (114 + WebSocket)
 
 Prefixo `/api/v1`. "auth" = so JWT, sem banco (`S/auth/middleware.ts:26-32`);
 "fresh" = JWT + sessao existente no banco + conta ativa (`:39-58`).
 
 | Modulo | Rotas |
 |---|---|
-| Raiz | `GET /health`, `GET /api/info` (nome, versao do gateway, voz, cadastro aberto, limites), paginas `/`, `/privacidade`, `/termos`, `POST /uploads`, `GET /attachments/*` (a URL e a capacidade), `GET /baixar`, `/baixar/versao`, `/baixar/:arquivo`, WS `/gateway` |
+| Raiz | `GET /health`, `GET /api/info` (nome, versao do gateway, voz, cadastro aberto, limites), paginas `/`, `/privacidade`, `/termos`, `/convite/:codigo` (o link do convite, fatia 6), `POST /uploads`, `GET /attachments/*` (a URL e a capacidade), `GET /baixar`, `/baixar/versao`, `/baixar/:arquivo`, WS `/gateway` |
 | Auth `S/routes/auth.ts` | register, login, login/mfa, refresh, logout, logout/all, sessions (listar/revogar), password, totp setup/enable/disable/backup-codes |
 | Google `S/routes/auth-google.ts` | `GET /auth/google`, `/disponivel`, `POST /start`, `GET /callback`, `POST /concluir`, `/registrar`, `/senha`, `DELETE /auth/google` |
 | Usuarios `S/routes/users.ts` | `@me` (ler/editar/username/presenca/apagar), `/:id`, `by-username`, ajustes de notificacao por guild e por canal |
 | Social `S/routes/relationships.ts` | amizades (pedir/aceitar/remover/bloquear), DMs e grupos (criar, renomear, adicionar/remover, fechar) |
-| Servidores `S/routes/guilds.ts` | CRUD, sair, transferir posse, membros (listar/editar/expulsar), bans, cargos (CRUD + reordenar), convites, auditoria |
-| Canais `S/routes/channels.ts` | listar visiveis, CRUD, reordenar, sobrescritas de permissao |
+| Servidores `S/routes/guilds.ts` | CRUD, sair, transferir posse, membros (listar/editar/expulsar), **dar e tirar um cargo** (`PUT`/`DELETE /guilds/:g/members/:m/roles/:r`), bans, cargos (CRUD + reordenar), convites, auditoria (filtro `actorId` e `action`) |
+| Canais `S/routes/channels.ts` | listar visiveis, CRUD, reordenar, sobrescritas de permissao, **sincronizar com a categoria** (`DELETE /channels/:c/permissions`) |
 | Mensagens `S/routes/messages.ts` | historico, enviar, editar, apagar, bulk-delete, reacoes, fixadas, ack, busca por guild e por canal |
 | Convites `S/routes/invites.ts` | preview publico, aceitar, revogar |
 | Voz `S/routes/voice.ts` | join/leave/refresh, estados do canal, tocar som do soundboard |
-| Expressoes `S/routes/expressions.ts` | emojis, figurinhas, sons |
+| Expressoes `S/routes/expressions.ts` | emojis, figurinhas, sons (e `PATCH` do som: nome, emoji, volume) |
 
-**Ja existe no servidor e a interface nao usa:** transferir posse, bans
-(listar/desbanir), reordenar cargos, listar/revogar convites, auditoria, CRUD
-e reordenacao de canais, sobrescritas por canal, apelidos, atribuir cargo,
-ajustes de notificacao por guild/canal, bloquear, grupos de DM, revogar sessoes.
-(Mover, silenciar, ensurdecer e tocar soundboard a interface nova usa desde a
-fatia 3.)
+**Ja existe no servidor e a interface nao usa:** grupos de DM. (Mover,
+silenciar, ensurdecer e tocar soundboard a interface nova usa desde a fatia 3;
+notificacoes por guild/canal, bloquear e revogar sessoes desde as fatias 4 e 5;
+posse, bans, cargos, convites, auditoria, canais, sobrescritas e apelidos desde
+a fatia 6.) A 1.x continua sem nada disso.
 
 ## Gateway (`S/gateway/`)
 
@@ -191,23 +190,41 @@ mensagem de DM**. O "nao lido" e calculado no cliente.
 
 - Criar guild cria o cargo `everyone` (id = id da guild) e, por padrao, duas
   categorias + `#geral` + voz "Geral".
-- Canais: PATCH permite categoria dentro de categoria (POST nao); reordenar
-  aceita `parentId` de outra guild; `nsfw`, `bitrate` e `GUILD_ANNOUNCEMENT` nao
-  tem efeito; canal de voz aceita mensagem.
+- Canais: `nsfw`, `bitrate` e `GUILD_ANNOUNCEMENT` nao tem efeito; canal de
+  voz aceita mensagem (e a "conversa da chamada" do Beta). Desde a fatia 6 o
+  PATCH recusa categoria dentro de categoria (o POST ja recusava) e o reordenar
+  so aceita como pai uma categoria do proprio servidor.
 - Expulsar/banir exigem a permissao e hierarquia; banir aceita quem nem e membro;
   banir nao apaga mensagens.
-- Transferir posse: erros de negocio viram 500 (`services/guilds.ts:155, 161`).
+- Transferir posse: desde a fatia 6 os erros de negocio saem com codigo (400/403/404), e quem entrega a posse deixa de ver na hora o canal privado que so via por ser dono.
 - Apagar guild: cascata no banco, arquivos ficam no disco.
-- Auditoria grava 16 acoes; nao grava reordenacoes, figurinhas, convites,
-  apagar mensagem alheia, mute/deafen/mover.
+- Auditoria: desde a fatia 6 grava tambem reordenar cargos e canais, dar e
+  tirar cargo (`MEMBER_ROLE_UPDATE`), criar e revogar convite, silenciar,
+  ensurdecer, mover e desconectar, tirar e sincronizar sobrescritas, renomear
+  emoji, mudar e apagar som. Nao grava figurinhas nem apagar mensagem alheia. A
+  rota filtra por quem fez e pela acao, e traz a pessoa alvo mesmo que ela ja
+  tenha saido.
 
 ## Convites
 
 Codigo de 8 caracteres num alfabeto de 55 sem ambiguos
 (`services/invites.ts:12-19`). `maxAgeSecs` 0–30 dias (padrao 7 d, 0 = nunca),
-`maxUses` 0–100 (0 = ilimitado). Criar exige CREATE_INVITE; listar, MANAGE_GUILD.
-Aceitar checa ban, cria membro, `uses+1` (nao atomico). **Nao ha deep link**: sem
-pagina `/convite/:codigo`, sem protocolo `kiroshi://`.
+`maxUses` 0–100 (0 = ilimitado). Criar exige CREATE_INVITE; listar, MANAGE_GUILD
+(a lista traz quem criou).
+
+Aceitar (fatia 6): quem ja e membro nao gasta uso; o uso e **reservado numa conta
+so no banco** (`updateMany` que so soma se ainda houver uso e validade) antes de
+criar o membro, e volta se a entrada falhar ou for banida — antes era ler, entrar
+e somar, e dois aceitando um convite de 1 uso entravam os dois. A resposta traz o
+canal de onde o convite saiu, se a pessoa o ve.
+
+**Link** (fatia 6): `GET /convite/:codigo` (em `routes/paginas.ts`) e a pagina que
+se manda pelo WhatsApp — servidor, quem convidou, online, o botao
+`kiroshi://convite/<codigo>`, o codigo para colar num app antigo e o instalador;
+com etiquetas `og:` para o link aparecer com nome e icone. Convite vencido,
+esgotado ou revogado da a pagina "este convite nao vale mais" (404). Tudo o que
+vem do banco entra escapado no HTML. O protocolo e registrado pelo instalador do
+Beta ([07](07-desktop-e-entrega.md)).
 
 ## Cargos e permissoes
 
@@ -224,7 +241,7 @@ estritamente abaixo; nao se concede bit que nao se tem.
 |---|---|---|
 | 0 | VIEW_CHANNEL | aplicado no REST (ver nota de seguranca) |
 | 1 | MANAGE_CHANNELS | funciona no servidor; sem UI de canais/sobrescritas |
-| 2 | MANAGE_ROLES | **criar cargo so funciona para o dono**; atribuir cargo so pela API |
+| 2 | MANAGE_ROLES | funciona desde a fatia 6: criar (nasce acima do everyone), editar, reordenar, dar e tirar um cargo de cada vez |
 | 3 | MANAGE_GUILD | funciona |
 | 4 | ADMINISTRATOR | funciona (mas nao cria cargo, e segue a hierarquia) |
 | 5 | KICK_MEMBERS | funciona (nao tira da voz) |
@@ -258,18 +275,33 @@ estritamente abaixo; nao se concede bit que nao se tem.
 EXTERNAL_EMOJIS, CREATE_INVITE, CHANGE_NICKNAME, CONNECT, SPEAK, STREAM, USE_VAD,
 USE_SOUNDBOARD (`SH/permissions.ts:69-83`).
 
-Defeitos de cargos:
-- **Criar cargo** poe o novo em `maximo+1` e depois exige posicao menor que a do
-  autor (`guilds.ts:406-413`) — impossivel para quem nao e dono. O e2e nao pega.
-- **Atribuir cargo:** so `PATCH /guilds/:g/members/:m {roleIds}` com a lista
-  COMPLETA (apaga e recria). Sem rota incremental. O cliente nunca chama.
-- **Herança de sobrescritas da categoria invertida:** a da categoria entra antes
-  da do canal e `find` pega a primeira — quando os dois tem sobrescrita para o
-  mesmo alvo, vale a da categoria (o contrario do comentario).
-- Reordenar cargos nao protege `everyone` e aceita posicoes repetidas.
-- Editar cargo exige que o conjunto final caiba no do autor (nao da nem para
-  mudar a cor de um cargo com bit que o autor nao tem).
-- `mentionable` e decorativo; `hoist` so e gravado (quem usa e o cliente).
+Consertos de cargos (fatia 6; o e2e cobre cada um):
+- **Criar cargo** poe o novo na posicao 1, logo acima do everyone, e sobe os
+  outros um degrau — como o Discord. Antes nascia no topo e a hierarquia exigia
+  que ficasse abaixo do autor: so o dono conseguia.
+- **Dar e tirar um cargo:** `PUT`/`DELETE /guilds/:g/members/:m/roles/:r`. Dar
+  exige o cargo abaixo do seu e sem permissao que voce nao tem; tirar, so a
+  hierarquia. O `PATCH` com a lista completa continua (a 1.x).
+- **Quem ganha ou perde canal na hora** (`services/acesso.ts`): dar ou tirar
+  cargo, mudar as permissoes de um cargo, apaga-lo ou passar a posse compara quem
+  ve cada canal antes e depois; quem passou a ver recebe o canal, quem deixou de
+  ver recebe o `CHANNEL_DELETE` e sai da voz daquele canal. Antes o canal novo so
+  aparecia depois de reconectar.
+- **Heranca da categoria** (`mesclarSobrescritas`, em `SH/permissions.ts`): o
+  canal herda as sobrescritas da categoria e o que ele diz vence, bit a bit, para
+  cada alvo. Antes as duas listas eram emendadas e, para o everyone e para
+  pessoas, valia a da categoria (o `find` pegava a primeira). Servidor
+  (REST e gateway) e cliente usam a mesma funcao. Producao tinha 0 sobrescritas:
+  nada mudou para ninguem.
+- **Reordenar** (`lib/cargos.ts`): recusa o everyone e ids repetidos, renumera
+  1..n (fim das posicoes repetidas) e so conta como movido quem mudou de lugar
+  na ordem — o cliente manda a lista inteira sem esbarrar nos cargos de cima.
+- **Editar** confere so os bits que mudam (antes nao dava nem para trocar a cor
+  de um cargo com bit que o autor nao tem). **Apagar** confere so a hierarquia e
+  limpa as sobrescritas que citavam o cargo.
+
+Ainda: `mentionable` e decorativo (a tela nao mostra); `hoist` e do cliente (a
+lista de membros do Beta agrupa por ele).
 
 ## Emojis, figurinhas, soundboard
 
@@ -279,11 +311,15 @@ Defeitos de cargos:
   webp animado. No texto (`<:nome:id>`) o servidor nao valida.
 - **Figurinha: nao funciona** — `stickerId` gravado sem validar (id invalido da
   500), a mensagem serializada nao tem o campo, o cliente nunca envia.
-- **Soundboard:** MP3/OGG/WAV/WebM ate 2 MB, 100 por guild; duracao nunca
-  calculada e o limite de 5 s (`SH/constants.ts:28`) nao e aplicado;
-  `audio/mpeg` vira `.mpeg` servido como `octet-stream`. Tocar: exige estar no
-  canal; emite VOICE_CHANNEL_EFFECT e **cada cliente toca o arquivo** (nao passa
-  pelo SFU). Nao funciona em DM.
+- **Soundboard:** MP3/OGG/WAV/WebM ate 2 MB, 100 por guild. Desde a fatia 6 a
+  duracao chega de quem envia (o Beta decodifica antes de subir; o schema recusa
+  acima de 5,25 s) e o teto de 5 s (`SH/constants.ts:28`) vale **na hora de
+  tocar**, em todo cliente novo (`voice/controller.ts`, `playSound`) — o servidor
+  nao decodifica audio, e um som longo enviado por outro caminho para no mesmo
+  limite. `audio/mpeg` passou a virar `.mp3` (os `.mpeg` antigos agora saem como
+  audio). `PATCH` muda nome, emoji e volume. Tocar: exige estar no canal; emite
+  VOICE_CHANNEL_EFFECT e **cada cliente toca o arquivo** (nao passa pelo SFU). Nao
+  funciona em DM.
 
 ## Mensagens
 
@@ -409,10 +445,15 @@ soundboard, busca, voz.
 - Unidade (vitest): 123 no servidor + shared — permissoes (27), markdown (22),
   snowflake (18), tokens (10), senha (9), Google loopback (13), provas do Google
   (11), TURN (13). **Sem teste:** rotas, servicos com banco, gateway, SSRF.
-- `test/e2e.mjs` (~60 checagens, API local com seed): login, READY, mensagem em
-  tempo real, nonce, historico, edicao, reacao, permissoes basicas, convite,
-  token de voz, validacao, rate limit. **Nao cobre 2FA** (o README diz que
-  cobre), DM, amizade, ban, sobrescritas, upload, busca, pins, RESUME.
+- `test/e2e.mjs` (124 checagens em 2026-09-25, API local com seed): login,
+  READY, mensagem em tempo real, nonce, historico, edicao, reacao, permissoes,
+  convite, token de voz, chamada em DM, notificacoes, canal privado pelo gateway
+  e, desde a fatia 6, cargos (criar sem ser dono, dar e tirar um, canal que o
+  cargo abre), heranca da categoria, sincronizar, convite de 1 uso concorrido,
+  a pagina do convite, filtros da auditoria e a posse. **Nao cobre 2FA** (o
+  README diz que cobre), upload, busca, pins, RESUME. Fixo na 4000; para a API
+  de teste na 4001, rodar uma copia com a porta trocada.
+- `lib/cargos.test.ts` (11): a regra de reordenar cargos, sem banco.
 - `test/producao.mjs` (~21, publico pelo tunel) e `test/fumaca-producao.mjs`
   (~29, contas descartaveis em producao; as contas ficam desativadas e seguram
   os usernames para sempre).
@@ -420,9 +461,9 @@ soundboard, busca, voz.
 ## Defeitos funcionais (sem os de seguranca)
 
 1. ~~RESUME perde eventos~~ — corrigido em `6f493df`.
-2. Herança de sobrescritas da categoria invertida.
-3. So o dono cria cargos.
-4. Atribuir cargo: sem UI e sem rota incremental.
+2. ~~Herança de sobrescritas da categoria invertida~~ — corrigido na fatia 6.
+3. ~~So o dono cria cargos~~ — corrigido na fatia 6.
+4. ~~Atribuir cargo: sem UI e sem rota incremental~~ — corrigido na fatia 6.
 5. Figurinhas nunca chegam.
 6. Erro no opcode de voz fecha o socket.
 7. ~~Mover fantasma~~ — corrigido na fatia 3; join REST ignora limite e nao cria estado.
@@ -431,16 +472,16 @@ soundboard, busca, voz.
 10. DM: MESSAGE_CREATE chega duplicado (`messages.ts:266-272`); ~~sem voz no
     READY~~ e ~~sem fixar~~ corrigidos (fatias 4 e 2).
 11. Ajustes de notificacao sem efeito.
-12. Transferir posse da 500.
+12. ~~Transferir posse da 500~~ — corrigido na fatia 6.
 13. Exclusao de conta incompleta; Google preso a conta morta; `/privacidade` promete o que nao faz.
 14. 2FA sem recuperacao completa.
 15. Username com `-` e senha de 129–200 caracteres pelo Google.
-16. Categoria dentro de categoria; `parentId` de outra guild; reordenar `everyone`.
+16. ~~Categoria dentro de categoria; `parentId` de outra guild; reordenar `everyone`~~ — corrigido na fatia 6.
 17. Presenca: invisivel, varios aparelhos, `activity`.
 18. Arquivos orfaos no disco; sessoes vencidas nunca apagadas.
 19. Ids comparados como texto (quebra ~2031).
-20. Soundboard: duracao e `.mpeg`.
-21. Convites: contagem nao atomica, `channelId` sem uso, sem deep link.
+20. ~~Soundboard: duracao e `.mpeg`~~ — corrigido na fatia 6 (a duracao medida pelo app, o teto aplicado ao tocar).
+21. ~~Convites: contagem nao atomica, `channelId` sem uso, sem deep link~~ — corrigido na fatia 6.
 
 ## Documentacao que diverge do codigo
 

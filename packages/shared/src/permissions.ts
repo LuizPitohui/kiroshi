@@ -212,6 +212,44 @@ export function computeChannelPermissions(
 }
 
 /**
+ * As sobrescritas que valem num canal dentro de uma categoria.
+ *
+ * O canal herda as da categoria, e o que ele diz por conta propria vence —
+ * bit a bit, para cada cargo ou membro. Um bit que o canal nao menciona (o
+ * "herdar" da interface) fica como a categoria deixou; um bit que o canal
+ * permite ou nega substitui o da categoria.
+ *
+ * Antes as duas listas eram so emendadas, a da categoria primeiro. Como
+ * `computeChannelPermissions` pega a PRIMEIRA sobrescrita do everyone e do
+ * membro, a da categoria vencia a do canal — o contrario do que a interface
+ * promete. Para cargos a conta somava as duas, e um deny da categoria nao se
+ * desfazia com um allow do canal para o mesmo cargo.
+ */
+export function mesclarSobrescritas(
+  daCategoria: readonly OverwriteLike[],
+  doCanal: readonly OverwriteLike[],
+): OverwriteLike[] {
+  if (daCategoria.length === 0) return [...doCanal];
+  const porAlvo = new Map<string, OverwriteLike>();
+  for (const o of daCategoria) porAlvo.set(o.targetId, { ...o });
+  for (const o of doCanal) {
+    const herdada = porAlvo.get(o.targetId);
+    if (!herdada) {
+      porAlvo.set(o.targetId, { ...o });
+      continue;
+    }
+    const ditos = o.allow | o.deny;
+    porAlvo.set(o.targetId, {
+      targetId: o.targetId,
+      targetType: o.targetType,
+      allow: (herdada.allow & ~ditos) | o.allow,
+      deny: (herdada.deny & ~ditos) | o.deny,
+    });
+  }
+  return [...porAlvo.values()];
+}
+
+/**
  * Sem VIEW_CHANNEL o membro nao ve o canal, entao nenhuma outra permissao
  * daquele canal deve valer. Normaliza para evitar vazamento por engano.
  */

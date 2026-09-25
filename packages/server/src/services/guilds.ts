@@ -5,6 +5,7 @@ import {
   type GuildWithState,
 } from '@kiroshi/shared';
 import { prisma } from '../db.js';
+import { badRequest, forbidden, notFound } from '../errors.js';
 import { logger } from '../logger.js';
 import { buildGuildState } from './ready.js';
 import { tirarDaVoz } from './voice.js';
@@ -154,19 +155,22 @@ export async function transferOwnership(
   currentOwnerId: string,
   newOwnerId: string,
 ): Promise<void> {
+  // Erros de negocio com codigo: antes eram `Error` puro e chegavam como 500.
   await prisma.$transaction(async (tx) => {
-    const guild = await tx.guild.findUniqueOrThrow({
+    const guild = await tx.guild.findUnique({
       where: { id: guildId },
       select: { ownerId: true },
     });
+    if (!guild) throw notFound('Servidor');
     if (guild.ownerId !== currentOwnerId) {
-      throw new Error('apenas o dono pode transferir a posse');
+      throw forbidden('So o dono pode passar a posse do servidor.');
     }
+    if (newOwnerId === currentOwnerId) throw badRequest('Voce ja e o dono deste servidor.');
     const member = await tx.guildMember.findUnique({
       where: { guildId_userId: { guildId, userId: newOwnerId } },
       select: { userId: true },
     });
-    if (!member) throw new Error('o novo dono precisa ser membro do servidor');
+    if (!member) throw badRequest('O novo dono precisa ser membro do servidor.');
 
     await tx.guild.update({ where: { id: guildId }, data: { ownerId: newOwnerId } });
   });

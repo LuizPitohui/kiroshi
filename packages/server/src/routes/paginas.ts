@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { INVITE_CODE_PATTERN, type InvitePreview } from '@kiroshi/shared';
 import { config } from '../config.js';
+import { previewInvite } from '../services/invites.js';
 
 /**
  * As tres paginas publicas do Kiroshi.
@@ -407,9 +409,128 @@ const TERMOS = moldura(
 `,
 );
 
+/** Texto de fora (nome do servidor, descricao) dentro do HTML. */
+function escapar(texto: string): string {
+  return texto
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+const ESTILO_DO_CONVITE = `
+  .convite { display: flex; gap: 18px; align-items: center; margin: 8px 0 24px; }
+  .convite img, .convite .inicial {
+    width: 72px; height: 72px; border-radius: 16px; flex-shrink: 0;
+    background: var(--superficie); border: 1px solid var(--borda); object-fit: cover;
+  }
+  .convite .inicial { display: grid; place-items: center; font-size: 28px; font-weight: 700; }
+  .convite h1 { margin: 0; }
+  .contagem { color: var(--apagado); font-size: 14px; margin: 4px 0 0; }
+  .codigo {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 18px;
+    letter-spacing: 0.08em; color: var(--texto); background: var(--canvas);
+    border: 1px solid var(--borda); border-radius: 6px; padding: 2px 10px;
+  }
+  .secundaria { margin-left: 12px; }
+`;
+
+/**
+ * A pagina do link de convite (`/convite/<codigo>`).
+ *
+ * O link e o que se manda pelo WhatsApp, e ele precisa servir para tres
+ * pessoas: quem tem o Kiroshi com o protocolo `kiroshi://` (o botao abre o
+ * app direto no convite), quem tem um Kiroshi mais antigo (o codigo esta na
+ * tela para colar em "Entrar em um servidor" — o app antigo ja aceita o link
+ * inteiro colado), e quem ainda nao tem nada (o instalador).
+ *
+ * As etiquetas `og:` fazem o link aparecer com nome e icone do servidor no
+ * WhatsApp e no Discord, em vez de uma URL crua.
+ */
+function paginaDoConvite(preview: InvitePreview): string {
+  const nome = escapar(preview.guild.name);
+  const codigo = escapar(preview.code);
+  const quem = escapar(preview.inviter.displayName || preview.inviter.username);
+  const icone = preview.guild.iconUrl
+    ? `<img src="${escapar(preview.guild.iconUrl)}" alt="">`
+    : `<span class="inicial" aria-hidden="true">${escapar(preview.guild.name.slice(0, 1).toUpperCase())}</span>`;
+  const descricao = preview.guild.description ? `<p>${escapar(preview.guild.description)}</p>` : '';
+  const validade = preview.expiresAt
+    ? `<p class="contagem">Vale até ${new Date(preview.expiresAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}.</p>`
+    : '';
+
+  const html = moldura(
+    `Convite para ${nome} — Kiroshi`,
+    `
+  <p style="margin:0 0 8px">${quem} convidou você para entrar em</p>
+  <div class="convite">
+    ${icone}
+    <div>
+      <h1>${nome}</h1>
+      <p class="contagem">${preview.onlineCount} online · ${preview.memberCount} ${preview.memberCount === 1 ? 'membro' : 'membros'}</p>
+    </div>
+  </div>
+  ${descricao}
+  <p>
+    <a class="chamada" href="kiroshi://convite/${codigo}">Abrir no Kiroshi</a>
+    <a class="secundaria" href="/baixar">Ainda não tenho o Kiroshi</a>
+  </p>
+  <div class="cartao">
+    <p style="margin:0">
+      Se o aplicativo não abrir, entre nele e use <strong>Entrar em um servidor</strong>
+      com este código: <span class="codigo">${codigo}</span>
+    </p>
+  </div>
+  ${validade}
+`,
+  );
+
+  const og = [
+    `<meta property="og:title" content="Convite para ${nome}">`,
+    `<meta property="og:description" content="${quem} convidou você para o servidor ${nome} no Kiroshi.">`,
+    `<meta property="og:site_name" content="Kiroshi">`,
+    preview.guild.iconUrl ? `<meta property="og:image" content="${escapar(preview.guild.iconUrl)}">` : '',
+    `<meta name="robots" content="noindex">`,
+    `<style>${ESTILO_DO_CONVITE}</style>`,
+  ].join('\n');
+  return html.replace('</head>', `${og}\n</head>`);
+}
+
+const CONVITE_INVALIDO = moldura(
+  'Convite inválido — Kiroshi',
+  `
+  <h1>Este convite não vale mais</h1>
+  <p>
+    Ele pode ter expirado, atingido o limite de usos ou sido revogado por quem
+    administra o servidor. Peça um convite novo a quem te mandou este.
+  </p>
+  <p><a class="chamada" href="/baixar">Baixar o Kiroshi</a></p>
+`,
+).replace('</head>', '<meta name="robots" content="noindex">\n</head>');
+
 export async function paginasRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async (_request, reply) => {
     return reply.type('text/html; charset=utf-8').send(INICIO);
+  });
+
+  app.get('/convite/:codigo', async (request, reply) => {
+    const { codigo } = request.params as { codigo: string };
+    const pagina = (status: number, html: string) =>
+      reply
+        .status(status)
+        .type('text/html; charset=utf-8')
+        // A contagem de online muda, e o convite pode ser revogado a qualquer hora.
+        .header('cache-control', 'no-store')
+        .send(html);
+
+    if (!INVITE_CODE_PATTERN.test(codigo)) return pagina(404, CONVITE_INVALIDO);
+    try {
+      return pagina(200, paginaDoConvite(await previewInvite(codigo, null)));
+    } catch (error) {
+      if ((error as { code?: string }).code === 'INVITE_INVALID') return pagina(404, CONVITE_INVALIDO);
+      throw error;
+    }
   });
 
   app.get('/privacidade', async (_request, reply) => {

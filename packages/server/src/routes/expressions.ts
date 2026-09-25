@@ -7,6 +7,7 @@ import {
   createSoundSchema,
   createStickerSchema,
   generateId,
+  updateSoundSchema,
 } from '@kiroshi/shared';
 import { prisma } from '../db.js';
 import { ApiError, badRequest, conflict, notFound } from '../errors.js';
@@ -89,8 +90,17 @@ export async function expressionRoutes(app: FastifyInstance): Promise<void> {
     const emoji = await prisma.emoji.findUnique({ where: { id: emojiId } });
     if (!emoji || emoji.guildId !== guildId) throw notFound('Emoji');
 
+    if (name !== emoji.name) {
+      const taken = await prisma.emoji.findUnique({
+        where: { guildId_name: { guildId, name } },
+        select: { id: true },
+      });
+      if (taken) throw conflict('Ja existe um emoji com este nome neste servidor.');
+    }
+
     const updated = await prisma.emoji.update({ where: { id: emojiId }, data: { name } });
     await broadcastEmojis(guildId);
+    await recordAudit(guildId, userId, 'EMOJI_UPDATE', emojiId, { name });
 
     return toEmoji(updated);
   });
@@ -230,7 +240,8 @@ export async function expressionRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const extension = match[1].split('/')[1] ?? 'mp3';
+    // audio/mpeg virava ".mpeg", que ninguem serve como audio.
+    const extension = EXTENSAO_DO_AUDIO[match[1].toLowerCase()] ?? 'mp3';
     const stored = await storeFile({
       buffer,
       filename: `${body.name}.${extension}`,
@@ -247,6 +258,7 @@ export async function expressionRoutes(app: FastifyInstance): Promise<void> {
         url: stored.url,
         emoji: body.emoji ?? null,
         volume: body.volume,
+        durationSecs: body.durationSecs ?? 0,
         creatorId: userId,
       },
     });
@@ -275,10 +287,53 @@ export async function expressionRoutes(app: FastifyInstance): Promise<void> {
 
     const all = await prisma.soundboardSound.findMany({ where: { guildId } });
     emitToGuild(guildId, 'GUILD_SOUNDS_UPDATE', { guildId, sounds: all.map(toSound) });
+    await recordAudit(guildId, userId, 'SOUND_DELETE', soundId, { name: sound.name });
 
     return { ok: true };
   });
+
+  /** Renomear, trocar o emoji ou o volume de um som, sem subir o arquivo de novo. */
+  app.patch('/guilds/:guildId/sounds/:soundId', async (request) => {
+    const userId = request.auth!.userId;
+    const { guildId, soundId } = request.params as { guildId: string; soundId: string };
+    const body = updateSoundSchema.parse(request.body);
+
+    await assertGuildPermissions(guildId, userId, Permission.MANAGE_SOUNDBOARD);
+
+    const sound = await prisma.soundboardSound.findUnique({ where: { id: soundId } });
+    if (!sound || sound.guildId !== guildId) throw notFound('Som');
+
+    if (body.name !== undefined && body.name !== sound.name) {
+      const taken = await prisma.soundboardSound.findUnique({
+        where: { guildId_name: { guildId, name: body.name } },
+        select: { id: true },
+      });
+      if (taken) throw conflict('Ja existe um som com este nome.');
+    }
+
+    const updated = await prisma.soundboardSound.update({
+      where: { id: soundId },
+      data: {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.emoji !== undefined ? { emoji: body.emoji } : {}),
+        ...(body.volume !== undefined ? { volume: body.volume } : {}),
+      },
+    });
+
+    const all = await prisma.soundboardSound.findMany({ where: { guildId } });
+    emitToGuild(guildId, 'GUILD_SOUNDS_UPDATE', { guildId, sounds: all.map(toSound) });
+    await recordAudit(guildId, userId, 'SOUND_UPDATE', soundId, { ...body });
+
+    return toSound(updated);
+  });
 }
+
+const EXTENSAO_DO_AUDIO: Record<string, string> = {
+  'audio/mpeg': 'mp3',
+  'audio/ogg': 'ogg',
+  'audio/wav': 'wav',
+  'audio/webm': 'webm',
+};
 
 async function broadcastEmojis(guildId: string): Promise<void> {
   const emojis = await prisma.emoji.findMany({ where: { guildId } });

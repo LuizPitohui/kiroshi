@@ -9,6 +9,7 @@ import {
   has,
   hasExact,
   highestRolePosition,
+  mesclarSobrescritas,
   normalizeChannelPermissions,
   Permission,
   serialize,
@@ -159,6 +160,57 @@ describe('computeChannelPermissions', () => {
       [{ targetId: OWNER, targetType: 'MEMBER', allow: 0n, deny: ALL_PERMISSIONS }],
     );
     expect(permissions).toBe(ALL_PERMISSIONS);
+  });
+});
+
+describe('mesclarSobrescritas', () => {
+  const V = Permission.VIEW_CHANNEL;
+  const S = Permission.SEND_MESSAGES;
+  const everyone = (allow: bigint, deny: bigint) => ({ targetId: GUILD, targetType: 'ROLE' as const, allow, deny });
+  const base = ctx({ roles: [{ id: GUILD, position: 0, permissions: V | S }] });
+  const noCanal = (categoria: ReturnType<typeof everyone>[], canal: ReturnType<typeof everyone>[]) =>
+    normalizeChannelPermissions(computeChannelPermissions(base, mesclarSobrescritas(categoria, canal)));
+
+  it('canal sem nada proprio fica como a categoria deixou', () => {
+    expect(noCanal([everyone(0n, V)], [])).toBe(0n);
+  });
+
+  it('o allow do canal vence o deny da categoria para o mesmo alvo', () => {
+    // Era o defeito: a sobrescrita da categoria chegava primeiro e valia ela.
+    expect(has(noCanal([everyone(0n, V)], [everyone(V, 0n)]), V)).toBe(true);
+  });
+
+  it('o deny do canal vence o allow da categoria', () => {
+    expect(has(noCanal([everyone(S, 0n)], [everyone(0n, S)]), S)).toBe(false);
+  });
+
+  it('bit que o canal nao menciona continua herdado', () => {
+    // O canal so nega enviar; a categoria privada continua escondendo o canal.
+    expect(noCanal([everyone(0n, V)], [everyone(0n, S)])).toBe(0n);
+  });
+
+  it('cargo: o allow do canal desfaz o deny da categoria para o mesmo cargo', () => {
+    const membro = ctx({
+      roles: [
+        { id: GUILD, position: 0, permissions: V | S },
+        { id: 'mod', position: 1, permissions: 0n },
+      ],
+    });
+    const mod = (allow: bigint, deny: bigint) => ({ targetId: 'mod', targetType: 'ROLE' as const, allow, deny });
+    const efetivas = computeChannelPermissions(membro, mesclarSobrescritas([mod(0n, S)], [mod(S, 0n)]));
+    expect(has(efetivas, S)).toBe(true);
+  });
+
+  it('alvos diferentes somam, cada um com a sua', () => {
+    const mesclada = mesclarSobrescritas([everyone(0n, V)], [{ targetId: MEMBER, targetType: 'MEMBER', allow: V, deny: 0n }]);
+    expect(mesclada).toHaveLength(2);
+    expect(has(computeChannelPermissions(base, mesclada), V)).toBe(true);
+  });
+
+  it('nao altera as listas recebidas', () => {
+    const categoria = [everyone(0n, V)];
+    mesclarSobrescritas(categoria, [everyone(V, 0n)]);
+    expect(categoria[0]).toEqual(everyone(0n, V));
   });
 });
 

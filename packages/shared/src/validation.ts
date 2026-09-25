@@ -311,6 +311,22 @@ export const createSoundSchema = z.object({
   emoji: z.string().max(64).nullable().optional(),
   volume: z.number().min(0).max(1).default(1),
   audio: z.string().min(16),
+  /**
+   * Duracao medida por quem envia (o app decodifica antes de subir). O
+   * servidor nao decodifica audio; o limite vale de verdade na hora de tocar,
+   * que para no mesmo teto. Clientes antigos nao mandam.
+   */
+  durationSecs: z
+    .number()
+    .positive()
+    .max(LIMITS.soundDurationSecs + 0.25, `o som pode ter no maximo ${LIMITS.soundDurationSecs} segundos`)
+    .optional(),
+});
+
+export const updateSoundSchema = z.object({
+  name: z.string().trim().min(2).max(32).optional(),
+  emoji: z.string().max(64).nullable().optional(),
+  volume: z.number().min(0).max(1).optional(),
 });
 
 export const playSoundSchema = z.object({

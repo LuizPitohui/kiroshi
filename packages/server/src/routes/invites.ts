@@ -6,6 +6,7 @@ import { optionalAuth, requireAuth } from '../auth/middleware.js';
 import { emitToUser, subscribeUserToGuild } from '../gateway/events.js';
 import { acceptInvite, deleteInvite, previewInvite } from '../services/invites.js';
 import { assertGuildPermissions } from '../services/permissions.js';
+import { recordAudit } from '../services/audit.js';
 import { buildGuildState } from '../services/ready.js';
 
 export async function inviteRoutes(app: FastifyInstance): Promise<void> {
@@ -25,14 +26,16 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
     const { code } = request.params as { code: string };
     if (!INVITE_CODE_PATTERN.test(code)) throw badRequest('Codigo de convite invalido.');
 
-    const { guildId, joined } = await acceptInvite(code, userId);
+    const { guildId, channelId, joined } = await acceptInvite(code, userId);
 
     // O GUILD_CREATE entrega o estado completo para a interface montar tudo.
     const state = await buildGuildState(guildId, userId);
     subscribeUserToGuild(userId, guildId);
     emitToUser(userId, 'GUILD_CREATE', state);
 
-    return { guild: state, joined };
+    // O canal de onde o convite saiu, para o app abrir nele — se a pessoa o ve.
+    const canal = channelId && state.channels.some((c) => c.id === channelId) ? channelId : null;
+    return { guild: state, joined, channelId: canal };
   });
 
   app.delete('/invites/:code', { preHandler: requireAuth }, async (request) => {
@@ -51,6 +54,7 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
     }
 
     await deleteInvite(code);
+    await recordAudit(invite.guildId, userId, 'INVITE_DELETE', null, { code });
     return { ok: true };
   });
 }

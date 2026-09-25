@@ -2,6 +2,7 @@ import {
   Permission,
   computeChannelPermissions,
   has,
+  mesclarSobrescritas,
   normalizeChannelPermissions,
   type MemberContext,
   type OverwriteLike,
@@ -18,7 +19,7 @@ import {
  *
  * A regra e a mesma de `resolveChannelPermissions`, so que aplicada a todos os
  * membros de uma vez: as funcoes de bits do shared, os cargos do membro mais o
- * everyone, e as sobrescritas da categoria antes das do proprio canal. Se as
+ * everyone, e as sobrescritas da categoria com as do canal por cima. Se as
  * duas contas divergissem, alguem passaria a receber evento de um canal que o
  * REST recusa, ou o contrario — por isso `visibleChannelIds` tambem passou a
  * usar este modulo.
@@ -104,13 +105,13 @@ export function contextoDoMembro(retrato: RetratoDaGuild, membro: MembroDoRetrat
   };
 }
 
-/** Sobrescritas que valem num canal: as do pai primeiro, as do canal depois. */
+/** Sobrescritas que valem num canal: as da categoria, com o que o canal diz por cima. */
 export function sobrescritasDoCanal(
   retrato: RetratoDaGuild,
   canal: CanalDoRetrato,
 ): OverwriteLike[] {
   const pai = canal.parentId ? indice(retrato).pais.get(canal.parentId) : undefined;
-  return [...(pai?.overwrites ?? []), ...canal.overwrites];
+  return mesclarSobrescritas(pai?.overwrites ?? [], canal.overwrites);
 }
 
 /** Permissoes efetivas de um membro num canal, ja normalizadas. */

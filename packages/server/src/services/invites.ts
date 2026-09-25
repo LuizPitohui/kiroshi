@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Invite, InvitePreview } from '@kiroshi/shared';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { ApiError, notFound } from '../errors.js';
 import { logger } from '../logger.js';
@@ -16,6 +17,22 @@ function randomCode(length = 8): string {
   let code = '';
   for (let i = 0; i < length; i++) code += CODE_ALPHABET[bytes[i]! % CODE_ALPHABET.length];
   return code;
+}
+
+const INVITE_INCLUDE = { inviter: { select: USER_SELECT } } as const;
+
+function toInvite(invite: Prisma.InviteGetPayload<{ include: typeof INVITE_INCLUDE }>): Invite {
+  return {
+    code: invite.code,
+    guildId: invite.guildId,
+    channelId: invite.channelId,
+    inviterId: invite.inviterId,
+    inviter: toPublicUser(invite.inviter),
+    uses: invite.uses,
+    maxUses: invite.maxUses,
+    expiresAt: invite.expiresAt?.toISOString() ?? null,
+    createdAt: invite.createdAt.toISOString(),
+  };
 }
 
 export async function createInvite(
@@ -41,18 +58,10 @@ export async function createInvite(
       expiresAt:
         options.maxAgeSecs > 0 ? new Date(Date.now() + options.maxAgeSecs * 1000) : null,
     },
+    include: INVITE_INCLUDE,
   });
 
-  return {
-    code: invite.code,
-    guildId: invite.guildId,
-    channelId: invite.channelId,
-    inviterId: invite.inviterId,
-    uses: invite.uses,
-    maxUses: invite.maxUses,
-    expiresAt: invite.expiresAt?.toISOString() ?? null,
-    createdAt: invite.createdAt.toISOString(),
-  };
+  return toInvite(invite);
 }
 
 function isExpired(invite: { expiresAt: Date | null; maxUses: number; uses: number }): boolean {
@@ -105,9 +114,36 @@ export async function previewInvite(
 export async function acceptInvite(
   code: string,
   userId: string,
-): Promise<{ guildId: string; joined: boolean }> {
+): Promise<{ guildId: string; channelId: string | null; joined: boolean }> {
   const invite = await prisma.invite.findUnique({ where: { code } });
   if (!invite || isExpired(invite)) {
+    throw new ApiError('INVITE_INVALID', 'Convite invalido ou expirado.');
+  }
+  const resposta = { guildId: invite.guildId, channelId: invite.channelId };
+
+  const jaMembro = await prisma.guildMember.findUnique({
+    where: { guildId_userId: { guildId: invite.guildId, userId } },
+    select: { userId: true },
+  });
+  if (jaMembro) return { ...resposta, joined: false };
+
+  /*
+    Reserva o uso ANTES de entrar, numa conta so no banco.
+
+    Antes era ler, entrar e somar 1: duas pessoas abrindo o mesmo convite de
+    um uso ao mesmo tempo entravam as duas. Agora a soma so acontece se ainda
+    houver uso e validade no momento da escrita, e quem perde a corrida
+    recebe "convite invalido".
+  */
+  const reservado = await prisma.invite.updateMany({
+    where: {
+      code,
+      OR: [{ maxUses: 0 }, { uses: { lt: invite.maxUses } }],
+      AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
+    },
+    data: { uses: { increment: 1 } },
+  });
+  if (reservado.count === 0) {
     throw new ApiError('INVITE_INVALID', 'Convite invalido ou expirado.');
   }
 
@@ -115,18 +151,18 @@ export async function acceptInvite(
   try {
     joined = await addMember(invite.guildId, userId);
   } catch (error) {
+    await devolverUso(code);
     if ((error as { code?: string }).code === 'BANNED') {
       throw new ApiError('BANNED', 'Voce foi banido deste servidor.');
     }
     throw error;
   }
 
-  if (!joined) return { guildId: invite.guildId, joined: false };
-
-  await prisma.invite.update({
-    where: { code },
-    data: { uses: { increment: 1 } },
-  });
+  // Entrou por outro caminho entre a conferencia e agora: o uso volta.
+  if (!joined) {
+    await devolverUso(code);
+    return { ...resposta, joined: false };
+  }
 
   const member = await prisma.guildMember.findUniqueOrThrow({
     where: { guildId_userId: { guildId: invite.guildId, userId } },
@@ -139,7 +175,13 @@ export async function acceptInvite(
   emitToGuild(invite.guildId, 'GUILD_MEMBER_ADD', toMember(member));
 
   logger.info({ guildId: invite.guildId, userId, code }, 'entrou pelo convite');
-  return { guildId: invite.guildId, joined: true };
+  return { ...resposta, joined: true };
+}
+
+async function devolverUso(code: string): Promise<void> {
+  await prisma.invite
+    .updateMany({ where: { code, uses: { gt: 0 } }, data: { uses: { decrement: 1 } } })
+    .catch(() => undefined);
 }
 
 export async function deleteInvite(code: string): Promise<void> {
@@ -150,18 +192,10 @@ export async function deleteInvite(code: string): Promise<void> {
 export async function listInvites(guildId: string): Promise<Invite[]> {
   const rows = await prisma.invite.findMany({
     where: { guildId },
+    include: INVITE_INCLUDE,
     orderBy: { createdAt: 'desc' },
   });
-  return rows.map((invite) => ({
-    code: invite.code,
-    guildId: invite.guildId,
-    channelId: invite.channelId,
-    inviterId: invite.inviterId,
-    uses: invite.uses,
-    maxUses: invite.maxUses,
-    expiresAt: invite.expiresAt?.toISOString() ?? null,
-    createdAt: invite.createdAt.toISOString(),
-  }));
+  return rows.map(toInvite);
 }
 
 /** Remove convites vencidos. Chamado por um job periodico. */

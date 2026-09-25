@@ -4,6 +4,7 @@ import {
   canActOn as canActOnShared,
   DM_PERMISSIONS,
   has,
+  mesclarSobrescritas,
   normalizeChannelPermissions,
   Permission,
   toNames,
@@ -102,17 +103,17 @@ export async function resolveChannelPermissions(
   const resolved = await resolveMember(channel.guildId, userId);
   if (!resolved) return { permissions: 0n, guildId: channel.guildId, channelType: channel.type };
 
-  // Um canal dentro de categoria herda os overwrites dela; os do proprio canal
-  // vem depois e tem prioridade.
-  let overwrites: OverwriteLike[] = [];
+  // Um canal dentro de categoria herda os overwrites dela; o que o proprio
+  // canal diz vence, bit a bit (`mesclarSobrescritas`).
+  let daCategoria: OverwriteLike[] = [];
   if (channel.parentId) {
     const parent = await prisma.channel.findUnique({
       where: { id: channel.parentId },
       select: { overwrites: { select: { targetId: true, targetType: true, allow: true, deny: true } } },
     });
-    if (parent) overwrites = parent.overwrites;
+    if (parent) daCategoria = parent.overwrites;
   }
-  overwrites = [...overwrites, ...channel.overwrites];
+  const overwrites = mesclarSobrescritas(daCategoria, channel.overwrites);
 
   const permissions = normalizeChannelPermissions(
     computeChannelPermissions(resolved.ctx, overwrites),

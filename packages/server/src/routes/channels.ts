@@ -144,6 +144,8 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
     await assertGuildPermissions(channel.guildId, userId, Permission.MANAGE_CHANNELS);
 
     if (body.parentId) {
+      // O POST ja recusava categoria dentro de categoria; o PATCH deixava passar.
+      if (channel.type === 'GUILD_CATEGORY') throw badRequest('Uma categoria nao pode ficar dentro de outra.');
       const parent = await prisma.channel.findUnique({
         where: { id: body.parentId },
         select: { guildId: true, type: true },
@@ -192,8 +194,23 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
     await assertGuildPermissions(guildId, userId, Permission.MANAGE_CHANNELS);
 
     const ids = body.positions.map((p) => p.id);
-    const owned = await prisma.channel.count({ where: { guildId, id: { in: ids } } });
-    if (owned !== ids.length) throw badRequest('Algum canal nao pertence a este servidor.');
+    if (new Set(ids).size !== ids.length) throw badRequest('Um canal apareceu duas vezes no pedido.');
+    const doServidor = await prisma.channel.findMany({
+      where: { guildId },
+      select: { id: true, type: true },
+    });
+    const tipo = new Map(doServidor.map((c) => [c.id, c.type]));
+    if (ids.some((id) => !tipo.has(id))) throw badRequest('Algum canal nao pertence a este servidor.');
+
+    // O pai precisa ser categoria DESTE servidor, e categoria nao tem pai: antes
+    // o reordenar aceitava qualquer id, ate de canal de outro servidor.
+    for (const p of body.positions) {
+      if (!p.parentId) continue;
+      if (tipo.get(p.id) === 'GUILD_CATEGORY') throw badRequest('Uma categoria nao pode ficar dentro de outra.');
+      if (tipo.get(p.parentId) !== 'GUILD_CATEGORY') {
+        throw badRequest('A categoria informada nao existe neste servidor.');
+      }
+    }
 
     const trocaDePai = body.positions.some((p) => p.parentId !== undefined);
     const antes = trocaDePai ? await carregarRetratoDaGuild(guildId) : null;
@@ -220,6 +237,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
       channels.map((c) => c.id),
       antes,
     );
+    await recordAudit(guildId, userId, 'CHANNEL_REORDER', null, { channels: ids.length });
 
     return channels.map(toChannel);
   });
@@ -362,7 +380,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
 
     const antes = await carregarRetratoDaGuild(channel.guildId);
 
-    await prisma.permissionOverwrite.deleteMany({ where: { channelId, targetId } });
+    const { count } = await prisma.permissionOverwrite.deleteMany({ where: { channelId, targetId } });
 
     const updated = await prisma.channel.findUniqueOrThrow({
       where: { id: channelId },
@@ -373,6 +391,48 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
       canaisAfetadosPorSobrescrita(antes, channelId, channel.type),
       antes,
     );
+    if (count > 0) {
+      await recordAudit(channel.guildId, userId, 'CHANNEL_OVERWRITE_DELETE', channelId, { targetId });
+    }
+
+    return toChannel(updated);
+  });
+
+  /**
+   * Sincronizar com a categoria: o canal larga tudo o que dizia por conta
+   * propria e volta a seguir a categoria inteira. Numa categoria, limpa as
+   * permissoes dela.
+   */
+  app.delete('/channels/:channelId/permissions', async (request) => {
+    const userId = request.auth!.userId;
+    const { channelId } = request.params as { channelId: string };
+
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { guildId: true, type: true },
+    });
+    if (!channel?.guildId) throw notFound('Canal');
+
+    await assertGuildPermissions(channel.guildId, userId, [
+      Permission.MANAGE_ROLES,
+      Permission.MANAGE_CHANNELS,
+    ]);
+
+    const antes = await carregarRetratoDaGuild(channel.guildId);
+    const { count } = await prisma.permissionOverwrite.deleteMany({ where: { channelId } });
+
+    const updated = await prisma.channel.findUniqueOrThrow({
+      where: { id: channelId },
+      include: CHANNEL_INCLUDE,
+    });
+    if (count > 0) {
+      await avisarCanaisAlterados(
+        channel.guildId,
+        canaisAfetadosPorSobrescrita(antes, channelId, channel.type),
+        antes,
+      );
+      await recordAudit(channel.guildId, userId, 'CHANNEL_OVERWRITE_SYNC', channelId, { removed: count });
+    }
 
     return toChannel(updated);
   });
@@ -447,6 +507,10 @@ async function avisarCanaisAlterados(
       );
       if (perderam.size > 0) {
         emitToGuild(guildId, 'CHANNEL_DELETE', serializado, { onlyUserIds: perderam });
+        // Quem deixou de ver um canal de voz nao fica na chamada dele.
+        if (canal.type === 'GUILD_VOICE') {
+          for (const id of perderam) await tirarDaVoz(id, { channelId: canal.id });
+        }
       }
     }
   } catch (error) {

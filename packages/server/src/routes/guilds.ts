@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   LIMITS,
   Permission,
@@ -12,19 +12,26 @@ import {
   updateGuildSchema,
   updateMemberSchema,
   updateRoleSchema,
+  type AuditLogEntry,
+  type GuildBan,
 } from '@kiroshi/shared';
 import { prisma } from '../db.js';
 import { ApiError, badRequest, forbidden, notFound } from '../errors.js';
 import { requireAuth, requireFreshAuth } from '../auth/middleware.js';
 import { consume } from '../lib/ratelimit.js';
 import {
+  CHANNEL_INCLUDE,
   MEMBER_INCLUDE,
   USER_SELECT,
+  toChannel,
   toGuild,
   toMember,
   toPublicUser,
   toRole,
 } from '../lib/serialize.js';
+import { cargoMaisAlto, reordenarCargos } from '../lib/cargos.js';
+import { membrosComPermissao } from '../lib/visibilidade.js';
+import { avisarMudancaDeAcesso } from '../services/acesso.js';
 import {
   emitToGuild,
   emitToUser,
@@ -35,6 +42,7 @@ import {
   assertCanActOn,
   assertCanManageRole,
   assertGuildPermissions,
+  carregarRetratoDaGuild,
   resolveMember,
 } from '../services/permissions.js';
 import { createGuild, memberIds, removeMember, transferOwnership } from '../services/guilds.js';
@@ -181,10 +189,13 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
     const { userId: newOwnerId } = request.body as { userId?: string };
     if (!newOwnerId) throw badRequest('Informe o userId do novo dono.');
 
+    const antes = await carregarRetratoDaGuild(guildId);
     await transferOwnership(guildId, userId, newOwnerId);
 
     const guild = await prisma.guild.findUniqueOrThrow({ where: { id: guildId } });
     emitToGuild(guildId, 'GUILD_UPDATE', toGuild(guild));
+    // O dono ve tudo: quem entrega a posse pode deixar de ver canal privado.
+    await avisarMudancaDeAcesso(guildId, antes, [userId, newOwnerId]);
     await recordAudit(guildId, userId, 'OWNERSHIP_TRANSFER', newOwnerId, {});
 
     return { ok: true };
@@ -249,13 +260,24 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
 
     if (body.serverMuted !== undefined) {
       await setServerMute(guildId, userId, memberId, body.serverMuted);
+      await recordAudit(guildId, userId, body.serverMuted ? 'MEMBER_MUTE' : 'MEMBER_UNMUTE', memberId, {});
     }
     if (body.serverDeafened !== undefined) {
       await setServerDeafen(guildId, userId, memberId, body.serverDeafened);
+      await recordAudit(guildId, userId, body.serverDeafened ? 'MEMBER_DEAFEN' : 'MEMBER_UNDEAFEN', memberId, {});
     }
     if (body.voiceChannelId !== undefined) {
       await moveMember(guildId, userId, memberId, body.voiceChannelId);
+      await recordAudit(
+        guildId,
+        userId,
+        body.voiceChannelId ? 'MEMBER_MOVE' : 'MEMBER_DISCONNECT',
+        memberId,
+        body.voiceChannelId ? { channelId: body.voiceChannelId } : {},
+      );
     }
+
+    const antes = body.roleIds !== undefined ? await carregarRetratoDaGuild(guildId) : null;
 
     if (body.nickname !== undefined || body.roleIds !== undefined) {
       await prisma.$transaction(async (tx) => {
@@ -285,13 +307,69 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
     const serialized = toMember(updated);
 
     emitToGuild(guildId, 'GUILD_MEMBER_UPDATE', serialized);
-    await recordAudit(guildId, userId, 'MEMBER_UPDATE', memberId, {
-      nickname: body.nickname,
-      roleIds: body.roleIds,
-    });
+    await avisarMudancaDeAcesso(guildId, antes, [memberId]);
+    if (body.nickname !== undefined || body.roleIds !== undefined) {
+      await recordAudit(guildId, userId, 'MEMBER_UPDATE', memberId, {
+        nickname: body.nickname,
+        roleIds: body.roleIds,
+      });
+    }
 
     return serialized;
   });
+
+  /*
+    Dar ou tirar UM cargo.
+
+    A unica forma de mexer em cargo de alguem era o PATCH acima com a lista
+    COMPLETA, que apaga e recria: dois moderadores mexendo ao mesmo tempo
+    desfaziam o que o outro fez, e o cliente precisava saber todos os cargos
+    da pessoa para mudar um. Aqui cada pedido muda so o que diz.
+  */
+  const mudarCargoDoMembro = (dar: boolean) => async (request: FastifyRequest) => {
+    const userId = request.auth!.userId;
+    const { guildId, memberId, roleId } = request.params as {
+      guildId: string;
+      memberId: string;
+      roleId: string;
+    };
+
+    await assertGuildPermissions(guildId, userId, Permission.MANAGE_ROLES);
+    if (roleId === guildId) throw badRequest('O cargo everyone vale para todos e nao se da nem se tira.');
+
+    const role = await prisma.role.findUnique({ where: { id: roleId } });
+    if (!role || role.guildId !== guildId) throw notFound('Cargo');
+    // Nao se da cargo no proprio nivel ou acima, nem um com permissao que nao se tem.
+    await assertCanManageRole(guildId, userId, role.position, dar ? role.permissions : 0n);
+    await assertCanActOn(guildId, userId, memberId);
+
+    const membro = await prisma.guildMember.findUnique({
+      where: { guildId_userId: { guildId, userId: memberId } },
+      select: { userId: true },
+    });
+    if (!membro) throw notFound('Membro');
+
+    const antes = await carregarRetratoDaGuild(guildId);
+    const linha = { guildId, userId: memberId, roleId };
+    const mudou = dar
+      ? (await prisma.memberRole.createMany({ data: [linha], skipDuplicates: true })).count > 0
+      : (await prisma.memberRole.deleteMany({ where: linha })).count > 0;
+
+    const atualizado = await prisma.guildMember.findUniqueOrThrow({
+      where: { guildId_userId: { guildId, userId: memberId } },
+      include: MEMBER_INCLUDE,
+    });
+    const serializado = toMember(atualizado);
+    if (mudou) {
+      emitToGuild(guildId, 'GUILD_MEMBER_UPDATE', serializado);
+      await avisarMudancaDeAcesso(guildId, antes, [memberId]);
+      await recordAudit(guildId, userId, 'MEMBER_ROLE_UPDATE', memberId, dar ? { added: [roleId] } : { removed: [roleId] });
+    }
+    return serializado;
+  };
+
+  app.put('/guilds/:guildId/members/:memberId/roles/:roleId', mudarCargoDoMembro(true));
+  app.delete('/guilds/:guildId/members/:memberId/roles/:roleId', mudarCargoDoMembro(false));
 
   app.delete('/guilds/:guildId/members/:memberId', async (request) => {
     const userId = request.auth!.userId;
@@ -336,13 +414,15 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
     });
     const byId = new Map(users.map((u) => [u.id, toPublicUser(u)]));
 
-    return bans.map((ban) => ({
-      user: byId.get(ban.userId) ?? null,
-      userId: ban.userId,
-      reason: ban.reason,
-      bannedBy: ban.bannedBy,
-      createdAt: ban.createdAt.toISOString(),
-    }));
+    return bans.map(
+      (ban): GuildBan => ({
+        user: byId.get(ban.userId) ?? null,
+        userId: ban.userId,
+        reason: ban.reason,
+        bannedBy: ban.bannedBy,
+        createdAt: ban.createdAt.toISOString(),
+      }),
+    );
   });
 
   app.put('/guilds/:guildId/bans/:memberId', async (request) => {
@@ -411,30 +491,42 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
 
     const permissions = deserialize(body.permissions ?? '0');
 
-    // O cargo novo entra logo abaixo do cargo mais alto de quem cria.
-    const highest = await prisma.role.aggregate({
-      where: { guildId },
-      _max: { position: true },
-    });
-    const position = (highest._max.position ?? 0) + 1;
+    /*
+      O cargo novo nasce logo acima do everyone, como no Discord.
 
-    await assertCanManageRole(guildId, userId, position, permissions);
+      Antes nascia no topo (maximo + 1) e em seguida a hierarquia exigia que
+      ficasse abaixo de quem criou: impossivel para qualquer um que nao fosse
+      o dono, administrador inclusive. Posicao 0 na checagem quer dizer "no
+      nivel do everyone": passa quem tem qualquer cargo acima dele.
+    */
+    await assertCanManageRole(guildId, userId, 0, permissions);
 
-    const role = await prisma.role.create({
-      data: {
-        id: generateId(),
-        guildId,
-        name: body.name,
-        color: body.color ?? null,
-        permissions,
-        hoist: body.hoist ?? false,
-        mentionable: body.mentionable ?? false,
-        position,
-      },
+    const role = await prisma.$transaction(async (tx) => {
+      await tx.role.updateMany({
+        where: { guildId, position: { gte: 1 } },
+        data: { position: { increment: 1 } },
+      });
+      return tx.role.create({
+        data: {
+          id: generateId(),
+          guildId,
+          name: body.name,
+          color: body.color ?? null,
+          permissions,
+          hoist: body.hoist ?? false,
+          mentionable: body.mentionable ?? false,
+          position: 1,
+        },
+      });
     });
 
     const serialized = toRole(role);
     emitToGuild(guildId, 'GUILD_ROLE_CREATE', serialized);
+    // Os outros subiram um degrau; sem isto a ordem na tela de cada um ficaria errada.
+    const subiram = await prisma.role.findMany({
+      where: { guildId, position: { gt: 1 } },
+    });
+    for (const outro of subiram) emitToGuild(guildId, 'GUILD_ROLE_UPDATE', toRole(outro));
     await recordAudit(guildId, userId, 'ROLE_CREATE', role.id, { name: body.name });
 
     return reply.status(201).send(serialized);
@@ -451,13 +543,19 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
     const nextPermissions =
       body.permissions !== undefined ? deserialize(body.permissions) : role.permissions;
 
-    await assertCanManageRole(guildId, userId, role.position, nextPermissions);
+    // So os bits que mudam precisam caber no que o autor tem: antes o conjunto
+    // final inteiro precisava, e nao dava nem para trocar a cor de um cargo
+    // que tivesse uma permissao que o autor nao tem.
+    await assertCanManageRole(guildId, userId, role.position, nextPermissions ^ role.permissions);
 
     // O cargo everyone existe sempre e nao pode ser renomeado nem exibido a parte.
     const isEveryone = role.id === guildId;
     if (isEveryone && (body.name !== undefined || body.hoist !== undefined)) {
       throw badRequest('O cargo padrao nao pode ser renomeado nem destacado.');
     }
+
+    const mudaAcesso = nextPermissions !== role.permissions;
+    const antes = mudaAcesso ? await carregarRetratoDaGuild(guildId) : null;
 
     const updated = await prisma.role.update({
       where: { id: roleId },
@@ -472,6 +570,7 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
 
     const serialized = toRole(updated);
     emitToGuild(guildId, 'GUILD_ROLE_UPDATE', serialized);
+    await avisarMudancaDeAcesso(guildId, antes);
     await recordAudit(guildId, userId, 'ROLE_UPDATE', roleId, { ...body });
 
     return serialized;
@@ -482,36 +581,54 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
     const { guildId } = request.params as { guildId: string };
     const body = reorderRolesSchema.parse(request.body);
 
-    await assertGuildPermissions(guildId, userId, Permission.MANAGE_ROLES);
-
-    const actor = await resolveMember(guildId, userId);
-    const actorHighest =
-      actor && actor.ctx.userId === actor.ctx.guildOwnerId
-        ? Number.POSITIVE_INFINITY
-        : (actor?.ctx.roles.reduce((max, r) => (r.position > max ? r.position : max), -1) ?? -1);
-
-    const roles = await prisma.role.findMany({
-      where: { guildId, id: { in: body.positions.map((p) => p.id) } },
+    const actor = await assertGuildPermissions(guildId, userId, Permission.MANAGE_ROLES);
+    const atuais = await prisma.role.findMany({
+      where: { guildId },
       select: { id: true, position: true },
     });
 
-    // Nao deixa empurrar um cargo para cima do proprio nivel.
-    for (const target of body.positions) {
-      const current = roles.find((r) => r.id === target.id);
-      if (!current) throw badRequest('Algum cargo informado nao existe neste servidor.');
-      if (target.position >= actorHighest || current.position >= actorHighest) {
-        throw forbidden('Voce nao pode reordenar cargos no seu nivel ou acima dele.');
+    const dono = actor.ctx.userId === actor.ctx.guildOwnerId;
+    const resultado = reordenarCargos(
+      atuais,
+      body.positions,
+      guildId,
+      dono ? { dono: true } : { dono: false, topoDoAutor: cargoMaisAlto(actor.ctx.roles, guildId) },
+    );
+    if (!resultado.ok) {
+      switch (resultado.motivo) {
+        case 'EVERYONE':
+          throw badRequest('O cargo everyone fica sempre embaixo de todos.');
+        case 'REPETIDO':
+          throw badRequest('Um cargo apareceu duas vezes no pedido.');
+        case 'DESCONHECIDO':
+          throw badRequest('Algum cargo informado nao existe neste servidor.');
+        case 'HIERARQUIA':
+          throw forbidden('Voce so pode reordenar cargos abaixo do seu cargo mais alto.');
       }
     }
 
-    await prisma.$transaction(
-      body.positions.map((p) =>
-        prisma.role.update({ where: { id: p.id }, data: { position: p.position } }),
-      ),
-    );
+    const mudaram = atuais.filter((r) => {
+      const nova = resultado.posicoes.get(r.id);
+      return nova !== undefined && nova !== r.position;
+    });
+    if (mudaram.length > 0) {
+      await prisma.$transaction(
+        mudaram.map((r) =>
+          prisma.role.update({ where: { id: r.id }, data: { position: resultado.posicoes.get(r.id)! } }),
+        ),
+      );
+    }
 
     const updated = await prisma.role.findMany({ where: { guildId }, orderBy: { position: 'asc' } });
-    for (const role of updated) emitToGuild(guildId, 'GUILD_ROLE_UPDATE', toRole(role));
+    const idsQueMudaram = new Set(mudaram.map((r) => r.id));
+    for (const role of updated) {
+      if (idsQueMudaram.has(role.id)) emitToGuild(guildId, 'GUILD_ROLE_UPDATE', toRole(role));
+    }
+    if (mudaram.length > 0) {
+      await recordAudit(guildId, userId, 'ROLE_REORDER', null, {
+        order: updated.filter((r) => r.id !== guildId).map((r) => r.id).reverse(),
+      });
+    }
 
     return updated.map(toRole);
   });
@@ -524,11 +641,36 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
     if (!role || role.guildId !== guildId) throw notFound('Cargo');
     if (role.managed) throw badRequest('Este cargo e gerido pelo sistema e nao pode ser apagado.');
 
-    await assertCanManageRole(guildId, userId, role.position, role.permissions);
+    // Apagar tira permissoes de quem tinha o cargo, nao concede nenhuma: basta
+    // a hierarquia, como no Discord.
+    await assertCanManageRole(guildId, userId, role.position, 0n);
 
-    await prisma.role.delete({ where: { id: roleId } });
+    const antes = await carregarRetratoDaGuild(guildId);
+    // As sobrescritas que citavam o cargo nao tem chave estrangeira; sem esta
+    // limpeza ficariam nos canais apontando para um cargo que nao existe.
+    const citado = await prisma.permissionOverwrite.findMany({
+      where: { targetId: roleId, channel: { guildId } },
+      select: { channelId: true },
+    });
+    await prisma.$transaction([
+      prisma.permissionOverwrite.deleteMany({ where: { targetId: roleId, channel: { guildId } } }),
+      prisma.role.delete({ where: { id: roleId } }),
+    ]);
 
     emitToGuild(guildId, 'GUILD_ROLE_DELETE', { guildId, roleId });
+    if (citado.length > 0) {
+      const canais = await prisma.channel.findMany({
+        where: { id: { in: citado.map((c) => c.channelId) } },
+        include: CHANNEL_INCLUDE,
+      });
+      const depois = await carregarRetratoDaGuild(guildId);
+      for (const canal of canais) {
+        emitToGuild(guildId, 'CHANNEL_UPDATE', toChannel(canal), {
+          onlyUserIds: depois ? membrosComPermissao(depois, canal.id) : new Set(),
+        });
+      }
+    }
+    await avisarMudancaDeAcesso(guildId, antes);
     await recordAudit(guildId, userId, 'ROLE_DELETE', roleId, { name: role.name });
 
     return { ok: true };
@@ -567,6 +709,11 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
       maxAgeSecs: body.maxAgeSecs,
       maxUses: body.maxUses,
     });
+    await recordAudit(guildId, userId, 'INVITE_CREATE', null, {
+      code: invite.code,
+      maxAgeSecs: body.maxAgeSecs,
+      maxUses: body.maxUses,
+    });
 
     return reply.status(201).send(invite);
   });
@@ -575,26 +722,47 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
   app.get('/guilds/:guildId/audit-log', async (request) => {
     const userId = request.auth!.userId;
     const { guildId } = request.params as { guildId: string };
-    const query = request.query as { limit?: string; before?: string };
+    const query = request.query as { limit?: string; before?: string; actorId?: string; action?: string };
 
     await assertGuildPermissions(guildId, userId, Permission.VIEW_AUDIT_LOG);
 
+    // Filtros da tela: por quem fez e pelo tipo de acao.
+    const id = /^\d{1,20}$/;
+    if (query.before && !id.test(query.before)) throw badRequest('Paginacao invalida.');
+    if (query.actorId && !id.test(query.actorId)) throw badRequest('Pessoa invalida.');
+    if (query.action && !/^[A-Z_]{2,64}$/.test(query.action)) throw badRequest('Acao invalida.');
+
     const entries = await prisma.auditLogEntry.findMany({
-      where: { guildId, ...(query.before ? { id: { lt: query.before } } : {}) },
+      where: {
+        guildId,
+        ...(query.before ? { id: { lt: query.before } } : {}),
+        ...(query.actorId ? { actorId: query.actorId } : {}),
+        ...(query.action ? { action: query.action } : {}),
+      },
       include: { actor: { select: USER_SELECT } },
       orderBy: { id: 'desc' },
-      take: Math.min(Number(query.limit ?? 50), 100),
+      take: Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), 100),
     });
 
-    return entries.map((entry) => ({
-      id: entry.id,
-      action: entry.action,
-      actor: toPublicUser(entry.actor),
-      targetId: entry.targetId,
-      changes: entry.changes,
-      reason: entry.reason,
-      createdAt: entry.createdAt.toISOString(),
-    }));
+    // O alvo, quando e uma pessoa: quem foi banido ja nao esta na lista de membros do app.
+    const alvos = await prisma.user.findMany({
+      where: { id: { in: [...new Set(entries.map((e) => e.targetId).filter((t): t is string => Boolean(t)))] } },
+      select: USER_SELECT,
+    });
+    const pessoa = new Map(alvos.map((u) => [u.id, toPublicUser(u)]));
+
+    return entries.map(
+      (entry): AuditLogEntry => ({
+        id: entry.id,
+        action: entry.action,
+        actor: toPublicUser(entry.actor),
+        targetId: entry.targetId,
+        targetUser: entry.targetId ? (pessoa.get(entry.targetId) ?? null) : null,
+        changes: (entry.changes ?? {}) as Record<string, unknown>,
+        reason: entry.reason,
+        createdAt: entry.createdAt.toISOString(),
+      }),
+    );
   });
 }
 

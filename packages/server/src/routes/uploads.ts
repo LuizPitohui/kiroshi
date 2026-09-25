@@ -97,6 +97,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   webm: 'video/webm',
   mov: 'video/quicktime',
   mp3: 'audio/mpeg',
+  // Sons antigos do soundboard foram gravados como .mpeg.
+  mpeg: 'audio/mpeg',
   ogg: 'audio/ogg',
   wav: 'audio/wav',
   opus: 'audio/opus',

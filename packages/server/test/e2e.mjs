@@ -294,6 +294,117 @@ async function main() {
   const accept = await api('POST', `/api/v1/invites/${invite.body.code}`, { token: token2 });
   check('aceita convite', accept.status === 200 && accept.body?.joined === true, JSON.stringify(accept.body).slice(0, 150));
 
+  console.log('\n--- CARGOS, ACESSO E CONVITES (fatia 6) ---');
+  {
+    const g = newGuild.body.id;
+    const kayaId = bob.ready.user.id;
+    const cargosDe = async () => (await api('GET', `/api/v1/guilds/${g}`, { token })).body?.roles ?? [];
+    const MANAGE_ROLES = String(1n << 2n);
+    const BAN = 1n << 6n;
+    const KICK = 1n << 5n;
+
+    const mod = await api('POST', `/api/v1/guilds/${g}/roles`, {
+      token, body: { name: 'Moderador', permissions: MANAGE_ROLES },
+    });
+    check('cargo novo nasce logo acima do everyone', mod.status === 201 && mod.body?.position === 1, JSON.stringify(mod.body));
+
+    const deu = esperarNovo(bob, 'GUILD_MEMBER_UPDATE', (d) => d?.guildId === g && d?.roleIds?.includes(mod.body.id));
+    const dar = await api('PUT', `/api/v1/guilds/${g}/members/${kayaId}/roles/${mod.body.id}`, { token });
+    check('da um cargo so, sem mandar a lista inteira', dar.status === 200 && dar.body?.roleIds?.includes(mod.body.id), JSON.stringify(dar.body).slice(0, 150));
+    check('quem recebeu o cargo fica sabendo na hora', Boolean(await deu.catch(() => null)));
+
+    // O defeito que prendia todo mundo: so o dono conseguia criar cargo.
+    const ajudante = await api('POST', `/api/v1/guilds/${g}/roles`, { token: token2, body: { name: 'Ajudante' } });
+    check('moderador (nao dono) cria cargo', ajudante.status === 201, `status ${ajudante.status} ${JSON.stringify(ajudante.body).slice(0, 120)}`);
+    const depois = await cargosDe();
+    const pos = (id) => depois.find((r) => r.id === id)?.position;
+    check('o cargo novo entra embaixo e os outros sobem', pos(ajudante.body?.id) === 1 && pos(mod.body.id) === 2, JSON.stringify(depois.map((r) => [r.name, r.position])));
+
+    const subir = await api('PATCH', `/api/v1/guilds/${g}/roles`, {
+      token: token2, body: { positions: [{ id: ajudante.body.id, position: 5 }] },
+    });
+    check('moderador nao sobe cargo acima do proprio', subir.status === 403, `status ${subir.status}`);
+    const everyone = await api('PATCH', `/api/v1/guilds/${g}/roles`, {
+      token, body: { positions: [{ id: g, position: 3 }] },
+    });
+    check('o everyone nao sai do lugar nem pelo dono', everyone.status === 400, `status ${everyone.status}`);
+
+    // Editar: so os bits que mudam precisam caber no que o autor tem.
+    const cofre = await api('POST', `/api/v1/guilds/${g}/roles`, { token, body: { name: 'Cofre', permissions: String(BAN) } });
+    const cor = await api('PATCH', `/api/v1/guilds/${g}/roles/${cofre.body?.id}`, { token: token2, body: { color: '#dc2626' } });
+    check('moderador muda a cor de cargo com permissao que ele nao tem', cor.status === 200, `status ${cor.status} ${JSON.stringify(cor.body).slice(0, 120)}`);
+    const mais = await api('PATCH', `/api/v1/guilds/${g}/roles/${cofre.body?.id}`, {
+      token: token2, body: { permissions: String(BAN | KICK) },
+    });
+    check('mas nao concede permissao que nao tem', mais.status === 403, `status ${mais.status}`);
+
+    // Canal privado que o cargo abre: dar e tirar o cargo avisa na hora.
+    const secreto = await api('POST', `/api/v1/guilds/${g}/channels`, { token, body: { name: 'secreto', type: 'GUILD_TEXT' } });
+    const VIEW = String(1n << 0n);
+    await api('PUT', `/api/v1/channels/${secreto.body.id}/permissions/${g}`, { token, body: { targetType: 'ROLE', allow: '0', deny: VIEW } });
+    const vip = await api('POST', `/api/v1/guilds/${g}/roles`, { token, body: { name: 'VIP' } });
+    await api('PUT', `/api/v1/channels/${secreto.body.id}/permissions/${vip.body.id}`, { token, body: { targetType: 'ROLE', allow: VIEW, deny: '0' } });
+    check('sem o cargo, o canal privado fica fechado', (await api('GET', `/api/v1/channels/${secreto.body.id}`, { token: token2 })).status === 403);
+
+    const abriu = esperarNovo(bob, 'CHANNEL_UPDATE', (d) => d?.id === secreto.body.id);
+    await api('PUT', `/api/v1/guilds/${g}/members/${kayaId}/roles/${vip.body.id}`, { token });
+    check('dar o cargo entrega o canal que ele abre', Boolean(await abriu.catch(() => null)));
+    const fechou = esperarNovo(bob, 'CHANNEL_DELETE', (d) => d?.id === secreto.body.id);
+    const tirar = await api('DELETE', `/api/v1/guilds/${g}/members/${kayaId}/roles/${vip.body.id}`, { token });
+    check('tira um cargo so', tirar.status === 200 && !tirar.body?.roleIds?.includes(vip.body.id));
+    check('tirar o cargo tira o canal da tela', Boolean(await fechou.catch(() => null)));
+
+    // Heranca da categoria: o que o canal diz vence o que a categoria diz.
+    const cat = await api('POST', `/api/v1/guilds/${g}/channels`, { token, body: { name: 'fechada', type: 'GUILD_CATEGORY' } });
+    await api('PUT', `/api/v1/channels/${cat.body.id}/permissions/${g}`, { token, body: { targetType: 'ROLE', allow: '0', deny: VIEW } });
+    const dentro = await api('POST', `/api/v1/guilds/${g}/channels`, { token, body: { name: 'aberto', type: 'GUILD_TEXT', parentId: cat.body.id } });
+    const herdado = await api('POST', `/api/v1/guilds/${g}/channels`, { token, body: { name: 'herdado', type: 'GUILD_TEXT', parentId: cat.body.id } });
+    await api('PUT', `/api/v1/channels/${dentro.body.id}/permissions/${g}`, { token, body: { targetType: 'ROLE', allow: VIEW, deny: '0' } });
+    check('canal que libera dentro de categoria fechada fica aberto', (await api('GET', `/api/v1/channels/${dentro.body.id}`, { token: token2 })).status === 200);
+    check('canal sem nada proprio segue a categoria fechada', (await api('GET', `/api/v1/channels/${herdado.body.id}`, { token: token2 })).status === 403);
+    const sincronizar = await api('DELETE', `/api/v1/channels/${dentro.body.id}/permissions`, { token });
+    check('sincronizar com a categoria apaga o que o canal dizia', sincronizar.status === 200 && sincronizar.body?.overwrites?.length === 0);
+    check('sincronizado, volta a seguir a categoria', (await api('GET', `/api/v1/channels/${dentro.body.id}`, { token: token2 })).status === 403);
+    const catDentro = await api('PATCH', `/api/v1/channels/${cat.body.id}`, { token, body: { parentId: cat.body.id } });
+    check('categoria nao entra em categoria pelo PATCH', catDentro.status === 400, `status ${catDentro.status}`);
+    const paiDeFora = await api('PATCH', `/api/v1/guilds/${g}/channels`, {
+      token, body: { positions: [{ id: herdado.body.id, position: 0, parentId: textChannel.id }] },
+    });
+    check('reordenar nao aceita pai de outro servidor', paiDeFora.status === 400, `status ${paiDeFora.status}`);
+
+    // Convite de um uso, duas pessoas ao mesmo tempo: entra uma so.
+    const login3 = await api('POST', '/api/v1/auth/login', { body: { login: 'rafa', password: 'ordem123456' } });
+    const login4 = await api('POST', '/api/v1/auth/login', { body: { login: 'bruno', password: 'ordem123456' } });
+    const umUso = await api('POST', `/api/v1/guilds/${g}/invites`, { token, body: { maxAgeSecs: 600, maxUses: 1 } });
+    const [a, b] = await Promise.all([
+      api('POST', `/api/v1/invites/${umUso.body.code}`, { token: login3.body?.accessToken }),
+      api('POST', `/api/v1/invites/${umUso.body.code}`, { token: login4.body?.accessToken }),
+    ]);
+    const entraram = [a, b].filter((r) => r.status === 200 && r.body?.joined).length;
+    check('convite de um uso nao deixa duas pessoas entrarem juntas', entraram === 1, `${a.status}/${b.status}`);
+
+    const lista = await api('GET', `/api/v1/guilds/${g}/invites`, { token });
+    check('a lista de convites diz quem criou', lista.status === 200 && lista.body?.every((i) => i.inviter?.id === i.inviterId));
+
+    const paraOLink = await api('POST', `/api/v1/guilds/${g}/invites`, { token, body: { maxAgeSecs: 600, maxUses: 0 } });
+    const pagina = await fetch(`${API}/convite/${paraOLink.body.code}`);
+    const html = await pagina.text();
+    check('a pagina do convite abre no navegador', pagina.status === 200 && html.includes(`kiroshi://convite/${paraOLink.body.code}`) && html.includes('Servidor Teste'), `status ${pagina.status}`);
+    const gasto = await fetch(`${API}/convite/${umUso.body.code}`);
+    check('convite ja gasto da a pagina de convite invalido', gasto.status === 404, `status ${gasto.status}`);
+    const invalida = await fetch(`${API}/convite/naoexiste9`);
+    check('convite que nao existe da a pagina de convite invalido', invalida.status === 404);
+
+    const auditoria = await api('GET', `/api/v1/guilds/${g}/audit-log?action=MEMBER_ROLE_UPDATE`, { token });
+    check('auditoria filtra por acao', auditoria.status === 200 && auditoria.body.length >= 3 && auditoria.body.every((e) => e.action === 'MEMBER_ROLE_UPDATE'));
+    check('auditoria traz a pessoa alvo', auditoria.body?.[0]?.targetUser?.id === kayaId);
+    const daKaya = await api('GET', `/api/v1/guilds/${g}/audit-log?actorId=${kayaId}`, { token });
+    check('auditoria filtra por quem fez', daKaya.status === 200 && daKaya.body.length >= 1 && daKaya.body.every((e) => e.actor.id === kayaId));
+
+    const posse = await api('POST', `/api/v1/guilds/${g}/owner`, { token, body: { userId: '1' } });
+    check('passar a posse para quem nao e membro da erro claro, nao 500', posse.status === 400, `status ${posse.status}`);
+  }
+
   console.log('\n--- VOZ ---');
 
   const info = await fetch(`${API}/api/info`).then((r) => r.json());

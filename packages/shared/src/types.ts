@@ -351,10 +351,36 @@ export interface Invite {
   guildId: Snowflake;
   channelId: Snowflake | null;
   inviterId: Snowflake;
+  /** Quem criou, para a lista de convites. Servidores antigos nao mandam. */
+  inviter?: PublicUser | null;
   uses: number;
   /** 0 significa ilimitado. */
   maxUses: number;
   expiresAt: string | null;
+  createdAt: string;
+}
+
+/** Um banimento, como a lista dos ajustes do servidor mostra. */
+export interface GuildBan {
+  userId: Snowflake;
+  /** null quando a conta ja nao existe. */
+  user: PublicUser | null;
+  reason: string | null;
+  bannedBy: Snowflake;
+  createdAt: string;
+}
+
+/** Uma linha do registro de auditoria. */
+export interface AuditLogEntry {
+  id: Snowflake;
+  /** ROLE_CREATE, MEMBER_BAN, INVITE_DELETE... (ver `AUDIT_ACTIONS` no cliente). */
+  action: string;
+  actor: PublicUser;
+  targetId: Snowflake | null;
+  /** Quando o alvo e uma pessoa, ela, mesmo que ja tenha saido do servidor. */
+  targetUser?: PublicUser | null;
+  changes: Record<string, unknown>;
+  reason: string | null;
   createdAt: string;
 }
 
