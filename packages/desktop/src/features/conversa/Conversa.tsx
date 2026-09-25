@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { selectors, useStore, useTypingIn } from '../../store/index.js';
 import { usePermissoesNoCanal } from '../../app/permissoes.js';
 import { useInterface } from '../../app/interface.js';
+import { useTelaLarga } from '../../app/largura.js';
 import { Avatar, BotaoIcone } from '../../design/primitivos/index.js';
 import { ListaDeMensagens, type ControleDaLista } from './ListaDeMensagens.js';
 import { Compositor } from './Compositor.js';
@@ -24,7 +25,8 @@ function useOutroLado(canal: Channel | undefined, euSou: string | null) {
 }
 
 function Cabecalho({ canal, euSou, aoBuscar, podeFixar, extra }: { canal: Channel; euSou: string | null; aoBuscar: () => void; podeFixar: boolean; extra?: ReactNode }) {
-  const membros = useInterface((s) => s.membros);
+  const telaLarga = useTelaLarga();
+  const membros = useInterface((s) => (telaLarga ? s.membros : s.gavetaDeMembros));
   const alternarMembros = useInterface((s) => s.alternarMembros);
   const outro = useOutroLado(canal, euSou);
   const Icone = canal.type === 'GUILD_ANNOUNCEMENT' ? Megaphone : canal.type === 'GUILD_VOICE' ? Volume2 : Hash;
@@ -48,7 +50,7 @@ function Cabecalho({ canal, euSou, aoBuscar, podeFixar, extra }: { canal: Channe
         {extra}
         <Fixadas canalId={canal.id} guildId={canal.guildId} podeFixar={podeFixar} />
         {canal.guildId ? (
-          <BotaoIcone rotulo={membros ? 'Esconder membros' : 'Mostrar membros'} ligado={membros} onClick={alternarMembros} icone={<Users className="size-[18px]" strokeWidth={1.5} />} />
+          <BotaoIcone rotulo={membros ? 'Esconder membros' : 'Mostrar membros'} ligado={membros} onClick={() => alternarMembros(telaLarga)} icone={<Users className="size-[18px]" strokeWidth={1.5} />} />
         ) : null}
         <BotaoIcone rotulo="Buscar" atalho="Ctrl+F" onClick={aoBuscar} icone={<Search className="size-[18px]" strokeWidth={1.5} />} />
       </div>

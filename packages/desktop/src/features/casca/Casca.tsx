@@ -13,6 +13,7 @@ import { useVoz } from './useVoz.js';
 import { Conversa } from '../conversa/Conversa.js';
 import { Ajustes } from '../ajustes/Ajustes.js';
 import { useInterface } from '../../app/interface.js';
+import { useTelaLarga } from '../../app/largura.js';
 
 const CHAVE_DA_ULTIMA_ROTA = 'kiroshi.rota';
 
@@ -190,7 +191,23 @@ function Membros({ guildId }: { guildId: string }) {
 export function Casca(): React.JSX.Element {
   const rota = useRota();
   useSincronizarRota(rota);
+  const telaLarga = useTelaLarga();
   const membrosVisiveis = useInterface((s) => s.membros);
+  const gaveta = useInterface((s) => s.gavetaDeMembros);
+  const fecharGaveta = useInterface((s) => s.fecharGaveta);
+
+  // A gaveta e daquela tela: trocar de lugar ou alargar a janela fecha.
+  useEffect(() => {
+    fecharGaveta();
+  }, [rota, telaLarga, fecharGaveta]);
+  useEffect(() => {
+    if (!gaveta) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') fecharGaveta();
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [gaveta, fecharGaveta]);
   const ehTexto = useStore((s) => {
     if (rota.tela !== 'servidor' || !rota.canalId) return false;
     const tipo = s.channels.get(rota.canalId)?.type;
@@ -218,7 +235,15 @@ export function Casca(): React.JSX.Element {
         <main id="conteudo" tabIndex={-1} className="min-h-0 min-w-0 flex-1 bg-void outline-none">
           <AreaPrincipal rota={rota} />
         </main>
-        {rota.tela === 'servidor' && ehTexto && membrosVisiveis ? <Membros guildId={rota.guildId} /> : null}
+        {rota.tela === 'servidor' && ehTexto && telaLarga && membrosVisiveis ? <Membros guildId={rota.guildId} /> : null}
+        {/* Janela estreita: o painel vira gaveta por cima da conversa (design, secao 3). */}
+        {rota.tela === 'servidor' && ehTexto && !telaLarga && gaveta ? (
+          <div className="fixed inset-x-0 bottom-[22px] top-8 z-[var(--k-z-palco-flutuante)] bg-preto/50" onClick={fecharGaveta}>
+            <div className="absolute inset-y-0 right-0 flex shadow-camada" onClick={(e) => e.stopPropagation()}>
+              <Membros guildId={rota.guildId} />
+            </div>
+          </div>
+        ) : null}
       </div>
       <BarraDeEstado />
     </div>
