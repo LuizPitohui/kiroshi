@@ -13,6 +13,8 @@ interface Props {
   /** Marca uma posicao na trilha — o limiar de sensibilidade, por exemplo. */
   marca?: number;
   desativado?: boolean;
+  /** Quando a pessoa solta (mouse ou tecla): para gravar uma vez so, e nao a cada passo. */
+  aoSoltar?: (valor: number) => void;
 }
 
 /**
@@ -29,6 +31,7 @@ export function Deslizante({
   formatar = (v) => String(v),
   marca,
   desativado,
+  aoSoltar,
 }: Props): React.JSX.Element {
   const id = useId();
   const posicaoDaMarca = marca === undefined ? null : ((marca - min) / (max - min)) * 100;
@@ -46,6 +49,9 @@ export function Deslizante({
         value={[valor]}
         onValueChange={([v]) => {
           if (v !== undefined) aoMudar(v);
+        }}
+        onValueCommit={([v]) => {
+          if (v !== undefined) aoSoltar?.(v);
         }}
         min={min}
         max={max}

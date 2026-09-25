@@ -32,12 +32,38 @@ export function Contador({ valor, rotulo }: { valor: number; rotulo: string }): 
   );
 }
 
-/** Cargo: ponto na cor do cargo + nome. */
-export function SeloCargo({ nome, cor }: { nome: string; cor?: number | null }): React.JSX.Element {
-  const hex = cor ? `#${cor.toString(16).padStart(6, '0')}` : 'var(--k-texto-3)';
+/**
+ * Cargo: ponto na cor do cargo + nome. A cor vem como o servidor guarda
+ * (`#rrggbb`) ou como numero. Com `aoTirar`, ganha o x para tirar o cargo.
+ */
+export function SeloCargo({
+  nome,
+  cor,
+  aoTirar,
+}: {
+  nome: string;
+  cor?: number | string | null;
+  aoTirar?: () => void;
+}): React.JSX.Element {
+  const hex = typeof cor === 'number' ? `#${cor.toString(16).padStart(6, '0')}` : (cor ?? 'var(--k-texto-3)');
   return (
-    <span className="inline-flex items-center gap-1.5 border border-borda px-1.5 py-0.5 text-12 text-texto-2">
-      <span aria-hidden className="size-2 rounded-full" style={{ background: hex }} />
+    <span className="group/cargo inline-flex items-center gap-1.5 border border-borda px-1.5 py-0.5 text-12 text-texto-2">
+      {aoTirar ? (
+        <button
+          type="button"
+          onClick={aoTirar}
+          aria-label={`Tirar o cargo ${nome}`}
+          title={`Tirar o cargo ${nome}`}
+          className="relative grid size-2.5 place-items-center rounded-full"
+          style={{ background: hex }}
+        >
+          <span aria-hidden className="hidden text-[9px] leading-none text-preto group-hover/cargo:block group-focus-within/cargo:block">
+            ×
+          </span>
+        </button>
+      ) : (
+        <span aria-hidden className="size-2 rounded-full" style={{ background: hex }} />
+      )}
       {nome}
     </span>
   );

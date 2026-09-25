@@ -156,6 +156,35 @@ versao nova.
 - `https://order.arasaka.fun/baixar/beta` entrega sempre o Beta mais novo, para
   quem vai instalar pela primeira vez.
 
+## Protocolo `kiroshi://` (fatia 6, 2026-09-25)
+
+O botao "Abrir no Kiroshi" da pagina do convite abre
+`kiroshi://convite/<codigo>`. Quem registra o protocolo e o **instalador**, nao
+o app: `packages/desktop/instalador/protocolo-kiroshi.nsh` (incluido pelo
+`nsis.include` do `electron-builder.beta.yml`) grava
+`HKCU\Software\Classes\kiroshi` apontando para o exe instalado, e o
+desinstalador apaga — so numa remocao de verdade (a atualizacao tambem passa
+pelo desinstalador da versao velha) e so se a chave ainda for deste app.
+
+Por que nao `app.setAsDefaultProtocolClient` na abertura, como e o costume: o
+electron-builder so registra protocolo no Mac e no Linux, e gravar a cada
+abertura faria qualquer build de teste, aberto de uma pasta qualquer, roubar
+os links de quem tem o app instalado. Assim o app nunca mexe no registro.
+
+No app (`electron/links.ts`, testado): o Windows passa o endereco como
+argumento — em `process.argv` na abertura, ou no `argv` do `second-instance`
+com o app ja aberto. So `kiroshi://convite/<codigo valido>` vira rota
+(`#/convite/<codigo>`); o resto e ignorado. O da abertura fica guardado ate a
+interface pedir (`links.pendente()`), porque um evento na abertura chegaria
+antes de o React montar quem escuta. Testado com o Beta empacotado nos dois
+caminhos.
+
+So o Beta registra, por enquanto: o Kiroshi 1.x nao trata o protocolo. Quem tem
+o 1.x usa o codigo que a pagina mostra (o 1.x ja aceita o link inteiro colado
+em "Entrar em um servidor"). Quando a interface nova virar a normal, o mesmo
+include entra no `electron-builder.yml` — e ai quem instalar por ultimo fica
+com os links.
+
 ## Atualizacao, como e hoje
 
 1. `dist:win` gera `.exe`, `.exe.blockmap`, `latest.yml`.

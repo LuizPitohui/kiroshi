@@ -16,7 +16,7 @@ import {
   type RoomOptions,
   VideoQuality,
 } from 'livekit-client';
-import type { VoiceServerUpdateEvent } from '@kiroshi/shared';
+import { LIMITS, type VoiceServerUpdateEvent } from '@kiroshi/shared';
 import { api, ApiRequestError } from '../api/client.js';
 import { lerCaminhos, type CaminhosDisponiveis } from './caminhos.js';
 import {
@@ -1819,7 +1819,20 @@ class VoiceController {
         .catch(() => undefined);
     }
 
-    await audio.play().catch(() => undefined);
+    /*
+      O teto do soundboard vale aqui, na hora de tocar. O servidor nao
+      decodifica audio, entao a duracao que ele guarda e a que o app mediu —
+      e um som de dois minutos enviado por outro caminho tocaria inteiro.
+      Parando no mesmo limite, ninguem ouve mais do que isso.
+    */
+    const teto = setTimeout(() => {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+    }, (LIMITS.soundDurationSecs + 0.25) * 1000);
+    audio.addEventListener('ended', () => clearTimeout(teto), { once: true });
+
+    await audio.play().catch(() => clearTimeout(teto));
   }
 
 

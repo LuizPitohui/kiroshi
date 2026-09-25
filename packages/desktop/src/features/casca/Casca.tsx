@@ -19,6 +19,10 @@ import { Inicio } from '../inicio/Inicio.js';
 import { ContextoDaChamada } from '../chamada/fonte.js';
 import { fonteAoVivo } from '../chamada/fonteAoVivo.js';
 import { Ajustes } from '../ajustes/Ajustes.js';
+import { AjustesDoServidor } from '../servidor/AjustesDoServidor.js';
+import { EntrarPorConvite } from '../servidor/EntrarPorConvite.js';
+import { PainelDeMembros } from '../pessoas/PainelDeMembros.js';
+import { JanelasDaPessoa } from '../pessoas/JanelasDaPessoa.js';
 import { useInterface } from '../../app/interface.js';
 import { useTelaLarga } from '../../app/largura.js';
 
@@ -137,53 +141,10 @@ function AreaPrincipal({ rota }: { rota: Rota }) {
     case 'ajustes':
       return <Ajustes />;
     case 'ajustes-servidor':
-      return (
-        <EstadoVazio rotulo="Ajustes do servidor" titulo="Em construção" acao={<Botao onClick={() => history.back()}>Voltar</Botao>}>
-          Os ajustes do servidor completos, com cargos que se atribuem, chegam na fatia 6.
-        </EstadoVazio>
-      );
+      return <AjustesDoServidor guildId={rota.guildId} pagina={rota.pagina} />;
     case 'convite':
-      return (
-        <EstadoVazio rotulo="Convite" titulo="Convites por link chegam na fatia 6">
-          Código: {rota.codigo}
-        </EstadoVazio>
-      );
+      return <EntrarPorConvite key={rota.codigo} codigo={rota.codigo} />;
   }
-}
-
-/** Membros do servidor, online primeiro. O agrupamento por cargo vem com os cargos (fatia 6). */
-function Membros({ guildId }: { guildId: string }) {
-  const membros = useMembersOfGuild(guildId);
-  const presencas = useStore((s) => s.presences);
-  const usuarios = useStore((s) => s.users);
-  const online = membros.filter((m) => (presencas.get(m.userId)?.status ?? 'OFFLINE') !== 'OFFLINE');
-  const offline = membros.filter((m) => (presencas.get(m.userId)?.status ?? 'OFFLINE') === 'OFFLINE');
-
-  const linha = (userId: string, nick: string | null) => {
-    const u = usuarios.get(userId);
-    const nome = nick || u?.displayName || u?.username || '?';
-    const status = presencas.get(userId)?.status ?? 'OFFLINE';
-    return (
-      <li key={userId} className={status === 'OFFLINE' ? 'opacity-40' : undefined}>
-        <div className="flex h-10 items-center gap-2.5 px-3.5">
-          <Avatar nome={nome} id={userId} url={u?.avatarUrl} tamanho={32} status={status} />
-          <span className="min-w-0 truncate text-14 font-medium">{nome}</span>
-        </div>
-      </li>
-    );
-  };
-
-  return (
-    <aside aria-label="Membros" className="k-rolagem w-[300px] shrink-0 overflow-y-auto border-l border-borda bg-deck">
-      <div className="flex h-12 items-center border-b border-borda px-3.5">
-        <p className="k-rotulo">Membros — {membros.length}</p>
-      </div>
-      {online.length ? <p className="k-rotulo px-3.5 pb-1 pt-4">Online — {online.length}</p> : null}
-      <ul>{online.map((m) => linha(m.userId, m.nickname))}</ul>
-      {offline.length ? <p className="k-rotulo px-3.5 pb-1 pt-4">Offline — {offline.length}</p> : null}
-      <ul>{offline.map((m) => linha(m.userId, m.nickname))}</ul>
-    </aside>
-  );
 }
 
 /**
@@ -216,13 +177,14 @@ export function Casca(): React.JSX.Element {
     rota.tela !== 'servidor' || !rota.canalId ? null : tipoDoCanal === 'GUILD_VOICE' ? (
       <ConversaDaChamada canalId={rota.canalId} />
     ) : tipoDoCanal === 'GUILD_TEXT' || tipoDoCanal === 'GUILD_ANNOUNCEMENT' ? (
-      <Membros guildId={rota.guildId} />
+      <PainelDeMembros guildId={rota.guildId} />
     ) : null;
 
   return (
     <ContextoDaChamada.Provider value={fonteAoVivo}>
     <ZeladorDaChamada />
     <NotificacoesDaJanela />
+    <JanelasDaPessoa />
     <div className="grid h-full grid-rows-[32px_minmax(0,1fr)_22px]">
       {/* Botao, e nao link `#conteudo`: com rotas por hash, a ancora trocaria a rota. */}
       <button

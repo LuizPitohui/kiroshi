@@ -21,6 +21,7 @@ import { autoUpdater } from 'electron-updater';
 import type { AcaoDeAtalho, AtualizacaoEstado, PreferenciasDoApp } from './preload.js';
 import { gravarPreferencias, lerPreferencias, primeiraExecucao } from './preferencias.js';
 import { atalhosGlobaisAtivos, configurarAtalhos, pararAtalhos } from './atalhos.js';
+import { linkDosArgumentos } from './links.js';
 
 /** Id do app no Windows (notificacoes, atalhos), trocado na compilacao: Kiroshi ou Kiroshi Beta. */
 declare const __APP_ID__: string;
@@ -192,6 +193,18 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 }
+
+/*
+  O link kiroshi:// com que o app foi aberto (o Windows passa como argumento).
+  Fica guardado ate a interface pedir: mandar por evento na abertura chegaria
+  antes de o React montar quem escuta, e o convite se perderia.
+*/
+let linkDaAbertura: string | null = linkDosArgumentos(process.argv);
+ipcMain.handle('link:pendente', () => {
+  const rota = linkDaAbertura;
+  linkDaAbertura = null;
+  return rota;
+});
 
 function resolveIcon(): string {
   return join(__dirname, '../../build/icon.png');
@@ -780,11 +793,14 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('second-instance', () => {
+app.on('second-instance', (_event, argv) => {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+  // Um link kiroshi:// com o app ja aberto chega aqui, no argv da segunda instancia.
+  const rota = linkDosArgumentos(argv);
+  if (rota) mainWindow.webContents.send('link:abrir', rota);
 });
 
 app.on('window-all-closed', () => {

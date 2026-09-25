@@ -37,6 +37,16 @@ export function NotificacoesDaJanela() {
     [],
   );
 
+  // Links kiroshi:// (o "Abrir no Kiroshi" da pagina do convite): o da
+  // abertura, pedido uma vez, e os que chegam com o app ja aberto.
+  useEffect(() => {
+    const abrir = (rota: string | null) => {
+      if (rota?.startsWith('#/convite/')) location.hash = rota;
+    };
+    void window.kiroshi?.links?.pendente().then(abrir);
+    return window.kiroshi?.links?.aoAbrir(abrir);
+  }, []);
+
   useEffect(() => assinarPreferenciasDeNotificacao(() => setContador(lerPreferenciasDeNotificacao().contador)), []);
 
   useEffect(() => {

@@ -27,6 +27,7 @@ import { dicionarioDoCanal, fontesDoCanal } from './fontes.js';
 import { paraEdicao, paraEnvio } from './mencoes.js';
 import { ListaDeSugestoes, ariaDoCampo, useAutocompletar } from './Autocompletar.js';
 import { idsOtimistas } from './envio.js';
+import { CartaoDePerfil } from '../pessoas/CartaoDePerfil.js';
 
 /** O que a lista faz por uma mensagem. Um objeto estavel, para o `memo` valer. */
 export interface AcoesDaLista {
@@ -447,6 +448,7 @@ export const Mensagem = memo(function Mensagem({
   // Foco pelo teclado mostra a barra; foco pelo clique (selecionar texto) nao.
   const [focoDeTeclado, setFocoDeTeclado] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
+  const [perfilAberto, setPerfilAberto] = useState(false);
 
   const pendente = idsOtimistas.has(mensagem.id);
   const mencionaMe = Boolean(
@@ -467,10 +469,18 @@ export const Mensagem = memo(function Mensagem({
     </span>
   ) : null;
 
+  // O nome e a foto abrem o perfil, com os cargos (e o `+` para dar cargo).
   const nomeDoAutor = (
-    <span className="font-semibold text-[14.5px] text-texto compacto:text-14" style={cor ? { color: cor } : undefined}>
-      {nome}
-    </span>
+    <CartaoDePerfil userId={mensagem.authorId} guildId={guildId} aberto={perfilAberto} aoMudar={setPerfilAberto} lado="right">
+      <button
+        type="button"
+        onClick={() => setPerfilAberto(true)}
+        className="font-semibold text-[14.5px] text-texto hover:underline focus-visible:underline compacto:text-14"
+        style={cor ? { color: cor } : undefined}
+      >
+        {nome}
+      </button>
+    </CartaoDePerfil>
   );
 
   return (
@@ -496,9 +506,15 @@ export const Mensagem = memo(function Mensagem({
       {/* Calha: avatar no comeco do bloco; hora nas que continuam (no hover) e sempre no compacto. */}
       <div className="flex justify-end pr-2.5 compacto:pr-2">
         {continua ? null : (
-          <span className="mr-auto ml-4 mt-0.5 compacto:hidden">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden
+            onClick={() => setPerfilAberto(true)}
+            className="mr-auto ml-4 mt-0.5 self-start compacto:hidden"
+          >
             <Avatar nome={nome} id={mensagem.authorId} url={avatar} tamanho={40} />
-          </span>
+          </button>
         )}
         <time
           dateTime={mensagem.createdAt}

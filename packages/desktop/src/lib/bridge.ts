@@ -83,6 +83,11 @@ function createBrowserFallback(): KiroshiApi {
       flash: noop,
       aoAbrir: () => unsubscribe,
     },
+    // No navegador o convite chega pelo proprio endereco (#/convite/...), sem protocolo.
+    links: {
+      pendente: () => Promise.resolve(null),
+      aoAbrir: () => unsubscribe,
+    },
     autostart: {
       get: () => Promise.resolve(false),
       set: (enabled: boolean) => Promise.resolve(enabled),

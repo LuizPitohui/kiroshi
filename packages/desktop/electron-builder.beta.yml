@@ -58,6 +58,8 @@ nsis:
   uninstallerIcon: build/icon.ico
   artifactName: Kiroshi-Beta-Setup-${version}.${ext}
   language: '1046'
+  # O protocolo kiroshi:// dos convites: o instalador registra, o desinstalador tira.
+  include: instalador/protocolo-kiroshi.nsh
 # Canal proprio: o Beta nunca pega a atualizacao do normal, nem o contrario.
 publish:
   provider: generic

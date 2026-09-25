@@ -42,6 +42,7 @@ export interface GuildRecord {
   description: string | null;
   ownerId: string;
   systemChannelId: string | null;
+  createdAt: string;
   memberCount: number;
   roleIds: string[];
   channelIds: string[];
@@ -204,6 +205,7 @@ function guildFromState(guild: GuildWithState): GuildRecord {
     description: guild.description,
     ownerId: guild.ownerId,
     systemChannelId: guild.systemChannelId,
+    createdAt: guild.createdAt,
     memberCount: guild.memberCount,
     roleIds: guild.roles.map((r) => r.id),
     channelIds: guild.channels.map((c) => c.id),

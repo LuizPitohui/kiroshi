@@ -97,6 +97,74 @@ export function MenuDeContextoSeparador() {
   return <ContextMenu.Separator className={SEPARADOR} />;
 }
 
+/**
+ * Item de marcar (os cargos de alguem no clique direito). `aoMudar` roda sem
+ * fechar o menu: da para marcar varios cargos seguidos.
+ */
+export function MenuDeContextoMarcavel({
+  marcado,
+  aoMudar,
+  desativado,
+  children,
+  cor,
+}: {
+  marcado: boolean;
+  aoMudar: (marcado: boolean) => void;
+  desativado?: boolean;
+  children: ReactNode;
+  /** A bolinha do cargo, quando ele tem cor. */
+  cor?: string | null;
+}) {
+  return (
+    <ContextMenu.CheckboxItem
+      checked={marcado}
+      disabled={desativado}
+      onCheckedChange={(v) => aoMudar(v === true)}
+      onSelect={(e) => e.preventDefault()}
+      className={ITEM}
+    >
+      <span
+        aria-hidden
+        className={cx(
+          'grid size-4 place-items-center border',
+          marcado ? 'border-acento bg-acento text-sobre-acento' : 'border-borda-2',
+        )}
+      >
+        {marcado ? (
+          <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M2.5 6.5l2.5 2.5 4.5-5" />
+          </svg>
+        ) : null}
+      </span>
+      {cor !== undefined ? (
+        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: cor ?? 'var(--k-texto-3)' }} />
+      ) : null}
+      <span className="flex-1 truncate">{children}</span>
+    </ContextMenu.CheckboxItem>
+  );
+}
+
+export const MenuDeContextoSub = ContextMenu.Sub;
+
+export function MenuDeContextoSubGatilho({ icone, children }: { icone?: ReactNode; children: ReactNode }) {
+  return (
+    <ContextMenu.SubTrigger className={cx(ITEM, 'data-[state=open]:bg-acento-tenue')}>
+      {conteudoDoItem(icone, children)}
+      <span aria-hidden className="font-mono text-10 text-texto-3">›</span>
+    </ContextMenu.SubTrigger>
+  );
+}
+
+export function MenuDeContextoSubConteudo({ children }: { children: ReactNode }) {
+  return (
+    <ContextMenu.Portal>
+      <ContextMenu.SubContent sideOffset={4} className={cx(CONTEUDO, 'k-rolagem max-h-[60vh] overflow-y-auto')}>
+        {children}
+      </ContextMenu.SubContent>
+    </ContextMenu.Portal>
+  );
+}
+
 export function MenuDeContextoRotulo({ children }: { children: ReactNode }) {
   return <ContextMenu.Label className={ROTULO}>{children}</ContextMenu.Label>;
 }

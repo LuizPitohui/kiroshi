@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Plus } from 'lucide-react';
+import { JanelaDeServidorNovo } from '../servidor/JanelaDeServidorNovo.js';
 import { selectors, useGuildList, useStore } from '../../store/index.js';
 import { navegar, useRota } from '../../app/rotas.js';
 import { Contador, Dica, cx } from '../../design/primitivos/index.js';
@@ -79,6 +80,7 @@ export function Trilho(): React.JSX.Element {
     selectors.privateChannels(s).reduce((soma, c) => soma + selectors.mentionCount(s, c.id), 0),
   );
   const guildAtual = rota.tela === 'servidor' || rota.tela === 'ajustes-servidor' ? rota.guildId : null;
+  const [novo, setNovo] = useState(false);
 
   return (
     <nav aria-label="Servidores" className="k-rolagem flex w-[72px] shrink-0 flex-col items-center gap-2.5 overflow-y-auto border-r border-borda bg-void py-3">
@@ -94,16 +96,17 @@ export function Trilho(): React.JSX.Element {
       {servidores.map((g) => (
         <ServidorNoTrilho key={g.id} id={g.id} ativo={guildAtual === g.id} />
       ))}
-      <Dica texto="Criar ou entrar num servidor (em breve)" lado="right">
+      <Dica texto="Criar ou entrar num servidor" lado="right">
         <button
           type="button"
-          disabled
-          aria-label="Criar ou entrar num servidor (em breve)"
-          className="grid size-11 shrink-0 place-items-center border border-dashed border-borda-2 text-texto-3 disabled:opacity-40"
+          onClick={() => setNovo(true)}
+          aria-label="Criar ou entrar num servidor"
+          className="grid size-11 shrink-0 place-items-center border border-dashed border-borda-2 text-texto-3 hover:border-acento hover:text-texto"
         >
           <Plus className="size-4" strokeWidth={1.5} />
         </button>
       </Dica>
+      <JanelaDeServidorNovo aberto={novo} aoMudar={setNovo} />
     </nav>
   );
 }

@@ -5,21 +5,11 @@ import { api } from '../../api/client.js';
 import { useStore } from '../../store/index.js';
 import { AreaDeTexto, Avatar, Botao, Campo, Escolha, avisar } from '../../design/primitivos/index.js';
 import { motivo } from '../conversa/acoes.js';
+import { lerImagem } from '../../lib/arquivos.js';
 import { Bloco } from './partes.js';
 
 const MB = 1024 * 1024;
 
-/** Le a imagem como data URL, recusando o que o servidor recusaria. */
-function lerImagem(arquivo: File): Promise<string> {
-  return new Promise((resolver, rejeitar) => {
-    if (!arquivo.type.startsWith('image/')) return rejeitar(new Error('Escolha uma imagem (PNG, JPG, GIF ou WebP).'));
-    if (arquivo.size > LIMITS.imageBytes) return rejeitar(new Error(`A imagem passa de ${LIMITS.imageBytes / MB} MB.`));
-    const leitor = new FileReader();
-    leitor.onload = () => resolver(String(leitor.result));
-    leitor.onerror = () => rejeitar(new Error('Não consegui ler a imagem.'));
-    leitor.readAsDataURL(arquivo);
-  });
-}
 
 function SecaoFoto({ eu }: { eu: SelfUser }) {
   const entrada = useRef<HTMLInputElement>(null);

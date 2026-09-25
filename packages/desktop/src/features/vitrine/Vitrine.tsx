@@ -7,7 +7,7 @@
  * classe (a reescrita quebrou todos os testes 1.x justamente por isso).
  */
 import { useState, type ReactNode } from 'react';
-import { Mic, MicOff, Headphones, MonitorUp, Video, Settings, Search, Hash, Trash2, UserX, Volume2, Copy } from 'lucide-react';
+import { Mic, MicOff, Headphones, MonitorUp, Video, Settings, Search, Hash, Trash2, UserX, Volume2, Copy, Shield } from 'lucide-react';
 import {
   Abas,
   Aviso,
@@ -33,7 +33,11 @@ import {
   MenuDeContextoConteudo,
   MenuDeContextoGatilho,
   MenuDeContextoItem,
+  MenuDeContextoMarcavel,
   MenuDeContextoSeparador,
+  MenuDeContextoSub,
+  MenuDeContextoSubConteudo,
+  MenuDeContextoSubGatilho,
   MenuGatilho,
   MenuItem,
   MenuRotulo,
@@ -50,6 +54,16 @@ import { aplicarMovimento, type Movimento } from '../../lib/movimento.js';
 import { PalcoDeDemonstracao } from '../chamada/PalcoDeDemonstracao.js';
 import { CartaoDeChamadaRecebida } from '../chamada/ChamadaRecebida.js';
 import { LinhaDeChamada } from '../conversa/MensagemDeChamada.js';
+import { TresEstados } from '../servidor/Canais.js';
+import type { Estado } from '../servidor/sobrescritas.js';
+
+/** Cargos de mentira para o submenu e os selos (o "Dono" mostra o item desligado). */
+const CARGOS_DA_VITRINE: { nome: string; cor: string | null }[] = [
+  { nome: 'Dono', cor: '#eab308' },
+  { nome: 'Moderador', cor: '#3b82f6' },
+  { nome: 'VIP', cor: '#dc2626' },
+  { nome: 'Sem cor', cor: null },
+];
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -76,6 +90,8 @@ export default function Vitrine(): React.JSX.Element {
   const [aba, setAba] = useState('online');
   const [dialogo, setDialogo] = useState(false);
   const [confirmacao, setConfirmacao] = useState(false);
+  const [cargosDaKaya, setCargosDaKaya] = useState<{ nome: string; cor: string | null }[]>([CARGOS_DA_VITRINE[1]!]);
+  const [estados, setEstados] = useState<Record<string, Estado>>({ 'Ver canais': 'negar', 'Enviar mensagens': 'permitir' });
 
   return (
     <ProvedorDeDicas>
@@ -192,7 +208,28 @@ export default function Vitrine(): React.JSX.Element {
               <Contador valor={128} rotulo="menções" />
               <SeloCargo nome="ADM" cor={0xfb7185} />
               <SeloCargo nome="Membro" />
+              {cargosDaKaya.map((c) => (
+                <SeloCargo key={c.nome} nome={c.nome} cor={c.cor} aoTirar={() => setCargosDaKaya((atual) => atual.filter((x) => x.nome !== c.nome))} />
+              ))}
             </div>
+          </Secao>
+
+          <Secao id="permissoes" titulo="Permissões de canal (três estados)">
+            <ul className="max-w-md border border-borda bg-terminal">
+              {(['Ver canais', 'Enviar mensagens', 'Anexar arquivos'] as const).map((rotulo) => (
+                <li key={rotulo} className="flex items-center justify-between gap-4 border-b border-borda px-3 py-2 last:border-b-0">
+                  <span className="text-14">{rotulo}</span>
+                  <TresEstados
+                    rotulo={rotulo}
+                    estado={estados[rotulo] ?? 'herdar'}
+                    aoMudar={(e) => setEstados((atual) => ({ ...atual, [rotulo]: e }))}
+                    podePermitir={rotulo !== 'Anexar arquivos'}
+                    desativado={false}
+                  />
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-12 text-texto-3">Anexar: sem “permitir”, como para quem não tem a permissão no servidor.</p>
           </Secao>
 
           <Secao id="camadas" titulo="Menus, diálogos e avisos">
@@ -222,6 +259,24 @@ export default function Vitrine(): React.JSX.Element {
                 <MenuDeContextoConteudo>
                   <MenuDeContextoItem icone={i(Volume2)}>Volume de kaya</MenuDeContextoItem>
                   <MenuDeContextoItem icone={i(MicOff)}>Silenciar no servidor</MenuDeContextoItem>
+                  <MenuDeContextoSub>
+                    <MenuDeContextoSubGatilho icone={i(Shield)}>Cargos</MenuDeContextoSubGatilho>
+                    <MenuDeContextoSubConteudo>
+                      {CARGOS_DA_VITRINE.map((c) => (
+                        <MenuDeContextoMarcavel
+                          key={c.nome}
+                          cor={c.cor}
+                          marcado={cargosDaKaya.some((x) => x.nome === c.nome)}
+                          desativado={c.nome === 'Dono'}
+                          aoMudar={(marcar) =>
+                            setCargosDaKaya((atual) => (marcar ? [...atual, c] : atual.filter((x) => x.nome !== c.nome)))
+                          }
+                        >
+                          {c.nome}
+                        </MenuDeContextoMarcavel>
+                      ))}
+                    </MenuDeContextoSubConteudo>
+                  </MenuDeContextoSub>
                   <MenuDeContextoSeparador />
                   <MenuDeContextoItem icone={i(UserX)} perigo>
                     Expulsar kaya

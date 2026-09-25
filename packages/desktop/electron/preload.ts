@@ -147,6 +147,20 @@ const api = {
     flash: () => ipcRenderer.send('flash'),
   },
 
+  /** Links kiroshi:// (convites): a rota ja vem traduzida, `#/convite/<codigo>`. */
+  links: {
+    /** O link com que o app foi aberto, uma vez so; depois, null. */
+    pendente: (): Promise<string | null> => ipcRenderer.invoke('link:pendente'),
+    /** Links que chegam com o app ja aberto. */
+    aoAbrir: (handler: (rota: string) => void): (() => void) => {
+      const listener = (_event: unknown, rota: string): void => handler(rota);
+      ipcRenderer.on('link:abrir', listener);
+      return () => {
+        ipcRenderer.removeListener('link:abrir', listener);
+      };
+    },
+  },
+
   autostart: {
     get: (): Promise<boolean> => ipcRenderer.invoke('autostart:get'),
     set: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke('autostart:set', enabled),

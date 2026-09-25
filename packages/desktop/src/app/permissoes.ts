@@ -3,6 +3,7 @@ import {
   computeBasePermissions,
   computeChannelPermissions,
   deserialize,
+  mesclarSobrescritas,
   normalizeChannelPermissions,
   type MemberContext,
   type OverwriteLike,
@@ -11,16 +12,15 @@ import { useStore } from '../store/index.js';
 
 type Estado = ReturnType<typeof useStore.getState>;
 
-/** O contexto de cargos da propria pessoa num servidor, como o servidor calcula. */
-function contextoNoServidor(s: Estado, guildId: string): MemberContext | null {
-  const eu = s.user?.id;
+/** O contexto de cargos de um membro num servidor, como o servidor calcula. */
+export function contextoDoMembro(s: Estado, guildId: string, userId: string): MemberContext | null {
   const guild = s.guilds.get(guildId);
-  const membro = eu ? s.members.get(`${guildId}:${eu}`) : undefined;
-  if (!eu || !guild || !membro) return null;
+  const membro = s.members.get(`${guildId}:${userId}`);
+  if (!guild || !membro) return null;
   // O cargo everyone tem o id do servidor e vale mesmo fora da lista.
   const ids = membro.roleIds.includes(guildId) ? membro.roleIds : [guildId, ...membro.roleIds];
   return {
-    userId: eu,
+    userId,
     guildOwnerId: guild.ownerId,
     everyoneRoleId: guildId,
     roles: ids
@@ -28,6 +28,12 @@ function contextoNoServidor(s: Estado, guildId: string): MemberContext | null {
       .filter((r): r is NonNullable<typeof r> => Boolean(r))
       .map((r) => ({ id: r.id, position: r.position, permissions: deserialize(r.permissions) })),
   };
+}
+
+/** O da propria pessoa. */
+export function contextoNoServidor(s: Estado, guildId: string): MemberContext | null {
+  const eu = s.user?.id;
+  return eu ? contextoDoMembro(s, guildId, eu) : null;
 }
 
 /**
@@ -70,7 +76,7 @@ export function permissoesNoCanal(s: Estado, canalId: string): bigint {
     allow: deserialize(o.allow),
     deny: deserialize(o.deny),
   });
-  const overwrites = [...(pai?.overwrites ?? []).map(paraOverwrite), ...canal.overwrites.map(paraOverwrite)];
+  const overwrites = mesclarSobrescritas((pai?.overwrites ?? []).map(paraOverwrite), canal.overwrites.map(paraOverwrite));
   return normalizeChannelPermissions(computeChannelPermissions(contexto, overwrites));
 }
 

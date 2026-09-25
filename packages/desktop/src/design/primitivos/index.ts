@@ -20,6 +20,10 @@ export {
   MenuDeContextoItem,
   MenuDeContextoSeparador,
   MenuDeContextoRotulo,
+  MenuDeContextoMarcavel,
+  MenuDeContextoSub,
+  MenuDeContextoSubGatilho,
+  MenuDeContextoSubConteudo,
 } from './Menu.js';
 export { Dialogo, Confirmacao } from './Dialogo.js';
 export { Abas, ConteudoDaAba, type Aba } from './Abas.js';

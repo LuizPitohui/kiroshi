@@ -96,6 +96,17 @@ para todas): Membros, Convites, Banimentos, Registro de auditoria, canais
 (editar/apagar/reordenar), permissoes por canal, transferir posse, canal do
 sistema.
 
+> **No Kiroshi Beta (fatia 6 do F1, 2026-09-25)** existe tudo isso, menos o canal
+> do sistema (o servidor nao manda mensagem de entrada, entao seria enfeite):
+> Visao geral, Membros, Cargos (com Exibicao / Permissoes / Membros), Convites,
+> Banimentos, Canais com permissoes em tres estados, Emojis, Soundboard, Registro
+> de auditoria e Excluir servidor. Cada pagina aparece so para quem tem a
+> permissao que a rota dela pede — com MANAGE_ROLES e nada mais, por exemplo,
+> aparecem Membros e Cargos. Dar cargo tambem pelo perfil (`+`) e pelo clique
+> direito. Tudo o que nao pode aparece desligado com o motivo, e toda recusa do
+> servidor vira aviso: nada e engolido. O que cada relato abaixo pedia esta
+> resolvido la; as tabelas continuam descrevendo a 1.x.
+
 ### Convidar pessoas (`InviteModal`)
 
 | Controle | Veredito | O que acontece |

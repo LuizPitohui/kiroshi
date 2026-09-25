@@ -5,6 +5,7 @@ import {
   computeChannelPermissions,
   deserialize,
   has,
+  mesclarSobrescritas,
   normalizeChannelPermissions,
   type MemberContext,
   type OverwriteLike,
@@ -88,10 +89,10 @@ export function useChannelPermissions(channelId: string | null): bigint {
       deny: deserialize(o.deny),
     });
 
-    const overwrites: OverwriteLike[] = [
-      ...(parent?.overwrites ?? []).map(toOverwrite),
-      ...channel.overwrites.map(toOverwrite),
-    ];
+    const overwrites: OverwriteLike[] = mesclarSobrescritas(
+      (parent?.overwrites ?? []).map(toOverwrite),
+      channel.overwrites.map(toOverwrite),
+    );
 
     return normalizeChannelPermissions(computeChannelPermissions(context, overwrites));
   }, [state, channelId, selfId]);

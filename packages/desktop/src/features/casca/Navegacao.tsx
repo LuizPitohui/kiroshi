@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Permission, has, type Channel } from '@kiroshi/shared';
-import { BellOff, ChevronDown, ChevronRight, Hash, HeadphoneOff, LogOut, Megaphone, MicOff, Phone, Settings, UserPlus, Users, Video, Volume2, X } from 'lucide-react';
+import { BellOff, ChevronDown, ChevronRight, FolderPlus, Hash, HeadphoneOff, LogOut, Megaphone, MicOff, PenLine, Phone, Plus, Settings, UserPlus, Users, Video, Volume2, X } from 'lucide-react';
 import { selectors, useChannelsOfGuild, usePrivateChannels, useStore, useVoiceMembersOf } from '../../store/index.js';
 import { navegar, useRota } from '../../app/rotas.js';
 import {
   Avatar,
+  Confirmacao,
   Contador,
   Menu,
   MenuConteudo,
@@ -27,6 +28,11 @@ import { usePermissoesNoServidor } from '../../app/permissoes.js';
 import { CartaoNaChamada } from '../chamada/CartaoNaChamada.js';
 import { moverPara } from '../chamada/moderacao.js';
 import { fecharConversa } from '../inicio/acoes.js';
+import { primeiraPagina, usePoder } from '../servidor/poder.js';
+import { JanelaDeConvite } from '../servidor/JanelaDeConvite.js';
+import { JanelaDeCriarCanal } from '../servidor/Canais.js';
+import { sairDoServidor } from '../servidor/acoes.js';
+import { abrirJanela } from '../pessoas/janelas.js';
 
 const ic = 'size-4 shrink-0';
 
@@ -160,12 +166,20 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
   );
 }
 
-function CabecalhoDoServidor({ guildId }: { guildId: string }) {
+function CabecalhoDoServidor({ guildId, canalAtivo }: { guildId: string; canalAtivo: string | null }) {
   const nome = useStore((s) => s.guilds.get(guildId)?.name ?? '');
   const membros = useStore((s) => s.guilds.get(guildId)?.memberCount ?? 0);
+  const eu = useStore((s) => s.user?.id ?? null);
   const calado = useServidorSilenciado(guildId);
+  const poder = usePoder(guildId);
+  const [convidando, setConvidando] = useState(false);
+  const [criando, setCriando] = useState<'canal' | 'categoria' | null>(null);
+  const [saindo, setSaindo] = useState(false);
+  const tem = (bit: bigint) => Boolean(poder && has(poder.permissoes, bit));
+  const paginaDosAjustes = primeiraPagina(poder);
 
   return (
+    <>
     <Menu>
       <MenuGatilho asChild>
         <button
@@ -185,22 +199,63 @@ function CabecalhoDoServidor({ guildId }: { guildId: string }) {
         </button>
       </MenuGatilho>
       <MenuConteudo>
-        <MenuItem icone={<UserPlus className="size-4" strokeWidth={1.5} />} desativado>
-          Convidar pessoas (em breve)
-        </MenuItem>
-        <MenuItem
-          icone={<Settings className="size-4" strokeWidth={1.5} />}
-          aoEscolher={() => navegar({ tela: 'ajustes-servidor', guildId, pagina: 'visao-geral' })}
-        >
-          Ajustes do servidor
-        </MenuItem>
+        {tem(Permission.CREATE_INVITE) ? (
+          <MenuItem icone={<UserPlus className="size-4" strokeWidth={1.5} />} aoEscolher={() => setConvidando(true)}>
+            Convidar pessoas
+          </MenuItem>
+        ) : null}
+        {paginaDosAjustes ? (
+          <MenuItem
+            icone={<Settings className="size-4" strokeWidth={1.5} />}
+            aoEscolher={() => navegar({ tela: 'ajustes-servidor', guildId, pagina: paginaDosAjustes })}
+          >
+            Ajustes do servidor
+          </MenuItem>
+        ) : null}
+        {tem(Permission.MANAGE_CHANNELS) ? (
+          <>
+            <MenuItem icone={<Plus className="size-4" strokeWidth={1.5} />} aoEscolher={() => setCriando('canal')}>
+              Criar canal
+            </MenuItem>
+            <MenuItem icone={<FolderPlus className="size-4" strokeWidth={1.5} />} aoEscolher={() => setCriando('categoria')}>
+              Criar categoria
+            </MenuItem>
+          </>
+        ) : null}
+        {eu && tem(Permission.CHANGE_NICKNAME) ? (
+          <MenuItem icone={<PenLine className="size-4" strokeWidth={1.5} />} aoEscolher={() => abrirJanela('apelido', guildId, eu)}>
+            Mudar meu apelido
+          </MenuItem>
+        ) : null}
+        <MenuSeparador />
         <ItensDeNotificacaoDoServidor guildId={guildId} />
         <MenuSeparador />
-        <MenuItem icone={<LogOut className="size-4" strokeWidth={1.5} />} perigo desativado>
-          Sair do servidor (em breve)
+        <MenuItem icone={<LogOut className="size-4" strokeWidth={1.5} />} perigo desativado={poder?.dono} aoEscolher={() => setSaindo(true)}>
+          {poder?.dono ? 'Sair do servidor (passe a posse antes)' : 'Sair do servidor'}
         </MenuItem>
       </MenuConteudo>
     </Menu>
+    <JanelaDeConvite guildId={guildId} canalId={canalAtivo} aberto={convidando} aoMudar={setConvidando} />
+    {criando ? (
+      <JanelaDeCriarCanal
+        guildId={guildId}
+        categoria={criando === 'categoria'}
+        aoFechar={() => setCriando(null)}
+        aoCriar={(id) => {
+          if (criando === 'canal') navegar({ tela: 'servidor', guildId, canalId: id });
+        }}
+      />
+    ) : null}
+    <Confirmacao
+      aberto={saindo}
+      aoMudar={setSaindo}
+      titulo={`Sair de ${nome}?`}
+      descricao="Você deixa de ver os canais e sai da chamada, se estiver numa. Para voltar, só com um convite."
+      confirmar="Sair do servidor"
+      perigo
+      aoConfirmar={() => sairDoServidor(guildId)}
+    />
+    </>
   );
 }
 
@@ -211,7 +266,7 @@ function CanaisDoServidor({ guildId, canalAtivo }: { guildId: string; canalAtivo
 
   return (
     <>
-      <CabecalhoDoServidor guildId={guildId} />
+      <CabecalhoDoServidor guildId={guildId} canalAtivo={canalAtivo} />
       <div className="k-rolagem flex-1 overflow-y-auto px-2 pb-3 pt-2">
         {grupos.map(({ categoria, canais: doGrupo }) => {
           const fechada = categoria ? fechadas.has(categoria.id) : false;

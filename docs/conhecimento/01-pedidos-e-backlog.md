@@ -172,7 +172,43 @@ nenhuma decorativa.
 - **Sobre e atualizacoes** e **Diagnostico** (IPv6, rede virtual, caminho,
   latencia e perda, com relatorio para copiar).
 
-Proximo: fatia 6 (ajustes do servidor completos, dar cargo, convites por link).
+**Fatia 6 (ajustes do servidor, cargos, convites por link) entregue em
+2026-09-25, no Kiroshi Beta** (`src/features/servidor/` e `src/features/pessoas/`):
+as queixas de cargo do F9 resolvidas, e o convite virou link (F8).
+
+- **Ajustes do servidor** como o Discord organiza (secao 4.7 do desenho): Visao
+  geral (icone, nome, descricao), Membros (busca, filtro por cargo, cargos com
+  `+`, apelido, expulsar, banir, passar a posse), **Cargos** (lista que se
+  reordena arrastando ou com Alt + setas; editor com Exibicao, Permissoes e
+  Membros), Convites (quem criou, usos, validade, revogar), Banimentos (motivo,
+  tirar), **Canais** (arvore com criar, reordenar, mudar de categoria, apagar,
+  modo lento e limite da sala; permissoes por canal em **tres estados** — negar,
+  herdar, permitir — com o que o "herdar" vale naquele momento, "sincronizado com
+  a categoria" e canal privado), Emojis e Soundboard (enviar varios, renomear,
+  apagar; som com a duracao medida e o limite de 5 s), Registro de auditoria
+  (filtro por pessoa e acao, em frases) e Excluir servidor (so o dono, digitando
+  o nome). Cada pagina aparece so para quem tem a permissao que o servidor pede.
+- **Dar cargo** tambem pelo perfil da pessoa (`+` nos cargos; o perfil abre no
+  nome da mensagem e na lista de membros) e pelo clique direito (submenu Cargos
+  com caixas de marcar). So aparece o que o servidor aceita: cargo abaixo do seu,
+  sem permissao que voce nao tem, em quem esta abaixo de voce.
+- **Lista de membros** agrupada pelo cargo destacado mais alto, nome na cor do
+  cargo, coroa no dono.
+- **Convite como link** (F8): a janela "Convidar pessoas" com o link, validade e
+  usos, e os amigos com o botao que manda o link pela DM; a pagina
+  `/convite/<codigo>` no navegador; o protocolo `kiroshi://` (registrado pelo
+  instalador do Beta) abre o app direto no convite; o `+` do trilho cria
+  servidor ou entra colando o link. O Kiroshi 1.x ja aceita o link colado.
+- No menu do servidor: convidar, criar canal e categoria, mudar o proprio
+  apelido e sair do servidor.
+
+Os consertos de servidor desta fatia estao em
+[03-servidor.md](03-servidor.md#cargos-e-permissoes). De fora ficaram, porque o
+servidor nao faz nada com eles: canal de sistema e notificacao padrao do
+servidor, "ver como este cargo", e figurinhas.
+
+Proximo: fatia 7 (entrada e conta: cadastro aberto, Google + aviso de senha,
+recuperacao).
 
 ## F2 — Estabilidade das transmissoes
 
@@ -337,6 +373,15 @@ protocolo `kiroshi://`, enviar por DM na janela, lista/revogacao na interface.
 A interface ja roda no navegador (`vite.web.config.ts`, substituto da ponte), o
 que torna a versao web viavel mais adiante.
 
+**Estado:** feito na fatia 6 do F1 (Beta e servidor). Link
+`order.arasaka.fun/convite/<codigo>` com pagina no navegador (servidor, quem
+convidou, online, o codigo para quem tem app antigo, e o instalador), protocolo
+`kiroshi://convite/<codigo>` registrado pelo instalador do Beta, janela de
+convite com validade e usos do Discord e envio pela DM, lista e revogacao nos
+ajustes. O uso do convite passou a ser reservado numa conta so no banco (dois
+aceitando um convite de 1 uso ao mesmo tempo nao entram os dois). Versao web:
+ainda depois.
+
 ## F9 — Cargos e moderacao de verdade
 
 **Pedido:** as permissoes de cargo nao funcionam; nao da para dar o cargo ADM a
@@ -359,8 +404,12 @@ Referencia em [09-referencia-discord.md](09-referencia-discord.md).
 
 **Estado:** moderacao de voz feita na fatia 3 do F1 (Beta e servidor): silenciar
 e ensurdecer tiram o microfone no SFU na hora, e o token de entrada ja sai sem
-ele; mover funciona e recusa destino sem CONNECT. Ajustes de servidor e cargos:
-fatia 6.
+ele; mover funciona e recusa destino sem CONNECT. **Ajustes de servidor e cargos
+feitos na fatia 6** (Beta e servidor): qualquer um com Gerenciar cargos cria
+cargo (nasce logo acima do everyone), da e tira um cargo de cada vez, e o canal
+que o cargo abre aparece (ou some) na hora para quem ganhou ou perdeu; heranca
+da categoria certa; telas para tudo o que so existia na API. USE_VAD,
+PRIORITY_SPEAKER e MANAGE_WEBHOOKS continuam sem efeito — e nao aparecem na tela.
 
 ## F10 — Emojis, soundboard, figurinhas
 
@@ -370,7 +419,11 @@ Figurinhas nao funcionam. Proposta: soundboard na barra da chamada, com volume,
 limites e permissao; figurinhas consertadas ou retiradas.
 
 **Estado:** tocar na chamada feito na fatia 3 do F1 (Beta), com permissao,
-moderacao e espera entre sons. Limite de duracao e gerenciamento: fatia 6.
+moderacao e espera entre sons. **Gerenciamento feito na fatia 6**: Emojis e
+Soundboard nos ajustes do servidor; o som tem a duracao medida no envio (o app
+decodifica) e o limite de 5 s vale tambem na hora de tocar, em todo cliente
+novo; MP3 passou a ser gravado como `.mp3`. Figurinhas: ainda quebradas no
+servidor, e fora da interface.
 
 ## F11 — Atualizacao e atualizador em segundo plano
 
