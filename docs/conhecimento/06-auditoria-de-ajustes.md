@@ -36,6 +36,13 @@
 | Sair da conta | PARCIAL | nao chama `/auth/logout` (a sessao continua valida no servidor); [I] nao sai da chamada | revogar + sair da voz |
 | Sessoes/dispositivos | NAO EXISTE na UI | o servidor lista e revoga (`GET/DELETE /auth/sessions`) | tela de dispositivos |
 
+> **No Kiroshi Beta (fatias 5 e 7, 2026-09-25):** 2FA reage na hora
+> (`USER_UPDATE`), pede senha so se a conta tiver, e **desliga com um codigo de
+> recuperacao** para quem perdeu o celular; trocar senha com confirmacao; sair de
+> verdade; aparelhos conectados. **Esqueci a senha na tela de entrada**, sem estar
+> logado, pelo Google vinculado (o dono decidiu: recuperacao so pelo Google), e a
+> faixa "defina uma senha" para quem so entra pelo Google.
+
 ### Voz e video
 
 | Controle | Veredito | O que acontece | Proposta |

@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Check, MessageSquare, MoreVertical, Phone, UserPlus, Users, Video, X } from 'lucide-react';
+import { Check, Link2, MessageSquare, MoreVertical, Phone, Plus, UserPlus, Users, Video, X } from 'lucide-react';
 import type { PresenceStatus, Relationship, VoiceState } from '@kiroshi/shared';
 import { useRelationships, useStore } from '../../store/index.js';
 import { navegar, type AbaDoInicio } from '../../app/rotas.js';
@@ -25,6 +25,7 @@ import { useVoz } from '../casca/useVoz.js';
 import { nomeDaConversa } from '../chamada/dm.js';
 import { amigosEmVoz, filtrarPorBusca, relacoesDaAba } from './amigos.js';
 import { abrirConversa, aceitarPedido, bloquear, desfazerRelacao, ligarPara, pedirAmizade } from './acoes.js';
+import { JanelaDeServidorNovo } from '../servidor/JanelaDeServidorNovo.js';
 
 const STATUS: Record<PresenceStatus, string> = {
   ONLINE: 'Online',
@@ -274,6 +275,48 @@ function Agora({ amigos }: { amigos: string[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Conta nova
+// ---------------------------------------------------------------------------
+
+/**
+ * "Sua rede comeca aqui" (10-front-end-novo.md 4.1): com o cadastro aberto, a
+ * conta nasce sem amigos nem servidores, e a tela vazia precisa dizer o que
+ * fazer. Os tres caminhos, cada um a um clique; some quando existir o primeiro
+ * amigo ou servidor.
+ */
+function PrimeirosPassos({ aoAdicionar }: { aoAdicionar: () => void }) {
+  const [janela, setJanela] = useState<'criar' | 'entrar' | null>(null);
+  const caminho = (icone: React.ReactNode, titulo: string, texto: string, acao: string, aoClicar: () => void) => (
+    <li className="flex flex-col gap-3 border border-borda bg-deck p-4">
+      <span className="grid size-9 place-items-center border border-borda-2 text-acento">{icone}</span>
+      <div>
+        <p className="font-display text-16 font-bold uppercase tracking-[0.06em]">{titulo}</p>
+        <p className="mt-1 text-13 text-texto-3">{texto}</p>
+      </div>
+      <Botao tamanho="sm" className="mt-auto self-start" onClick={aoClicar}>
+        {acao}
+      </Botao>
+    </li>
+  );
+
+  return (
+    <section aria-labelledby="primeiros-passos" className="border-b border-borda px-6 py-6">
+      <p className="k-rotulo">Conta nova</p>
+      <h2 id="primeiros-passos" className="mt-1 font-display text-28 font-bold uppercase tracking-display">
+        Sua rede começa aqui
+      </h2>
+      <p className="mt-1 max-w-xl text-14 text-texto-3">Ninguém por perto ainda. Três jeitos de começar:</p>
+      <ul className="mt-4 grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-3">
+        {caminho(<UserPlus className="size-4" strokeWidth={1.5} />, 'Adicionar amigo', 'Pelo nome de usuário. Amigos conversam e ligam direto.', 'Adicionar', aoAdicionar)}
+        {caminho(<Link2 className="size-4" strokeWidth={1.5} />, 'Entrar num servidor', 'Recebeu um link de convite? Cole aqui.', 'Usar convite', () => setJanela('entrar'))}
+        {caminho(<Plus className="size-4" strokeWidth={1.5} />, 'Criar um servidor', 'Para o seu grupo, com canal de texto e de voz.', 'Criar', () => setJanela('criar'))}
+      </ul>
+      <JanelaDeServidorNovo aberto={janela !== null} aoMudar={(v) => !v && setJanela(null)} modoInicial={janela ?? 'escolher'} />
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // A tela
 // ---------------------------------------------------------------------------
 
@@ -289,6 +332,9 @@ export function Inicio({ aba }: { aba: AbaDoInicio }) {
   const telaLarga = useTelaLarga();
   const recebidos = relacoes.filter((r) => r.type === 'PENDING_INCOMING').length;
   const amigos = useMemo(() => relacoes.filter((r) => r.type === 'FRIEND').map((r) => r.user.id), [relacoes]);
+  // Sem ninguem e sem servidor: a conta acabou de nascer.
+  const semServidor = useStore((s) => s.guilds.size === 0);
+  const contaNova = semServidor && relacoes.length === 0;
 
   const abas = [
     { valor: 'online', rotulo: 'Online' },
@@ -313,6 +359,7 @@ export function Inicio({ aba }: { aba: AbaDoInicio }) {
           </Botao>
         </header>
         {adicionando ? <AdicionarAmigo aoFechar={() => setAdicionando(false)} /> : null}
+        {contaNova && !adicionando ? <PrimeirosPassos aoAdicionar={() => setAdicionando(true)} /> : null}
         <div className="flex min-h-0 flex-1 flex-col pt-2 [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col">
           <Abas rotulo="Amigos" abas={abas} valor={aba} aoMudar={(valor) => navegar({ tela: 'inicio', aba: valor as AbaDoInicio })}>
             {abas.map((a) => (

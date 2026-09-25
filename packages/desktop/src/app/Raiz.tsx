@@ -23,6 +23,19 @@ export function Raiz(): React.JSX.Element {
   const vitrine = typeof location !== 'undefined' && new URLSearchParams(location.search).has('vitrine');
   const [logado, setLogado] = useState(() => api.isAuthenticated());
 
+  // Links kiroshi:// (o "Abrir no Kiroshi" da pagina do convite): o da
+  // abertura, pedido uma vez, e os que chegam com o app ja aberto. Aqui, e nao
+  // na casca, para valer tambem antes de entrar: quem chega pelo convite sem
+  // conta cria a conta ja sabendo para onde vai.
+  useEffect(() => {
+    if (vitrine) return undefined;
+    const abrir = (rota: string | null) => {
+      if (rota?.startsWith('#/convite/')) location.hash = rota;
+    };
+    void window.kiroshi?.links?.pendente().then(abrir);
+    return window.kiroshi?.links?.aoAbrir(abrir);
+  }, [vitrine]);
+
   useEffect(() => {
     if (vitrine) return undefined;
     installGatewayHandlers();

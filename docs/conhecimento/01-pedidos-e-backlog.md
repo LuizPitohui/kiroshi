@@ -207,8 +207,29 @@ Os consertos de servidor desta fatia estao em
 servidor nao faz nada com eles: canal de sistema e notificacao padrao do
 servidor, "ver como este cargo", e figurinhas.
 
-Proximo: fatia 7 (entrada e conta: cadastro aberto, Google + aviso de senha,
-recuperacao).
+**Fatia 7 (entrada e conta) entregue em 2026-09-25, no Kiroshi Beta**
+(`src/features/entrada/`): o F4 inteiro, com as decisoes do dono — cadastro
+aberto e recuperacao so pelo Google.
+
+- **Entrada** (secao 4.1 do desenho): entrar, criar conta (email, usuario, nome,
+  senha repetida; o nome reservado e a senha curta aparecem antes de enviar),
+  continuar com o Google (entra, pede o 2FA, ou oferece criar a conta com um
+  nome de usuario ja sugerido), esqueci a senha (pelo Google vinculado) e o
+  segundo fator, que vale para os tres caminhos. Com o cadastro fechado, o campo
+  de convite aparece sozinho.
+- **Chegando pelo link de convite sem conta**, a tela mostra o convite e a
+  conta nova ja nasce dentro do servidor — o `kiroshi://` passou a valer antes
+  do login.
+- **Conta nova cai no "Sua rede comeca aqui"**: adicionar amigo, entrar num
+  servidor com convite ou criar um.
+- **"Defina uma senha"**: faixa fixa e dispensavel para quem so entra pelo
+  Google; some sozinha quando a senha e definida.
+- **2FA**: desliga com um codigo de recuperacao (quem perdeu o celular ficava
+  preso com o 2FA ligado).
+
+Com isso as sete fatias do desenho estao no Beta. Proximo: decidir com o dono a
+troca do Beta para todo mundo (o plano da secao 7 do desenho) e seguir para o
+F3 (supressao de ruido do zero).
 
 ## F2 — Estabilidade das transmissoes
 
@@ -283,9 +304,19 @@ pre-sequestrada); "entrar com Google de novo" nao prova quem esta digitando — 
 padrao do mercado para **redefinir** senha e link ou codigo por email. Definir a
 **primeira** senha de uma conta so-Google estando logado e o padrao (Notion).
 
-**Decisoes do dono antes de abrir:** cadastro aberto para qualquer um que tenha o
-instalador (o link de download e publico)? Recuperacao de senha so pelo Google,
-ou tambem por email (exige um servico de envio de email)?
+**Decisoes do dono (2026-09-25):** cadastro **aberto** para qualquer um;
+recuperacao de senha **so pelo Google** (sem servico de email).
+
+**Estado:** feito na fatia 7 do F1 (Beta e servidor). Conta nova com email e
+senha ou com o Google, sem convite; com convite (chegando pelo link), a conta ja
+nasce dentro do servidor. "Esqueci a senha" pelo Google vinculado, sem estar
+logado: confirma pelo Google, escolhe a senha nova e entra (com 2FA, pede o
+codigo do app). Aviso fixo e dispensavel "defina uma senha" para quem entrou
+pelo Google. Protecoes do cadastro aberto: teto de contas novas por hora no
+servidor inteiro, nomes reservados, teto de pedidos de amizade, e DM so entre
+amigos, gente com servidor em comum ou quem ja tinha conversa. Continua sem
+verificacao de email (nao ha como mandar email). Quem nao tem Google vinculado
+e esquece a senha depende de quem administra.
 
 ## F5 — Chamada em DM + quem fica sozinho
 

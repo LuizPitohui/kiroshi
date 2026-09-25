@@ -30,7 +30,7 @@ abertas.
 | Area | Estado |
 |---|---|
 | Versao publicada | 1.15.0 (2026-09-23) |
-| Testes | 727 unitarios passando (shared 74, servidor 150, desktop 503); e2e 124/124; typecheck limpo |
+| Testes | 741 unitarios passando (shared 79, servidor 153, desktop 509); e2e 136/136; typecheck limpo |
 | Conversa (texto) | 1.x: funciona, sem autocompletar e com acoes so no hover. Beta: autocompletar, acoes por teclado, densidade real |
 | Voz | funciona; ajustes de audio em boa parte sem efeito; PTT global quebrado. Beta: silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada |
 | Transmissao de tela | 1.x: **trava** — espectador recebe 360p15 ao lado do chat, sem metricas. Beta: nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Rede de quem usa relay: a medir |
@@ -41,9 +41,9 @@ abertas.
 | Notificacoes | 1.x: so DM e mencoes, sem ajustes. Beta: nivel por servidor e canal, silenciar por tempo, Nao perturbe, clique abre a conversa, contador no icone |
 | Iniciar com o Windows | 1.x: quebrado. Beta: consertado, abre escondido na bandeja |
 | Atualizacao automatica | funciona, mas baixa 93 MiB inteiros por versao |
-| Cadastro | so com convite (`ALLOW_OPEN_REGISTRATION=false`); criar com Google ja existe no servidor |
+| Cadastro | aberto (decisao do dono, 2026-09-25): email e senha ou Google, sem convite; com o link de convite a conta ja nasce no servidor. Recuperacao so pelo Google vinculado. Protecoes: teto por IP e global, nomes reservados, teto de pedidos de amizade, DM so com vinculo |
 | Seguranca | servidor: 13 falhas corrigidas e publicadas (API `6f493df`); abertas: casca Electron e host (ver `privado/`) |
-| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca), 2 (conversa), 3 (chamada e palco), 4 (inicio, amigos e DM), 5 (ajustes do usuario) e 6 (ajustes do servidor, cargos, convites por link) no Kiroshi Beta |
+| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca), 2 (conversa), 3 (chamada e palco), 4 (inicio, amigos e DM), 5 (ajustes do usuario), 6 (ajustes do servidor, cargos, convites por link) e 7 (entrada e conta) no Kiroshi Beta — as sete do desenho |
 
 ## Como manter
 

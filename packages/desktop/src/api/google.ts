@@ -17,7 +17,7 @@ import { api } from './client.js';
  * quer se alguem tentar trocar o destino no meio.
  */
 
-export type IntencaoDoGoogle = 'entrar' | 'vincular' | 'senha';
+export type IntencaoDoGoogle = 'entrar' | 'vincular' | 'senha' | 'recuperar';
 
 export interface SessaoDoGoogle {
   tipo: 'sessao';
@@ -34,7 +34,9 @@ export type DesfechoDoGoogle =
   /** Ninguem aqui usa essa conta do Google ainda. */
   | { tipo: 'sem-conta'; prova: string; email: string | null; nome: string | null }
   | { tipo: 'vinculado'; email: string | null }
-  | { tipo: 'prova-de-senha'; prova: string };
+  | { tipo: 'prova-de-senha'; prova: string }
+  /** Esqueci a senha: a conta que este Google abre, para a pessoa conferir antes de trocar. */
+  | { tipo: 'prova-de-recuperacao'; prova: string; username: string; displayName: string };
 
 export interface EstadoDoVinculo {
   disponivel: boolean;
@@ -85,7 +87,8 @@ export async function conversarComGoogle(intencao: IntencaoDoGoogle): Promise<De
     const inicio = await api.post<{ url: string }>(
       '/auth/google/start',
       { intencao, retorno },
-      { auth: intencao !== 'entrar' },
+      // Entrar e recuperar sao para quem ainda nao tem sessao.
+      { auth: intencao === 'vincular' || intencao === 'senha' },
     );
     url = inicio.url;
   } catch (erro) {
@@ -113,11 +116,19 @@ export async function registrarComGoogle(dados: {
   username: string;
   displayName?: string;
   inviteCode?: string;
-}): Promise<SessaoDoGoogle & { tipo: 'sessao' }> {
-  const r = await api.post<Omit<SessaoDoGoogle, 'tipo'>>('/auth/google/registrar', dados, {
+}): Promise<SessaoDoGoogle & { tipo: 'sessao'; guildId?: string | null }> {
+  const r = await api.post<Omit<SessaoDoGoogle, 'tipo'> & { guildId?: string | null }>('/auth/google/registrar', dados, {
     auth: false,
   });
   return { tipo: 'sessao', ...r };
+}
+
+/**
+ * Esqueci a senha: troca a senha com a prova do Google vinculado e ja entra.
+ * Com 2FA ligado, volta pedindo o codigo do app, como o login pelo Google.
+ */
+export async function recuperarComGoogle(prova: string, novaSenha: string): Promise<SessaoDoGoogle | { tipo: 'mfa'; mfaToken: string }> {
+  return api.post('/auth/google/recuperar', { prova, newPassword: novaSenha }, { auth: false });
 }
 
 /** Define uma senha nova provando pelo Google, sem saber a antiga. */

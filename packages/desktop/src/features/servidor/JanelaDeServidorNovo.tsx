@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Link2, Plus } from 'lucide-react';
 import { LIMITS, type GuildWithState } from '@kiroshi/shared';
 import { api } from '../../api/client.js';
@@ -9,14 +9,26 @@ import { lerImagem } from '../../lib/arquivos.js';
 import { motivo } from '../conversa/acoes.js';
 import { codigoDe } from './regrasDoConvite.js';
 
-type Modo = 'escolher' | 'criar' | 'entrar';
+export type Modo = 'escolher' | 'criar' | 'entrar';
 
 /**
  * O `+` do trilho: criar um servidor ou entrar com um convite (o codigo, ou o
  * link inteiro colado de qualquer lugar).
  */
-export function JanelaDeServidorNovo({ aberto, aoMudar }: { aberto: boolean; aoMudar: (v: boolean) => void }) {
-  const [modo, setModo] = useState<Modo>('escolher');
+export function JanelaDeServidorNovo({
+  aberto,
+  aoMudar,
+  modoInicial = 'escolher',
+}: {
+  aberto: boolean;
+  aoMudar: (v: boolean) => void;
+  /** O Inicio de uma conta nova abre direto em criar ou em entrar com convite. */
+  modoInicial?: Modo;
+}) {
+  const [modo, setModo] = useState<Modo>(modoInicial);
+  useEffect(() => {
+    if (aberto) setModo(modoInicial);
+  }, [aberto, modoInicial]);
   const [nome, setNome] = useState('');
   const [icone, setIcone] = useState<string | null>(null);
   const [convite, setConvite] = useState('');

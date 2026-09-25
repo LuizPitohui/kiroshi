@@ -118,11 +118,14 @@ function SecaoDuasEtapas({ ativa, temSenha }: { ativa: boolean; temSenha: boolea
   const [codigos, setCodigos] = useState<string[] | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Perdeu o celular: desativar com um codigo de recuperacao (so no desativar).
+  const [comReserva, setComReserva] = useState(false);
 
   function limpar() {
     setCodigo('');
     setSenha('');
     setErro(null);
+    setComReserva(false);
   }
 
   async function comecar() {
@@ -141,7 +144,11 @@ function SecaoDuasEtapas({ ativa, temSenha }: { ativa: boolean; temSenha: boolea
     setOcupado(true);
     setErro(null);
     try {
-      const r = await api.post<{ backupCodes?: string[] }>(caminho, { code: codigo.trim(), ...(temSenha ? { password: senha } : {}) });
+      const usarReserva = comReserva && caminho === '/auth/totp/disable';
+      const r = await api.post<{ backupCodes?: string[] }>(caminho, {
+        ...(usarReserva ? { backupCode: codigo.trim() } : { code: codigo.trim() }),
+        ...(temSenha ? { password: senha } : {}),
+      });
       if (r.backupCodes) setCodigos(r.backupCodes);
       setConfigurando(null);
       setPedindo(null);
@@ -155,7 +162,19 @@ function SecaoDuasEtapas({ ativa, temSenha }: { ativa: boolean; temSenha: boolea
 
   const campos = (
     <>
-      <Campo rotulo="Código do aplicativo" inputMode="numeric" autoComplete="one-time-code" value={codigo} onChange={(e) => setCodigo(e.target.value)} className="max-w-[200px]" />
+      <Campo
+        rotulo={comReserva ? 'Código de recuperação' : 'Código do aplicativo'}
+        inputMode={comReserva ? 'text' : 'numeric'}
+        autoComplete="one-time-code"
+        value={codigo}
+        onChange={(e) => setCodigo(e.target.value)}
+        className="max-w-[200px]"
+      />
+      {pedindo === 'desativar' ? (
+        <button type="button" onClick={() => (setComReserva((v) => !v), setCodigo(''))} className="text-12 text-texto-3 underline hover:text-texto">
+          {comReserva ? 'Usar o código do aplicativo' : 'Perdi o celular: usar um código de recuperação'}
+        </button>
+      ) : null}
       {temSenha ? <CampoSenha rotulo="Sua senha" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} className="max-w-[320px]" /> : null}
     </>
   );

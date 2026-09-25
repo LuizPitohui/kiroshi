@@ -23,6 +23,7 @@ import { AjustesDoServidor } from '../servidor/AjustesDoServidor.js';
 import { EntrarPorConvite } from '../servidor/EntrarPorConvite.js';
 import { PainelDeMembros } from '../pessoas/PainelDeMembros.js';
 import { JanelasDaPessoa } from '../pessoas/JanelasDaPessoa.js';
+import { AvisoDeSenha } from './AvisoDeSenha.js';
 import { useInterface } from '../../app/interface.js';
 import { useTelaLarga } from '../../app/largura.js';
 
@@ -202,10 +203,13 @@ export function Casca(): React.JSX.Element {
           <PainelDeVoz />
           <Identidade />
         </aside>
-        <main id="conteudo" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 bg-void outline-none">
+        <main id="conteudo" tabIndex={-1} className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-void outline-none">
           {/* Primeiro no documento: o Tab chega na chamada recebida antes da conversa. */}
           <ChamadasDiretas />
-          <AreaPrincipal rota={rota} />
+          <AvisoDeSenha />
+          <div className="relative min-h-0 flex-1">
+            <AreaPrincipal rota={rota} />
+          </div>
           <MiniPalco />
         </main>
         {painel && telaLarga && membrosVisiveis ? painel : null}
