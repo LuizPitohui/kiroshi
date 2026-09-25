@@ -25,7 +25,7 @@ divergiu deles, esta base registra.
 producao, a lista dos outros servicos do host e as pendencias de seguranca ainda
 abertas.
 
-## Painel (2026-09-24)
+## Painel (atualizado em 2026-09-25)
 
 | Area | Estado |
 |---|---|
@@ -42,7 +42,8 @@ abertas.
 | Iniciar com o Windows | quebrado |
 | Atualizacao automatica | funciona, mas baixa 93 MiB inteiros por versao |
 | Cadastro | so com convite (`ALLOW_OPEN_REGISTRATION=false`); criar com Google ja existe no servidor |
-| Seguranca | pendencias abertas no servidor, na casca e no host (ver `privado/`) |
+| Seguranca | servidor: 13 falhas corrigidas e publicadas (API `6f493df`); abertas: casca Electron e host (ver `privado/`) |
+| Front-end novo | design aprovado (vermelho Arasaka); fatia 1 (fundacao + casca) no Kiroshi Beta |
 
 ## Como manter
 

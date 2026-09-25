@@ -48,7 +48,14 @@ movimento de verdade, componentes testados, roteamento interno com link direto
 
 **Estado:** design aprovado em 2026-09-24 — identidade em **vermelho Arasaka**
 (escolha do dono), resto da proposta adotado: [10-front-end-novo.md](10-front-end-novo.md).
-Proximo: fatia 1 (fundacao), num ramo proprio, entregue ao dono como "Kiroshi Beta".
+**Fatia 1 (fundacao) entregue em 2026-09-25, no Kiroshi Beta**
+(`npm run dist:beta`; instala ao lado do normal, pasta de dados propria):
+tokens, tema claro/escuro antes do primeiro desenho, movimento em tres niveis,
+primitivos (Radix + Tailwind v4), vitrine (`?nova&vitrine`), rotas por hash,
+casca com dados reais (titulo, trilho, navegacao com categorias e voz, painel
+da voz, identidade, membros, barra de estado) e a entrada (email/usuario,
+senha, 2FA). As duas interfaces convivem no mesmo codigo; o instalador de
+todos segue sem nenhum codigo da nova. Proximo: fatia 2 (conversa).
 
 ## F2 — Estabilidade das transmissoes
 

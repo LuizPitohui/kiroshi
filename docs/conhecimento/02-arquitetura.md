@@ -101,6 +101,9 @@ npm test                                     # vitest em todos os pacotes
 npm run typecheck                            # tsc nos tres pacotes (servidor precisa do shared compilado)
 npm run dist:dir -w @kiroshi/desktop         # empacota so win-unpacked (rapido para testar)
 npm run dist:win -w @kiroshi/desktop         # instalador NSIS em packages/desktop/release/
+npm run dist:beta -w @kiroshi/desktop        # Kiroshi Beta (interface nova), em release-beta/
+npx vite --config packages/desktop/vite.web.config.ts --port 5273   # ?nova = interface nova; ?nova&vitrine = catalogo
+./deploy/scripts/deploy-api.sh               # publica SO a API (padrao para mudanca de servidor)
 ./deploy/scripts/deploy.sh <host-ssh>        # deploy completo — REINICIA O LIVEKIT (ver 08-producao.md)
 ```
 
