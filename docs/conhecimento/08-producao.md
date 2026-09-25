@@ -110,7 +110,8 @@ docker logs --since 72h kiroshi-livekit 2>&1 | grep "resuming RTC session" | gre
 journalctl -u cloudflared --since "72 hours ago" --no-pager -o short-iso --utc
 # rede e CPU historicas (sysstat, medias de 10 min)
 LC_ALL=C sar -n DEV -f /var/log/sysstat/saDD
-# quem esta em chamada: script avulso linhas-sfu (some a cada deploy) — deve virar comando do admin.ts
+# quem esta em chamada (so contagens; saida 0 = vazio, 1 = tem gente) — rodar ANTES de qualquer deploy
+ssh <host> 'docker exec -i -w /app kiroshi-api node --input-type=module -' < deploy/scripts/quem-em-chamada.mjs
 ```
 
 ## Pendencias de operacao
@@ -121,5 +122,4 @@ LC_ALL=C sar -n DEV -f /var/log/sysstat/saDD
 - `deploy.sh` sempre reinicia o LiveKit mesmo quando so a API mudou.
 - `/baixar/:arquivo` sem `Range`: cada atualizacao baixa 93 MiB por maquina
   (ver [07-desktop-e-entrega.md](07-desktop-e-entrega.md)).
-- Script de "quem esta em chamada" fora do repositorio.
 - Seguranca do host: ver notas privadas.

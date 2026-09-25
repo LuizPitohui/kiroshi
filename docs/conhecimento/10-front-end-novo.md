@@ -1,6 +1,8 @@
-# Front-end novo do Kiroshi — proposta de design
+# Front-end novo do Kiroshi — design
 
-> **Documento para aprovacao do dono.** Nada disto esta implementado. Escrito
+> **Aprovado pelo dono em 2026-09-24, com a identidade em vermelho Arasaka.**
+> E a especificacao da reescrita; o estado de cada fatia fica em
+> [01-pedidos-e-backlog.md](01-pedidos-e-backlog.md#f1--front-end-novo). Escrito
 > em 2026-09-24 a partir do estudo completo ([README](README.md)), da auditoria
 > do front-end atual ([05](05-front-end-atual.md), [06](06-auditoria-de-ajustes.md)),
 > do estudo de midia ([04](04-midia.md)) e do sistema de design do Arasaka Nexus
@@ -9,42 +11,39 @@
 > copiar.
 >
 > Prototipo visual da tela principal: [prototipo/index.html](prototipo/index.html)
-> (abre em qualquer navegador; botoes no topo trocam a direcao de cor, a
-> densidade e mostram a chamada recebida).
+> (abre em qualquer navegador; botoes no topo trocam a tela, a densidade e
+> mostram a chamada recebida).
 >
-> O que precisa da sua decisao esta marcado com **[DECIDIR]** e resumido no fim.
+> As decisoes de design estao resumidas no fim (secao 9).
 
 ---
 
 ## 0. Como fica (prototipo estatico, 1440x900)
 
-**Chamada com transmissao no palco — direcao B (optica, recomendada):**
+> **Decidido pelo dono em 2026-09-24: vermelho Arasaka (direcao A)**, o mesmo
+> acento do Nexus. As capturas abaixo ja estao nela.
 
-![Chamada, direcao B](prototipo/chamada-optica.png)
+**Chamada com transmissao no palco:**
 
-**A mesma tela na direcao A (vermelho Arasaka, como o Nexus)** — repare que
-canal selecionado, colchetes do palco, botao ligado e "ao vivo" ficam todos da
-mesma cor:
-
-![Chamada, direcao A](prototipo/chamada-arasaka.png)
+![Chamada](prototipo/chamada.png)
 
 **Conversa, densidade confortavel** (mencao a voce em amarelo, divisor de novas,
 cartao de link, autocompletar de mencao):
 
-![Conversa confortavel](prototipo/conversa-optica.png)
+![Conversa confortavel](prototipo/conversa.png)
 
 **Conversa, densidade compacta** (hora, nome e mensagem numa linha, sem avatar):
 
-![Conversa compacta](prototipo/conversa-compacta-optica.png)
+![Conversa compacta](prototipo/conversa-compacta.png)
 
 **Holochamada recebida** (chamada em DM):
 
-![Holochamada](prototipo/holochamada-optica.png)
+![Holochamada](prototipo/holochamada.png)
 
-Direcao A na conversa: [prototipo/conversa-arasaka.png](prototipo/conversa-arasaka.png).
 Para ver ao vivo, com os botoes: abrir `prototipo/index.html` num navegador
 (ou a configuracao `prototipo` do `.claude/launch.json` e
-`/docs/conhecimento/prototipo/index.html`).
+`/docs/conhecimento/prototipo/index.html`). A direcao B (ciano) continua no
+botao do prototipo so como registro da alternativa considerada.
 
 O prototipo ja pegou um defeito de desenho que o palco real nao pode ter: o
 quadro 16:9 calculado so pela altura transbordava a coluna e cobria o painel da
@@ -118,7 +117,12 @@ de estado e informacao, nao decoracao:
 | Sinal instavel / aviso | amarelo | barras de sinal, texto |
 | Sinal bom / sucesso | verde | barras de sinal, `[OK]` |
 
-**[DECIDIR] A cor da identidade** — o acento de selecao, foco, botao principal:
+**A cor da identidade — DECIDIDO: A, vermelho Arasaka `#dc2626`** (hover
+`#ef4444`), como o Nexus. O vermelho carrega identidade, selecao, foco, botao
+principal, ao vivo e perigo; o que separa os estados e a **forma**: selecao =
+barra lateral + colchetes; ao vivo = selo solido `● AO VIVO` com pulso; mudo e
+surdo = icone cortado; erro = `[!]` + texto; perigo (sair, apagar) = botao
+solido com rotulo explicito. As opcoes que estavam na mesa:
 
 | | A. Arasaka (vermelho) | B. Optica Kiroshi (ciano) — **recomendada** |
 |---|---|---|
@@ -221,7 +225,7 @@ Na interface os textos sao **com acento** (`AO VIVO`, `Configurações`,
 `Transmissão`); os exemplos deste documento seguem a convencao sem acento do
 repositorio.
 
-**[DECIDIR]** Chamar a pessoa de "agente", como o Nexus faz? Proposta: so no boot
+Chamar a pessoa de "agente", como o Nexus faz: so no boot
 e na entrada ("Bem-vindo de volta, agente."), nunca no uso diario.
 
 ---
@@ -433,6 +437,13 @@ src/
   api/ store/ lib/ voice/ hooks/     (os de hoje)
 ```
 
+**Versao web (depois):** a interface nova fala com o sistema so pela ponte
+(`window.kiroshi`), que ja tem substituto para navegador (`src/lib/bridge.ts`), e
+as rotas por hash funcionam fora do Electron. A mesma interface pode virar o
+Kiroshi no navegador sem reescrita — o que muda e o que o navegador nao deixa
+(escolher janela para transmitir, bandeja, atalho global), que some da tela
+em vez de aparecer quebrado.
+
 **Testes:** testes de componente (Vitest + Testing Library) para primitivos e
 fluxos; a **vitrine** renasce como catalogo de componentes (`?vitrine`) com
 atributos de teste estaveis (`data-testid`); os roteiros CDP de hoje sao
@@ -478,11 +489,11 @@ notificacoes) andam junto com a interface.
 - Som de entrada/saida sempre ligado; Enter envia sem opcao (decisoes suas).
 - Nada decorativo: o que nao funciona nao aparece.
 
-## 9. O que preciso que voce decida
+## 9. Decisoes de design
 
-| # | Decisao | Proposta |
+| # | Decisao | Resultado |
 |---|---|---|
-| 1 | Cor da identidade: **A (vermelho Arasaka)** ou **B (ciano da optica)** | B — veja as duas no prototipo |
-| 2 | A disposicao da janela (secao 3) | como esta |
+| 1 | Cor da identidade | **A, vermelho Arasaka** — escolhida pelo dono em 2026-09-24 |
+| 2 | A disposicao da janela (secao 3) | proposta adotada (o dono delegou o resto; vale vetar a qualquer momento) |
 | 3 | Chamar de "agente" | so no boot e na entrada |
 | 4 | Intensidade dos efeitos (varredura, glitch, CRT) | como na secao 2.4 |

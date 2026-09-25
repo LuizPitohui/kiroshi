@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-direcao="optica" data-densidade="confortavel" data-tela="chamada">
+<html lang="pt-BR" data-direcao="arasaka" data-densidade="confortavel" data-tela="chamada">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -47,7 +47,7 @@
   --chanfro: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
   --chanfro-sm: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
 }
-/* B. Optica Kiroshi — recomendada */
+/* B. Optica Kiroshi — considerada e descartada pelo dono (2026-09-24) */
 :root[data-direcao="optica"] {
   --acento: #22d3ee;
   --acento-2: #67e8f9;
@@ -56,7 +56,7 @@
   --acento-sobre: #041a1f;
   --marca: #dc2626;
 }
-/* A. Arasaka — como o Nexus */
+/* A. Arasaka — ESCOLHIDA pelo dono em 2026-09-24, como o Nexus */
 :root[data-direcao="arasaka"] {
   --acento: #dc2626;
   --acento-2: #ef4444;
@@ -472,8 +472,8 @@ svg.i.s20 { width: 20px; height: 20px; }
 <div class="proto" role="toolbar" aria-label="Controles do protótipo">
   <b>KIROSHI · PROTÓTIPO</b>
   <div class="grupo"><span>DIREÇÃO</span>
-    <button data-p="direcao" data-v="optica" aria-pressed="true">B · ÓPTICA</button>
-    <button data-p="direcao" data-v="arasaka" aria-pressed="false">A · ARASAKA</button>
+    <button data-p="direcao" data-v="arasaka" aria-pressed="true">A · ARASAKA (ESCOLHIDA)</button>
+    <button data-p="direcao" data-v="optica" aria-pressed="false">B · ÓPTICA (DESCARTADA)</button>
   </div>
   <div class="grupo"><span>TELA</span>
     <button data-p="tela" data-v="chamada" aria-pressed="true">CHAMADA</button>

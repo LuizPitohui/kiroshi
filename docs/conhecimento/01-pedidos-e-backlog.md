@@ -46,8 +46,9 @@ movimento de verdade, componentes testados, roteamento interno com link direto
 
 **Depende de:** link de referencia do dono -> documento de design -> aprovacao.
 
-**Estado:** referencia recebida (Arasaka Nexus, 2026-09-24). Documento de design
-e prototipo prontos para aprovacao: [10-front-end-novo.md](10-front-end-novo.md).
+**Estado:** design aprovado em 2026-09-24 — identidade em **vermelho Arasaka**
+(escolha do dono), resto da proposta adotado: [10-front-end-novo.md](10-front-end-novo.md).
+Proximo: fatia 1 (fundacao), num ramo proprio, entregue ao dono como "Kiroshi Beta".
 
 ## F2 — Estabilidade das transmissoes
 
