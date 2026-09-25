@@ -4,6 +4,7 @@ import { jsonSafe } from '../lib/serialize.js';
 import {
   dispatchToChannel,
   dispatchToGuild,
+  dispatchToSession,
   dispatchToUser,
   sessions,
 } from './registry.js';
@@ -25,6 +26,8 @@ interface BusEnvelope {
   payload: unknown;
   exceptUserId?: string;
   onlyUserIds?: string[];
+  /** So esta sessao de gateway da conta, e nenhuma outra. */
+  onlySessionId?: string;
 }
 
 function publish(channel: string, envelope: BusEnvelope): void {
@@ -42,6 +45,29 @@ export function emitToUser<E extends GatewayEventName>(
 ): void {
   dispatchToUser(userId, event, payload);
   publish(BusChannel.user(userId), { origin: PROCESS_ID, event, payload });
+}
+
+/**
+ * Entrega a uma sessao de gateway so, em qualquer processo.
+ *
+ * Existe por causa do token de voz. Emitido com `emitToUser`, ele chegava a
+ * TODOS os aparelhos logados da conta, e cada um que atendesse entrava na
+ * chamada — abrindo o microfone sem ninguem ter tocado nele. O cliente
+ * aprendeu a ignorar token que nao pediu; o servidor agora nem manda.
+ */
+export function emitToSession<E extends GatewayEventName>(
+  userId: string,
+  sessionId: string,
+  event: E,
+  payload: GatewayEventMap[E],
+): void {
+  dispatchToSession(userId, sessionId, event, payload);
+  publish(BusChannel.user(userId), {
+    origin: PROCESS_ID,
+    event,
+    payload,
+    onlySessionId: sessionId,
+  });
 }
 
 export function emitToUsers<E extends GatewayEventName>(
@@ -107,6 +133,10 @@ export async function subscribeToBus(): Promise<void> {
     BusChannel.allUsers,
     handle(
       (envelope, userId) => {
+        if (envelope.onlySessionId) {
+          dispatchToSession(userId, envelope.onlySessionId, envelope.event, envelope.payload as never);
+          return;
+        }
         dispatchToUser(userId, envelope.event, envelope.payload as never);
       },
       (channel) => channel.split(':')[2] ?? null,

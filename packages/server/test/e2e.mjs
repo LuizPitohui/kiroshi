@@ -273,7 +273,9 @@ async function main() {
     );
     check('dono pode publicar microfone', claims.video?.canPublishSources?.includes('microphone'));
     check('dono pode compartilhar tela', claims.video?.canPublishSources?.includes('screen_share'));
-    check('dono tem poder de moderacao na sala', claims.video?.roomAdmin === true);
+    // A moderacao de voz passa pelo servidor; o token do cliente nao abre a
+    // API de administracao da sala para ninguem, nem para o dono.
+    check('token de voz nao da administracao da sala', !claims.video?.roomAdmin);
 
     // Regressao: reconectar no mesmo canal precisa emitir token novo. Antes,
     // o servidor via que a pessoa "ja estava la" e nao mandava nada, deixando
@@ -300,6 +302,32 @@ async function main() {
     foreignVoice.status >= 400,
     `status ${foreignVoice.status}`,
   );
+
+  console.log('\n--- TOKEN DE VOZ SO PARA A SESSAO QUE PEDIU ---');
+
+  if (!info.voiceEnabled) {
+    console.log('  (sem SFU configurado o token nao e emitido: nada a conferir aqui)');
+  } else {
+    // Duas sessoes da mesma conta, como computador e notebook. So a que manda
+    // o opcode 4 pode receber o token: o outro aparelho entraria na chamada.
+    const outroAparelho = await connectGateway(token, 'alice-2');
+    const tokenQuePediu = esperarNovo(alice, 'VOICE_SERVER_UPDATE', (d) => d?.channelId === voiceChannel.id);
+    const tokenNoOutro = naoChega(outroAparelho, 'VOICE_SERVER_UPDATE', () => true, 3000);
+
+    alice.ws.send(JSON.stringify({
+      op: 4,
+      d: { guildId: guild.id, channelId: voiceChannel.id, selfMute: true, selfDeaf: false },
+    }));
+
+    check('a sessao que pediu recebe o token de voz', Boolean(await tokenQuePediu.catch(() => null)));
+    check('outro aparelho da mesma conta nao recebe o token', await tokenNoOutro);
+
+    alice.ws.send(JSON.stringify({
+      op: 4,
+      d: { guildId: guild.id, channelId: null, selfMute: true, selfDeaf: false },
+    }));
+    outroAparelho.close();
+  }
 
   console.log('\n--- MENCOES INVALIDAS (regressao) ---');
 

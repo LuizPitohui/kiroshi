@@ -17,6 +17,7 @@ import { canaisComPermissao } from '../lib/visibilidade.js';
 import { carregarRetratoDaGuild, resolveChannelPermissions } from './permissions.js';
 import { buildEmbeds } from './embeds.js';
 import { emitirParaQuemVe } from './entrega.js';
+import { bloqueioNaDm } from './relacoes.js';
 import { deleteFile } from './storage.js';
 
 /**
@@ -69,6 +70,13 @@ export async function createMessage(args: CreateMessageArgs): Promise<ApiMessage
   */
   if (channel.type === 'GUILD_CATEGORY') {
     throw badRequest('Uma categoria nao aceita mensagens.');
+  }
+
+  // Bloqueio numa DM 1:1, de qualquer um dos lados, fecha a conversa para
+  // envio. So a criacao de DM conferia; a DM que ja existia seguia aberta. A
+  // mensagem nao diz quem bloqueou quem.
+  if (channel.type === 'DM' && (await bloqueioNaDm(channel.id, args.authorId))) {
+    throw forbidden('Nao foi possivel enviar a mensagem.');
   }
 
   // Modo lento: nao vale para quem pode gerenciar mensagens no canal.

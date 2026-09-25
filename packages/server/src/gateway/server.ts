@@ -26,6 +26,7 @@ import { MEMBER_INCLUDE, toMember } from '../lib/serialize.js';
 import { emitirParaQuemVe } from '../services/entrega.js';
 import { resolveChannelPermissions } from '../services/permissions.js';
 import { buildReadyPayload } from '../services/ready.js';
+import { bloqueioNaDm } from '../services/relacoes.js';
 import { handleVoiceStateUpdate, disconnectFromVoice } from '../services/voice.js';
 import { emitToGuild, emitToUser } from './events.js';
 import {
@@ -443,8 +444,10 @@ async function handleTyping(
       where: { channelId: channel.id },
       select: { userId: true },
     });
-    // So quem participa da conversa avisa que esta digitando nela.
+    // So quem participa da conversa avisa que esta digitando nela, e numa DM
+    // 1:1 com bloqueio ninguem digita para ninguem: enviar ja e recusado.
     if (!recipients.some((r) => r.userId === session.userId)) return;
+    if (channel.type === 'DM' && (await bloqueioNaDm(channel.id, session.userId))) return;
 
     for (const recipient of recipients) {
       if (recipient.userId === session.userId) continue;

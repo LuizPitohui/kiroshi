@@ -7,6 +7,7 @@ import {
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { buildGuildState } from './ready.js';
+import { tirarDaVoz } from './voice.js';
 
 /**
  * Criacao de servidor. Roda tudo em uma transacao: um servidor sem o cargo
@@ -128,8 +129,15 @@ export async function addMember(guildId: string, userId: string): Promise<boolea
 /**
  * Remove o membro e limpa o que ficaria orfao: estado de voz, cargos e
  * preferencias daquele servidor.
+ *
+ * Expulsar, banir e sair passam por aqui, e as tres tiram a pessoa da voz de
+ * verdade antes de tudo: avisando quem esta no canal e tirando da sala no
+ * SFU. Antes a linha de voz sumia calada e a pessoa seguia na chamada.
+ * Enquanto ainda e membro, para o aviso alcancar as sessoes dela.
  */
 export async function removeMember(guildId: string, userId: string): Promise<void> {
+  await tirarDaVoz(userId, { guildId });
+
   await prisma.$transaction(async (tx) => {
     await tx.voiceState.deleteMany({ where: { userId, guildId } });
     await tx.guildMember.deleteMany({ where: { guildId, userId } });

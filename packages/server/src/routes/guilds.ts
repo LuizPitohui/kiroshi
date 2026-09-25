@@ -40,7 +40,7 @@ import {
 import { createGuild, memberIds, removeMember, transferOwnership } from '../services/guilds.js';
 import { createInvite, listInvites } from '../services/invites.js';
 import { buildGuildState } from '../services/ready.js';
-import { moveMember, setServerDeafen, setServerMute } from '../services/voice.js';
+import { moveMember, setServerDeafen, setServerMute, tirarDaVoz } from '../services/voice.js';
 import { resolveImageInput } from '../services/storage.js';
 import { recordAudit } from '../services/audit.js';
 
@@ -132,6 +132,14 @@ export async function guildRoutes(app: FastifyInstance): Promise<void> {
     if (guild.ownerId !== userId) throw forbidden('So o dono pode apagar o servidor.');
 
     const members = await memberIds(guildId);
+
+    // Quem esta numa chamada deste servidor sai dela antes: o banco apagaria o
+    // estado por cascata, mas a sala no SFU continuaria aberta para essa gente.
+    const naVoz = await prisma.voiceState.findMany({
+      where: { guildId },
+      select: { userId: true },
+    });
+    for (const { userId: ocupante } of naVoz) await tirarDaVoz(ocupante, { guildId });
 
     // Avisa antes de apagar: depois do delete nao ha mais a quem perguntar
     // quem eram os membros.

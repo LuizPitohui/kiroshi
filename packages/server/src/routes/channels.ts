@@ -25,7 +25,7 @@ import {
   visibleChannelIds,
 } from '../services/permissions.js';
 import { recordAudit } from '../services/audit.js';
-import { disconnectFromVoice } from '../services/voice.js';
+import { tirarDaVoz } from '../services/voice.js';
 
 export async function channelRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -247,13 +247,14 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
         ? antes.channels.filter((c) => c.parentId === channelId).map((c) => c.id)
         : [];
 
-    // Tira todo mundo da voz antes de sumir com o canal.
+    // Tira todo mundo da voz antes de sumir com o canal — avisando cada um,
+    // para o app largar a chamada em vez de tratar como queda de rede.
     if (channel.type === 'GUILD_VOICE') {
       const occupants = await prisma.voiceState.findMany({
         where: { channelId },
         select: { userId: true },
       });
-      for (const occupant of occupants) await disconnectFromVoice(occupant.userId);
+      for (const occupant of occupants) await tirarDaVoz(occupant.userId, { channelId });
     }
 
     const serialized = toChannel(channel);

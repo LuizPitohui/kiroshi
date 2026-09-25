@@ -11,10 +11,11 @@ import { montarIceServers } from './turn.js';
 import { prisma } from '../db.js';
 import { ApiError, forbidden, notFound } from '../errors.js';
 import { logger } from '../logger.js';
-import { emitToUser } from '../gateway/events.js';
+import { emitToSession, emitToUser } from '../gateway/events.js';
 import { toVoiceState } from '../lib/serialize.js';
 import { emitirParaQuemVe } from './entrega.js';
 import { resolveChannelPermissions, resolveMember } from './permissions.js';
+import { bloqueioNaDm } from './relacoes.js';
 
 /**
  * Voz, video e compartilhamento de tela via LiveKit (SFU).
@@ -92,10 +93,13 @@ export async function createVoiceToken(
     throw forbidden('Voce nao pode entrar neste canal de voz.');
   }
 
+  // Aqui tambem, e nao so no gateway: a rota REST entrega o token direto.
+  if (channelType === 'DM' && (await bloqueioNaDm(channelId, userId))) {
+    throw forbidden('Nao foi possivel entrar nesta chamada.');
+  }
+
   const canSpeak = has(permissions, Permission.SPEAK);
   const canStream = has(permissions, Permission.STREAM);
-  const isModerator =
-    has(permissions, Permission.MUTE_MEMBERS) || has(permissions, Permission.MOVE_MEMBERS);
 
   const sources: TrackSource[] = [];
   if (canSpeak) sources.push(TrackSource.MICROPHONE);
@@ -112,8 +116,16 @@ export async function createVoiceToken(
     canSubscribe: true,
     // Usado pelo soundboard e pelos indicadores de fala.
     canPublishData: true,
-    // Moderador pode silenciar e remover participantes pela propria sala.
-    roomAdmin: isModerator,
+    /*
+      Sem `roomAdmin`, para ninguem.
+
+      Ele ia no token de quem tinha MUTE_MEMBERS ou MOVE_MEMBERS, e dava a esse
+      cliente a API de administracao da sala direto no SFU: remover ou calar
+      qualquer participante, sem passar pela hierarquia de cargos nem pelo
+      registro de auditoria. O app nunca usou; a moderacao de voz passa pelo
+      servidor (setServerMute, moveMember), que fala com o SFU pela chave da
+      API.
+    */
   };
 
   const accessToken = new AccessToken(config.voice.apiKey, config.voice.apiSecret, {
@@ -174,6 +186,13 @@ export async function handleVoiceStateUpdate(
   if (!has(permissions, Permission.CONNECT)) {
     logger.warn(registro, 'voz: negada, sem permissao de conectar');
     throw forbidden('Voce nao pode entrar neste canal de voz.');
+  }
+
+  // Bloqueio numa DM 1:1 fecha a chamada nos dois sentidos. Conferido antes de
+  // gravar o estado, para nao sobrar alguem "na chamada" sem poder entrar.
+  if (channel.type === 'DM' && (await bloqueioNaDm(channel.id, userId))) {
+    logger.warn(registro, 'voz: negada, bloqueio na DM');
+    throw forbidden('Nao foi possivel entrar nesta chamada.');
   }
 
   // Limite de pessoas, exceto para quem pode mover membros.
@@ -275,7 +294,8 @@ export async function handleVoiceStateUpdate(
   if (needsToken && config.voice.enabled) {
     const { token, roomName, url } = await createVoiceToken(userId, channel.id);
     const iceServers = await montarIceServers();
-    emitToUser(userId, 'VOICE_SERVER_UPDATE', {
+    // So para a sessao que pediu: ver `emitToSession`.
+    emitToSession(userId, sessionId, 'VOICE_SERVER_UPDATE', {
       channelId: channel.id,
       guildId: channel.guildId,
       url,
@@ -323,9 +343,51 @@ export async function disconnectFromVoice(
   // secundaria nao tira a pessoa da call aberta na principal.
   if (sessionId && state.sessionId !== sessionId) return;
 
-  await prisma.voiceState.delete({ where: { userId } }).catch(() => undefined);
-  await announceLeave(state.channelId, state.guildId, userId, { notifyUser: options.notifyUser });
-  await removeFromRoom(state.channelId, userId);
+  await encerrarVoz(state, options);
+}
+
+/**
+ * Tira alguem da voz porque perdeu o direito de estar la: expulso, banido,
+ * saiu do servidor, o servidor foi apagado, o canal foi apagado, saiu ou foi
+ * tirado do grupo, ou ha bloqueio na DM.
+ *
+ * Antes so o banco mudava: a linha de VoiceState sumia sem aviso nenhum, e a
+ * pessoa continuava na sala do SFU, ouvindo e falando pela conexao que ja
+ * tinha, com um token que vale seis horas.
+ *
+ * A propria pessoa recebe o aviso, porque para o app ele e a ordem de largar a
+ * chamada. `onde` restringe: so tira se o estado for daquele servidor ou
+ * canal — quem foi expulso de um servidor nao sai da chamada que esta em
+ * outro.
+ */
+export async function tirarDaVoz(
+  userId: string,
+  onde: { guildId?: string; channelId?: string },
+): Promise<void> {
+  const state = await prisma.voiceState.findUnique({ where: { userId } });
+  if (!state) return;
+  if (onde.guildId !== undefined && state.guildId !== onde.guildId) return;
+  if (onde.channelId !== undefined && state.channelId !== onde.channelId) return;
+
+  await encerrarVoz(state, { notifyUser: true });
+}
+
+/** Apaga o estado, avisa quem enxerga o canal e tira da sala no SFU. */
+async function encerrarVoz(
+  state: { userId: string; channelId: string; guildId: string | null; sessionId: string },
+  options: { notifyUser?: boolean },
+): Promise<void> {
+  // Apaga so o estado que foi lido. Se a pessoa trocou de canal ou de sessao
+  // entre a leitura e aqui, o estado novo e dela e fica.
+  const { count } = await prisma.voiceState.deleteMany({
+    where: { userId: state.userId, channelId: state.channelId, sessionId: state.sessionId },
+  });
+  if (count === 0) return;
+
+  await announceLeave(state.channelId, state.guildId, state.userId, {
+    notifyUser: options.notifyUser,
+  });
+  await removeFromRoom(state.channelId, state.userId);
 }
 
 /**
@@ -393,9 +455,22 @@ async function removeFromRoom(channelId: string, userId: string): Promise<void> 
   try {
     await getRoomService().removeParticipant(roomNameFor(channelId), userId);
   } catch (error) {
-    // Participante ja tinha saido, ou a sala nem chegou a existir.
-    logger.debug({ error, channelId, userId }, 'remocao do SFU ignorada');
+    // Participante ja tinha saido, ou a sala nem chegou a existir: o resultado
+    // que se queria ja vale.
+    if (naoEncontradoNoSfu(error)) {
+      logger.debug({ channelId, userId }, 'remocao do SFU ignorada: ja nao estava la');
+      return;
+    }
+    // Qualquer outra falha nao vira erro para quem pediu — a saida ja foi
+    // gravada — mas precisa aparecer: e ela que deixaria alguem na chamada.
+    logger.warn({ error, channelId, userId }, 'nao consegui tirar da sala no SFU');
   }
+}
+
+/** O SFU respondeu "nao existe" (sala ou participante), e nao uma falha. */
+function naoEncontradoNoSfu(error: unknown): boolean {
+  const e = error as { status?: number; code?: string } | null;
+  return e?.status === 404 || e?.code === 'not_found';
 }
 
 // ---------------------------------------------------------------------------
@@ -532,11 +607,12 @@ export async function moveMember(
     incluir: [targetId],
   });
 
-  // A pessoa movida precisa de um token novo para a sala de destino.
+  // A pessoa movida precisa de um token novo para a sala de destino — no
+  // aparelho que esta na chamada, e so nele: a sessao dona do estado de voz.
   if (config.voice.enabled) {
     try {
       const { token, roomName, url } = await createVoiceToken(targetId, destinationChannelId);
-      emitToUser(targetId, 'VOICE_SERVER_UPDATE', {
+      emitToSession(targetId, state.sessionId, 'VOICE_SERVER_UPDATE', {
         channelId: destinationChannelId,
         guildId,
         url,

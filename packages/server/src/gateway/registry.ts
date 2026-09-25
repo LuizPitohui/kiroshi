@@ -214,6 +214,31 @@ export function dispatchToUser<E extends GatewayEventName>(
   return delivered;
 }
 
+/**
+ * Entrega a UMA sessao de gateway da conta, se ela estiver neste processo.
+ *
+ * Para o que so faz sentido num aparelho: o token de voz responde a quem
+ * pediu para entrar, e nao a toda sessao aberta da conta.
+ */
+export function dispatchToSession<E extends GatewayEventName>(
+  userId: string,
+  sessionId: string,
+  name: E,
+  payload: GatewayEventMap[E],
+): number {
+  const session = sessions.get(sessionId);
+  // A conferencia do dono evita entregar a sessao de outra conta por um id
+  // trocado.
+  if (!session || session.userId !== userId || !session.isOpen) return 0;
+  try {
+    session.dispatch(name, payload);
+    return 1;
+  } catch (error) {
+    logger.error({ error, sessionId, event: name }, 'falha ao despachar');
+    return 0;
+  }
+}
+
 export function dispatchToGuild<E extends GatewayEventName>(
   guildId: string,
   name: E,

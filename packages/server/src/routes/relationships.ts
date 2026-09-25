@@ -20,7 +20,9 @@ import {
   subscribeUserToChannel,
   unsubscribeUserFromChannel,
 } from '../gateway/events.js';
+import { bloqueioEntre, dmEntre } from '../services/relacoes.js';
 import { resolveImageInput } from '../services/storage.js';
+import { tirarDaVoz } from '../services/voice.js';
 
 /**
  * Amizades e mensagens diretas.
@@ -39,12 +41,6 @@ async function findRelationship(a: string, b: string) {
       ],
     },
   });
-}
-
-/** Verdadeiro quando existe bloqueio em qualquer direcao. */
-export async function isBlocked(a: string, b: string): Promise<boolean> {
-  const relationship = await findRelationship(a, b);
-  return relationship?.status === 'BLOCKED';
 }
 
 export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
@@ -237,26 +233,59 @@ export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!target) throw notFound('Usuario');
 
-    const existing = await findRelationship(userId, targetId);
-    if (existing) await prisma.relationship.delete({ where: { id: existing.id } });
+    /*
+      Cada bloqueio e de quem bloqueou, gravado com ele como requester, e os
+      dois sentidos podem existir juntos.
 
-    const blocked = await prisma.relationship.create({
-      data: {
-        id: generateId(),
-        requesterId: userId,
-        addresseeId: targetId,
-        status: 'BLOCKED',
-      },
-    });
+      Antes a relacao encontrada era apagada fosse qual fosse: bloquear quem ja
+      tinha te bloqueado apagava o bloqueio DELA, em silencio. Agora so some a
+      amizade ou o pedido pendente; um bloqueio alheio fica onde esta.
+    */
+    const [minha, dela] = await Promise.all([
+      prisma.relationship.findUnique({
+        where: { requesterId_addresseeId: { requesterId: userId, addresseeId: targetId } },
+      }),
+      prisma.relationship.findUnique({
+        where: { requesterId_addresseeId: { requesterId: targetId, addresseeId: userId } },
+      }),
+    ]);
 
-    emitToUser(userId, 'RELATIONSHIP_ADD', {
-      id: blocked.id,
-      type: 'BLOCKED',
-      user: toPublicUser(target),
-      createdAt: blocked.createdAt.toISOString(),
-    });
-    if (existing && existing.status !== 'BLOCKED') {
-      emitToUser(targetId, 'RELATIONSHIP_REMOVE', { id: existing.id, userId });
+    const desfeitas = [minha, dela].filter(
+      (r): r is NonNullable<typeof r> => r !== null && r.status !== 'BLOCKED',
+    );
+    for (const relacao of desfeitas) {
+      await prisma.relationship.delete({ where: { id: relacao.id } });
+      // Os dois lados perdem a amizade ou o pedido. Quem bloqueou tambem
+      // precisa do aviso: o app guarda a relacao pelo id, e sem ele a amizade
+      // antiga ficava na tela ao lado do bloqueio novo.
+      emitToUser(userId, 'RELATIONSHIP_REMOVE', { id: relacao.id, userId: targetId });
+      emitToUser(targetId, 'RELATIONSHIP_REMOVE', { id: relacao.id, userId });
+    }
+
+    // Bloquear de novo quem ja esta bloqueado nao cria nada.
+    if (minha?.status !== 'BLOCKED') {
+      const blocked = await prisma.relationship.create({
+        data: {
+          id: generateId(),
+          requesterId: userId,
+          addresseeId: targetId,
+          status: 'BLOCKED',
+        },
+      });
+
+      emitToUser(userId, 'RELATIONSHIP_ADD', {
+        id: blocked.id,
+        type: 'BLOCKED',
+        user: toPublicUser(target),
+        createdAt: blocked.createdAt.toISOString(),
+      });
+    }
+
+    // Bloqueio fecha a chamada da DM entre os dois, para os dois.
+    const dm = await dmEntre(userId, targetId);
+    if (dm) {
+      await tirarDaVoz(userId, { channelId: dm.id });
+      await tirarDaVoz(targetId, { channelId: dm.id });
     }
 
     return { ok: true };
@@ -296,7 +325,7 @@ export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
     if (recipients.length !== recipientIds.length) throw badRequest('Algum usuario nao existe.');
 
     for (const recipient of recipients) {
-      if (await isBlocked(userId, recipient.id)) {
+      if (await bloqueioEntre(userId, recipient.id)) {
         throw new ApiError('FORBIDDEN', 'Nao foi possivel abrir a conversa.');
       }
     }
@@ -408,7 +437,7 @@ export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
     if (channel.recipients.some((r) => r.userId === targetId)) {
       throw conflict('Esta pessoa ja esta no grupo.');
     }
-    if (await isBlocked(userId, targetId)) {
+    if (await bloqueioEntre(userId, targetId)) {
       throw new ApiError('FORBIDDEN', 'Nao foi possivel adicionar esta pessoa.');
     }
 
@@ -444,6 +473,10 @@ export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
     if (!isSelf && channel.ownerId !== userId) {
       throw forbidden('So quem criou o grupo pode remover pessoas.');
     }
+
+    // Quem deixa o grupo deixa tambem a chamada dele. Antes de sair da lista
+    // de participantes, para o aviso ainda alcancar a propria pessoa.
+    await tirarDaVoz(targetId, { channelId });
 
     await prisma.channelRecipient.deleteMany({ where: { channelId, userId: targetId } });
     unsubscribeUserFromChannel(targetId, channelId);
