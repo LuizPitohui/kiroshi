@@ -13,7 +13,9 @@
     "dist:win": "node scripts/baixar-modelos.mjs --verificar && electron-vite build && electron-builder --win --publish never",
     "dist:dir": "node scripts/baixar-modelos.mjs --verificar && electron-vite build && electron-builder --dir --publish never",
     "modelos": "node scripts/baixar-modelos.mjs",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "dist:beta": "node scripts/dist-beta.mjs",
+    "dist:beta:dir": "node scripts/dist-beta.mjs --dir"
   },
   "dependencies": {
     "@sapphi-red/web-noise-suppressor": "^0.4.1",

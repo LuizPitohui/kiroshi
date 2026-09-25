@@ -19,6 +19,9 @@ import {
 } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import type { AtualizacaoEstado } from './preload.js';
+
+/** Id do app no Windows (notificacoes, atalhos), trocado na compilacao: Kiroshi ou Kiroshi Beta. */
+declare const __APP_ID__: string;
 import { abrirEEsperar, cancelarEspera, prepararRetorno } from './google.js';
 
 /**
@@ -302,7 +305,7 @@ function createWindow(): void {
 function createTray(): void {
   const icon = nativeImage.createFromPath(resolveIcon()).resize({ width: 16, height: 16 });
   tray = new Tray(icon);
-  tray.setToolTip('Kiroshi');
+  tray.setToolTip(app.getName());
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
@@ -666,7 +669,7 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   // Sem isto o Windows usa o nome do executavel nas notificacoes.
-  if (process.platform === 'win32') app.setAppUserModelId('fun.arasaka.kiroshi');
+  if (process.platform === 'win32') app.setAppUserModelId(__APP_ID__);
 
   setupAtualizacao();
   // Antes da janela: o autoteste do modelo roda logo que a interface abre.

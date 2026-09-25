@@ -14,6 +14,11 @@ const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    // O Beta (interface nova) e outro app para o Windows: outra identidade nas
+    // notificacoes e na bandeja, para nao se misturar com o Kiroshi normal.
+    define: {
+      __APP_ID__: JSON.stringify(process.env.VITE_INTERFACE === 'nova' ? 'fun.arasaka.kiroshi.beta' : 'fun.arasaka.kiroshi'),
+    },
     build: {
       rollupOptions: { input: { index: resolve(__dirname, 'electron/main.ts') } },
     },

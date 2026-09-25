@@ -1,0 +1,61 @@
+# Kiroshi Beta: a interface nova, instalada AO LADO do Kiroshi normal.
+#
+# Outro app para o Windows — outro appId, outro nome, outra pasta de dados
+# (%APPDATA%\Kiroshi Beta) e outra trava de instancia unica —, entao os dois
+# rodam juntos sem dividir sessao nem configuracao. Conecta no mesmo servidor
+# de verdade, com a conta de verdade.
+#
+# Instalador de um clique e por usuario: sem pedir administrador, como o estudo
+# de atualizacao recomendou (docs/conhecimento/07-desktop-e-entrega.md).
+#
+#   npm run dist:beta -w @kiroshi/desktop
+#
+# O build tem que sair com VITE_INTERFACE=nova (o script ja faz), senao o Beta
+# carregaria a interface antiga.
+
+appId: fun.arasaka.kiroshi.beta
+productName: Kiroshi Beta
+copyright: Kiroshi
+# O package.json empacotado ganha o productName: e dele que o Electron tira o
+# nome do app, e do nome sai a pasta de dados.
+extraMetadata:
+  productName: Kiroshi Beta
+directories:
+  output: release-beta
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/*.ts'
+electronLanguages:
+  - pt-BR
+  - en-US
+asar: true
+extraResources:
+  - from: resources/modelos
+    to: modelos
+    filter:
+      - '**/*'
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  signAndEditExecutable: true
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Kiroshi Beta
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  artifactName: Kiroshi-Beta-Setup-${version}.${ext}
+  language: '1046'
+# Canal proprio: o Beta nunca pega a atualizacao do normal, nem o contrario.
+publish:
+  provider: generic
+  url: https://order.arasaka.fun/baixar/beta
+  channel: latest
