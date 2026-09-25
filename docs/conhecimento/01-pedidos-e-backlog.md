@@ -46,7 +46,8 @@ movimento de verdade, componentes testados, roteamento interno com link direto
 
 **Depende de:** link de referencia do dono -> documento de design -> aprovacao.
 
-**Estado:** aguardando o link de referencia.
+**Estado:** referencia recebida (Arasaka Nexus, 2026-09-24). Documento de design
+e prototipo prontos para aprovacao: [10-front-end-novo.md](10-front-end-novo.md).
 
 ## F2 — Estabilidade das transmissoes
 
@@ -277,15 +278,24 @@ nao apaga — ponto de LGPD.
 - O container `atm11` e o teto de memoria dele nao se discutem.
 - Commits como Luiz Fernando, sem assinatura do Claude.
 
+## Decisoes delegadas (2026-09-24)
+
+O dono mandou a referencia (`https://nexus.arasaka.fun/`) e disse "o resto voce
+decide". O que foi decidido, e por que:
+
+| # | Questao | Decisao |
+|---|---|---|
+| 1 | Referencia do visual | Arasaka Nexus (`arasaka-nexus/frontend/DESIGN.md` + o site). Aplicada em [10-front-end-novo.md](10-front-end-novo.md) |
+| 2 | Documento do EA app | nao veio; seguir a recomendacao do estudo ([07](07-desktop-e-entrega.md#atualizador-em-segundo-plano-estilo-ea-app--estudo)) |
+| 3 | Repositorio publico | mantido; detalhe sensivel so em `privado/` |
+| 4 | Falhas de privacidade do servidor | corrigir **antes** do front-end; publicar so a API (sem reiniciar o LiveKit), num momento sem ninguem em chamada |
+| 5 | Endurecimento do host | e configuracao de seguranca do sistema e mexe em todos os projetos: fica com o dono, com o roteiro pronto em `privado/seguranca.md` |
+| 6 | Cadastro aberto | sim, como o Discord, com protecoes: limite por IP (ja existe), DM so entre amigos ou quem divide servidor (hoje qualquer um manda DM para qualquer um), username sem `-`. Recuperacao de senha pelo Google agora; por email quando houver servico de envio |
+| 7 | Quem reclama das travadas | medir (telemetria de F2) em vez de perguntar |
+| 8 | Acento na interface | sim — o Nexus usa ("Catalogo", "Mangas") |
+
 ## Perguntas em aberto
 
-| # | Pergunta | Bloqueia |
-|---|---|---|
-| 1 | Link do projeto de referencia do visual | F1 |
-| 2 | Documento do EA app | F11 (parte do atualizador) |
-| 3 | O repositorio publico no GitHub e intencional? | F12 |
-| 4 | Pode corrigir as 3 falhas de privacidade do servidor antes do front-end? Qual horario sem ninguem em chamada? | F12 |
-| 5 | Pode mexer no firewall/SSH/Postgres do host (afeta todos os projetos)? | F12 |
-| 6 | Cadastro aberto para qualquer um que tiver o instalador? Recuperacao de senha so pelo Google ou tambem por email? | F4 |
-| 7 | Quem mais reclama das travadas? (para cruzar com quem usa relay) | F2 |
-| 8 | Textos da interface nova com acento (portugues correto)? Hoje sao todos sem acento | F1 |
+As de design, em [10-front-end-novo.md](10-front-end-novo.md#9-o-que-preciso-que-voce-decida):
+cor da identidade (A vermelho ou B ciano), disposicao da janela, "agente",
+intensidade dos efeitos.
