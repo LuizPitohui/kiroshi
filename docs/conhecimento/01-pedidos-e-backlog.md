@@ -503,6 +503,27 @@ Metricas (LiveKit e cliente), backup automatico do banco, deploy que nao reinici
 o LiveKit quando so a API mudou, comando versionado de "quem esta em chamada",
 `.env.production.example` e icones versionados (hoje um clone limpo nao empacota).
 
+**Tunel meio morto (2026-09-25, ~20:30 a 20:55 UTC).** O Kiroshi do dono mostrou
+"524" ao procurar a atualizacao. Parte dos pedidos a `order.arasaka.fun` e
+`voz.arasaka.fun` ficava sem resposta: a borda da Cloudflare aceitava a conexao
+(TLS em 0,2 s) e esperava o servidor ate desistir, sem o pedido chegar ao
+`cloudflared` (nenhum pedido em andamento durante a trava). Nao era banda (upload
+a 10 kbps) nem a API (3 ms direto na 4000). Dependia de quem pedia: da maquina do
+dono, 6 de 6 travavam; do proprio servidor, 5 de 5 passavam. A Cloudflare escolhe
+a conexao do tunel pela origem do pedido, e uma das quatro estava meio morta, com
+o `/ready` do `cloudflared` dizendo 4 conexoes prontas. `systemctl restart
+cloudflared` refez as quatro e resolveu (18 de 18 depois). Pelo mesmo caminho
+falhavam as chamadas da API ao LiveKit (`LIVEKIT_URL` e `wss://voz.arasaka.fun`)
+e downloads da 2.0.1 ("stream canceled by remote"); ninguem estava em chamada.
+
+A causa de fundo e o transporte: o `cloudflared` usa QUIC (UDP) atras do CGNAT, e
+as conexoes morrem por "no recent network activity" todo dia (de 2 a 19 vezes por
+dia na ultima semana; 36 pedidos com falha so no dia 25). Proposta: HTTP/2 (TCP),
+por um arquivo de sobrescrita do systemd com
+`Environment=TUNNEL_TRANSPORT_PROTOCOL=http2`, reversivel apagando o arquivo.
+**Decisao do dono:** o tunel serve todos os projetos do servidor (pelo menos 10
+regras de entrada), entao cai na decisao delegada 5.
+
 ## F14 — Documentacao desatualizada
 
 README, ARQUITETURA, MANUAL, DEPLOY e a pagina `/privacidade` divergem do codigo
