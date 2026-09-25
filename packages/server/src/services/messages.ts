@@ -781,8 +781,19 @@ export async function setPinned(messageId: string, userId: string, pinned: boole
   });
   if (!message || message.deletedAt) throw notFound('Mensagem');
 
-  const { permissions } = await resolveChannelPermissions(message.channelId, userId);
-  if (!has(permissions, Permission.MANAGE_MESSAGES)) {
+  const { permissions, channelType } = await resolveChannelPermissions(message.channelId, userId);
+  /*
+    Em conversa direta nao ha moderador: como no Discord, quem participa fixa.
+    Antes a regra era a mesma do servidor (MANAGE_MESSAGES), que o conjunto
+    fixo da DM nao tem — e nem pode ter, porque daria a cada um o poder de
+    apagar a mensagem do outro. O resultado era um botao de fixar que o
+    cliente mostrava e o servidor sempre recusava.
+  */
+  const emConversaDireta = channelType === 'DM' || channelType === 'GROUP_DM';
+  const pode = emConversaDireta
+    ? has(permissions, Permission.VIEW_CHANNEL)
+    : has(permissions, Permission.MANAGE_MESSAGES);
+  if (!pode) {
     throw forbidden('Voce nao pode fixar mensagens neste canal.');
   }
 

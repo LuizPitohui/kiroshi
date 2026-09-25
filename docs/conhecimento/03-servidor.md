@@ -292,7 +292,9 @@ URLs, 5 s por salto, 4 saltos) -> transacao -> distribuicao (falha vira log).
 Anexos: ate 100 MB em memoria, extensoes executaveis bloqueadas, MIME do
 cliente, miniatura de 16 px; servidos com `CSP: sandbox` + `nosniff`, sem Range.
 Reacoes: 20 emojis distintos. Edicao sem historico. Exclusao logica. Fixadas
-ate 50. Busca `ILIKE`; filtro `has` aceito e ignorado.
+ate 50; em servidor exige MANAGE_MESSAGES, em DM qualquer participante fixa
+(desde 2026-09-25 — antes a DM caia na regra do servidor e sempre recusava).
+Busca `ILIKE`; filtro `has` aceito e ignorado.
 
 ## Notificacoes
 
