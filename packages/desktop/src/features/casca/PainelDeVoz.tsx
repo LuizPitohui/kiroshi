@@ -106,7 +106,7 @@ export function Identidade(): React.JSX.Element | null {
       <BotaoIcone
         rotulo="Configurações"
         icone={<Settings className={ic} strokeWidth={1.5} />}
-        onClick={() => navegar({ tela: 'ajustes', pagina: 'perfil' })}
+        onClick={() => navegar({ tela: 'ajustes', pagina: 'aparencia' })}
       />
     </section>
   );

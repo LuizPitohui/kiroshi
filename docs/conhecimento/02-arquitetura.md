@@ -169,4 +169,8 @@ de teste estaveis.
 | Ajustes | `packages/desktop/src/screens/SettingsScreen.tsx`, `components/modals/GuildSettingsModal.tsx` |
 | Estilos | `packages/desktop/src/styles/{global,componentes}.css` |
 | SFU | `deploy/livekit.yaml` |
+| Interface nova (Beta): entrada, rotas, tema | `packages/desktop/src/app/` |
+| Interface nova: sistema de design | `packages/desktop/src/design/` (tokens, assinatura, primitivos) |
+| Interface nova: telas | `packages/desktop/src/features/` (casca, conversa, ajustes, entrada, vitrine) |
+| Markdown, autocompletar e mencoes (puros, testados) | `packages/desktop/src/features/conversa/{markdown,mencoes,linhas}.ts` |
 | Deploy | `deploy/scripts/deploy.sh`, `docs/DEPLOY.md` |

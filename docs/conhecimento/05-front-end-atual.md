@@ -170,6 +170,13 @@ global (trocar canal, mutar).
   sessao continua valida no servidor.
 - **Arquivo temporario versionado por engano:**
   `src/components/emoji-palavras.test.ts.tmp.34664.9a598b2eb32b`.
+- **So em desenvolvimento, a conversa pode ficar presa no "carregando".** O
+  efeito de carga do `ChatArea` marca `loading` e cancela a resposta na
+  limpeza; o StrictMode do React roda o efeito duas vezes na montagem, a
+  segunda ve `loading` e nao busca, e a primeira resposta e descartada. No app
+  empacotado nao acontece (StrictMode nao repete efeitos em producao). A
+  conversa nova (`features/conversa/acoes.ts`) nao cancela a carga e nao tem o
+  problema.
 
 ## Testes da interface
 

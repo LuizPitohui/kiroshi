@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { corteDeNaoLidas, quantasNaoLidas, type MensagemParaCorte } from './naoLidas.js';
+import { contaComoMencao, corteDeNaoLidas, quantasNaoLidas, type MensagemParaCorte } from './naoLidas.js';
 
 /** Ids crescentes, como os snowflakes reais. */
 const msg = (id: number, autor = 'outra'): MensagemParaCorte => ({
@@ -100,5 +100,29 @@ describe('a contagem bate com o divisor', () => {
 
   it('sem divisor, zero', () => {
     expect(quantasNaoLidas([msg(1)], null, EU)).toBe(0);
+  });
+});
+
+describe('contaComoMencao', () => {
+  const base = { authorId: 'outra', mentionedUserIds: [] as string[], mentionedRoleIds: [] as string[], mentionsEveryone: false };
+
+  it('mencao direta, a um cargo meu e @everyone contam', () => {
+    expect(contaComoMencao({ ...base, mentionedUserIds: [EU] }, EU, [], false)).toBe(true);
+    expect(contaComoMencao({ ...base, mentionedRoleIds: ['c1'] }, EU, ['c1'], false)).toBe(true);
+    expect(contaComoMencao({ ...base, mentionsEveryone: true }, EU, [], false)).toBe(true);
+  });
+
+  it('cargo que nao e meu e mensagem comum nao contam', () => {
+    expect(contaComoMencao({ ...base, mentionedRoleIds: ['c2'] }, EU, ['c1'], false)).toBe(false);
+    expect(contaComoMencao(base, EU, [], false)).toBe(false);
+  });
+
+  it('em conversa direta toda mensagem conta, menos a minha', () => {
+    expect(contaComoMencao(base, EU, [], true)).toBe(true);
+    expect(contaComoMencao({ ...base, authorId: EU, mentionedUserIds: [EU] }, EU, [], true)).toBe(false);
+  });
+
+  it('sem sessao, nada conta', () => {
+    expect(contaComoMencao({ ...base, mentionedUserIds: [EU] }, null, [], false)).toBe(false);
   });
 });

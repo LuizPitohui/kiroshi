@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Hash, Megaphone, Volume2 } from 'lucide-react';
 import type { Channel } from '@kiroshi/shared';
 import { selectors, useMembersOfGuild, useStore } from '../../store/index.js';
 import { ROTA_INICIAL, escreverRota, navegar, useRota, type Rota } from '../../app/rotas.js';
@@ -11,6 +10,9 @@ import { Identidade, PainelDeVoz } from './PainelDeVoz.js';
 import { Trilho } from './Trilho.js';
 import { entrarNaVoz } from './acoesDeVoz.js';
 import { useVoz } from './useVoz.js';
+import { Conversa } from '../conversa/Conversa.js';
+import { Ajustes } from '../ajustes/Ajustes.js';
+import { useInterface } from '../../app/interface.js';
 
 const CHAVE_DA_ULTIMA_ROTA = 'kiroshi.rota';
 
@@ -85,49 +87,32 @@ export function restaurarUltimaRota(): void {
   }
 }
 
-function Cabecalho({ canal }: { canal: Channel }) {
-  const Icone = canal.type === 'GUILD_VOICE' ? Volume2 : canal.type === 'GUILD_ANNOUNCEMENT' ? Megaphone : Hash;
-  return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-borda px-4">
-      <h1 className="flex items-center gap-2 font-display text-20 font-bold tracking-[0.06em]">
-        <Icone aria-hidden className="size-5 text-acento" strokeWidth={1.5} />
-        {canal.name}
-      </h1>
-      {canal.topic ? <p className="truncate border-l border-borda pl-3 text-13 text-texto-3">{canal.topic}</p> : null}
-    </header>
-  );
-}
-
 function CanalAberto({ guildId, canalId }: { guildId: string; canalId: string }) {
   const canal = useStore((s) => s.channels.get(canalId));
   const estouAqui = useVoz((v) => v.channelId === canalId && (v.connected || v.connecting));
   if (!canal) return null;
 
-  if (canal.type === 'GUILD_VOICE') {
-    return (
-      <div className="flex h-full flex-col">
-        <Cabecalho canal={canal} />
-        <EstadoVazio
-          rotulo="Canal de voz"
-          titulo={estouAqui ? 'Você está na chamada' : canal.name ?? 'Chamada'}
-          acao={estouAqui ? undefined : <Botao variante="primario" onClick={() => void entrarNaVoz(canal.id, guildId)}>▸ Entrar na chamada</Botao>}
-        >
-          O palco novo, com as transmissões e a qualidade certa para quem assiste, chega na fatia 3. A chamada em si
-          já funciona: microfone, fone e sair ficam embaixo, à esquerda.
-        </EstadoVazio>
-      </div>
-    );
-  }
+  /*
+    Canal de voz: por enquanto a conversa dele na area principal, como a 1.x
+    mostrava ao lado do palco. O palco novo (fatia 3) toma a area principal e a
+    conversa vai para o painel da direita.
+  */
+  const chamada =
+    canal.type === 'GUILD_VOICE' ? (
+      estouAqui ? (
+        <span className="mr-2 flex items-center gap-1.5 font-mono text-10 uppercase tracking-rotulo text-ok">
+          <span aria-hidden className="size-1.5 bg-ok" />
+          Na chamada
+        </span>
+      ) : (
+        <Botao tamanho="sm" variante="primario" onClick={() => void entrarNaVoz(canal.id, guildId)}>
+          ▸ Entrar na chamada
+        </Botao>
+      )
+    ) : null;
 
-  return (
-    <div className="flex h-full flex-col">
-      <Cabecalho canal={canal} />
-      <EstadoVazio rotulo="Conversa" titulo="A conversa nova chega na fatia 2">
-        Mensagens, menções com autocompletar, as duas densidades e as ações por teclado. Até lá, este canal continua
-        completo no Kiroshi normal.
-      </EstadoVazio>
-    </div>
-  );
+  // A chave e o canal: estado de um canal (resposta, edicao, anexos, rolagem) nunca vaza para outro.
+  return <Conversa key={canal.id} canalId={canal.id} extraNoCabecalho={chamada} />;
 }
 
 function AreaPrincipal({ rota }: { rota: Rota }) {
@@ -137,11 +122,7 @@ function AreaPrincipal({ rota }: { rota: Rota }) {
     case 'servidor':
       return rota.canalId ? <CanalAberto guildId={rota.guildId} canalId={rota.canalId} /> : null;
     case 'dm':
-      return (
-        <EstadoVazio rotulo="Conversa direta" titulo="A conversa nova chega na fatia 2">
-          As chamadas de voz e vídeo na conversa direta, com toque para atender, chegam na fatia 4.
-        </EstadoVazio>
-      );
+      return <Conversa key={rota.canalId} canalId={rota.canalId} />;
     case 'inicio':
       return (
         <EstadoVazio rotulo="Início" titulo={amigos === 0 ? 'Sua rede começa aqui' : amigos === 1 ? '1 amigo' : `${amigos} amigos`}>
@@ -151,16 +132,11 @@ function AreaPrincipal({ rota }: { rota: Rota }) {
         </EstadoVazio>
       );
     case 'ajustes':
+      return <Ajustes />;
     case 'ajustes-servidor':
       return (
-        <EstadoVazio
-          rotulo={rota.tela === 'ajustes' ? 'Configurações' : 'Ajustes do servidor'}
-          titulo="Em construção"
-          acao={<Botao onClick={() => history.back()}>Voltar</Botao>}
-        >
-          {rota.tela === 'ajustes'
-            ? 'As configurações novas — só o que funciona de verdade — chegam na fatia 5.'
-            : 'Os ajustes do servidor completos, com cargos que se atribuem, chegam na fatia 6.'}
+        <EstadoVazio rotulo="Ajustes do servidor" titulo="Em construção" acao={<Botao onClick={() => history.back()}>Voltar</Botao>}>
+          Os ajustes do servidor completos, com cargos que se atribuem, chegam na fatia 6.
         </EstadoVazio>
       );
     case 'convite':
@@ -214,6 +190,7 @@ function Membros({ guildId }: { guildId: string }) {
 export function Casca(): React.JSX.Element {
   const rota = useRota();
   useSincronizarRota(rota);
+  const membrosVisiveis = useInterface((s) => s.membros);
   const ehTexto = useStore((s) => {
     if (rota.tela !== 'servidor' || !rota.canalId) return false;
     const tipo = s.channels.get(rota.canalId)?.type;
@@ -241,7 +218,7 @@ export function Casca(): React.JSX.Element {
         <main id="conteudo" tabIndex={-1} className="min-h-0 min-w-0 flex-1 bg-void outline-none">
           <AreaPrincipal rota={rota} />
         </main>
-        {rota.tela === 'servidor' && ehTexto ? <Membros guildId={rota.guildId} /> : null}
+        {rota.tela === 'servidor' && ehTexto && membrosVisiveis ? <Membros guildId={rota.guildId} /> : null}
       </div>
       <BarraDeEstado />
     </div>

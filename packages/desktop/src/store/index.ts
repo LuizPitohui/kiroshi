@@ -17,6 +17,7 @@ import {
   type Sticker,
   type VoiceState,
 } from '@kiroshi/shared';
+import { contaComoMencao } from '../lib/naoLidas.js';
 
 /**
  * Estado da aplicacao.
@@ -555,6 +556,7 @@ export const useStore = create<AppState>((set, get) => ({
       if (message.nonce) {
         items = items.filter((m) => m.nonce !== message.nonce);
       }
+      const nova = !current.items.some((m) => m.id === message.id);
 
       messages.set(message.channelId, {
         ...current,
@@ -566,6 +568,27 @@ export const useStore = create<AppState>((set, get) => ({
       const channel = channels.get(message.channelId);
       if (channel) channels.set(channel.id, { ...channel, lastMessageId: message.id });
 
+      /*
+        Mencao em canal que nao esta aberto sobe o contador na hora. O servidor
+        ja conta no banco, mas o numero so chegava ao cliente no READY. So
+        mensagem nova (um evento repetido na retomada nao conta duas vezes) e
+        nunca no canal aberto: ali o "lido" chega em menos de um segundo, e o
+        numero piscaria.
+      */
+      let readStates = state.readStates;
+      const selfId = state.user?.id ?? null;
+      const ehDireta = channel?.type === 'DM' || channel?.type === 'GROUP_DM';
+      const meusCargos = channel?.guildId && selfId ? (state.members.get(memberKey(channel.guildId, selfId))?.roleIds ?? []) : [];
+      if (nova && state.selectedChannelId !== message.channelId && contaComoMencao(message, selfId, meusCargos, ehDireta)) {
+        readStates = new Map(state.readStates);
+        const lido = readStates.get(message.channelId);
+        readStates.set(message.channelId, {
+          channelId: message.channelId,
+          lastReadMessageId: lido?.lastReadMessageId ?? null,
+          mentionCount: (lido?.mentionCount ?? 0) + 1,
+        });
+      }
+
       // Quem digitava acabou de mandar: some com o indicador.
       const typing = new Map(state.typing);
       const entries = typing.get(message.channelId);
@@ -576,7 +599,7 @@ export const useStore = create<AppState>((set, get) => ({
         );
       }
 
-      return { messages, channels, typing };
+      return { messages, channels, typing, readStates };
     }),
 
   updateMessage: (message) =>

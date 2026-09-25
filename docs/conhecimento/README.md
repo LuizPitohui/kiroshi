@@ -30,8 +30,8 @@ abertas.
 | Area | Estado |
 |---|---|
 | Versao publicada | 1.15.0 (2026-09-23) |
-| Testes | 499 unitarios passando (shared 67, servidor 128, desktop 304); e2e 80/80; typecheck limpo |
-| Conversa (texto) | funciona; sem autocompletar mencao; acoes da mensagem so no hover |
+| Testes | 576 unitarios passando (shared 67, servidor 128, desktop 381); e2e 80/80; typecheck limpo |
+| Conversa (texto) | 1.x: funciona, sem autocompletar e com acoes so no hover. Beta: autocompletar, acoes por teclado, densidade real |
 | Voz | funciona; ajustes de audio em boa parte sem efeito; PTT global quebrado |
 | Transmissao de tela | **trava** — espectador recebe 360p15 ao lado do chat; caminho de rede instavel para quem usa relay; sem metricas |
 | Supressao de ruido | DFN3 roda, soa mal; vai ser refeita |
@@ -43,7 +43,7 @@ abertas.
 | Atualizacao automatica | funciona, mas baixa 93 MiB inteiros por versao |
 | Cadastro | so com convite (`ALLOW_OPEN_REGISTRATION=false`); criar com Google ja existe no servidor |
 | Seguranca | servidor: 13 falhas corrigidas e publicadas (API `6f493df`); abertas: casca Electron e host (ver `privado/`) |
-| Front-end novo | design aprovado (vermelho Arasaka); fatia 1 (fundacao + casca) no Kiroshi Beta |
+| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca) e 2 (conversa) no Kiroshi Beta |
 
 ## Como manter
 

@@ -115,6 +115,13 @@
   }
 }
 
+/*
+  `compacto:` — a densidade compacta da conversa (Ajustes > Aparencia). O
+  confortavel e o padrao e nao pinta nada; o compacto marca `data-densidade`
+  no <html> (lib/leitura.ts). Ex.: `compacto:hidden`.
+*/
+@custom-variant compacto (&:where([data-densidade='compacto'] *));
+
 @layer base {
   html,
   body,

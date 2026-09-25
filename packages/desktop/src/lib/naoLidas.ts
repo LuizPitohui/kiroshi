@@ -98,3 +98,34 @@ export function quantasNaoLidas(
   }
   return total;
 }
+
+// ---------------------------------------------------------------------------
+
+export interface MensagemParaMencao {
+  authorId: string;
+  mentionedUserIds: readonly string[];
+  mentionedRoleIds: readonly string[];
+  mentionsEveryone: boolean;
+}
+
+/**
+ * A mensagem sobe o contador de mencoes de quem?
+ *
+ * A mesma regra do servidor (`services/messages.ts`): mencao direta, mencao a
+ * um cargo que a pessoa tem, @everyone/@here que valeu (o servidor so marca
+ * `mentionsEveryone` quando o autor podia) — e, em conversa direta, toda
+ * mensagem. O que a pessoa mesma escreveu nunca conta.
+ *
+ * Existe porque o contador so era atualizado no READY: o servidor contava no
+ * banco, mas o numero vermelho so aparecia na tela depois de reconectar.
+ */
+export function contaComoMencao(
+  m: MensagemParaMencao,
+  euSou: string | null,
+  meusCargos: readonly string[],
+  ehConversaDireta: boolean,
+): boolean {
+  if (!euSou || m.authorId === euSou) return false;
+  if (ehConversaDireta) return true;
+  return m.mentionsEveryone || m.mentionedUserIds.includes(euSou) || meusCargos.some((id) => m.mentionedRoleIds.includes(id));
+}

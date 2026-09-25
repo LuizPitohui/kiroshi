@@ -55,7 +55,35 @@ primitivos (Radix + Tailwind v4), vitrine (`?nova&vitrine`), rotas por hash,
 casca com dados reais (titulo, trilho, navegacao com categorias e voz, painel
 da voz, identidade, membros, barra de estado) e a entrada (email/usuario,
 senha, 2FA). As duas interfaces convivem no mesmo codigo; o instalador de
-todos segue sem nenhum codigo da nova. Proximo: fatia 2 (conversa).
+todos segue sem nenhum codigo da nova.
+
+**Fatia 2 (conversa) entregue em 2026-09-25, no Kiroshi Beta**
+(`src/features/conversa/`): canais de texto, DMs e a conversa dos canais de voz.
+Paridade com a 1.x (historico paginado, divisor de novas congelado, marcar como
+lido, anexos com progresso, cartoes de link, reacoes, responder, editar,
+fixar, apagar, busca, fixadas, quem digita, rascunho por canal) mais:
+
+- **densidade real** — confortavel e compacta, escolhida em Configuracoes >
+  Aparencia (a unica pagina de ajustes por enquanto, junto com tema e movimento);
+- **autocompletar** de `@pessoa`, `@cargo`, `#canal` e `:emoji:`, aberto em cima
+  do cursor; o campo mostra nomes e a troca pelas marcas acontece no envio
+  (`mencoes.ts`, testado);
+- **acoes por teclado** — Shift+Tab do compositor entra nas mensagens, setas
+  navegam, Enter abre o menu, E/R/P/+/Del agem, Esc volta; clique com o botao
+  direito abre o mesmo menu; letra digitada fora de um campo vai para o
+  compositor;
+- **Enter envia, Shift+Enter quebra linha**, sem opcao (decisao do dono);
+- markdown refeito como arvore (`markdown.ts`): link com `_` nao quebra mais,
+  negrito passa por cima de codigo, `nome_do_arquivo` nao vira italico, escape
+  com barra, `>>>`, `@everyone` destacado pela regra do servidor;
+- nada engolido: editar, apagar, reagir e fixar mostram o motivo da falha;
+- reacao com emoji do servidor funciona (a 1.x mandava a marca como texto);
+- contador de mencoes sobe ao vivo (antes so no READY) — vale para as duas
+  interfaces;
+- no servidor: **fixar em DM** passou a funcionar (a regra exigia
+  MANAGE_MESSAGES, que o conjunto da DM nao tem).
+
+Proximo: fatia 3 (chamada e palco).
 
 ## F2 — Estabilidade das transmissoes
 

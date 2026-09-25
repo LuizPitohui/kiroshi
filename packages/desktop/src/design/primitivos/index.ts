@@ -26,3 +26,5 @@ export { Abas, ConteudoDaAba, type Aba } from './Abas.js';
 export { Avatar } from './Avatar.js';
 export { SeloVivo, Contador, SeloCargo, Tecla } from './Selo.js';
 export { Carregando, Esqueleto, Aviso, EstadoVazio, Avisos, avisar } from './Estados.js';
+export { Balao, BalaoGatilho, BalaoAncora, BalaoFechar, BalaoConteudo } from './Balao.js';
+export { Escolha, type OpcaoDeEscolha } from './Escolha.js';
