@@ -19,7 +19,7 @@ divergiu deles, esta base registra.
 | [07-desktop-e-entrega.md](07-desktop-e-entrega.md) | Electron, empacotamento, atualizacao e o estudo do atualizador em segundo plano |
 | [08-producao.md](08-producao.md) | Topologia, regras de ouro de deploy, estabilidade observada, comandos de diagnostico |
 | [09-referencia-discord.md](09-referencia-discord.md) | Como o Discord resolve cada coisa que vamos construir (chamada em DM, cargos, convites, soundboard, notificacoes, conta) |
-| [10-front-end-novo.md](10-front-end-novo.md) | **Proposta de design do front-end novo, para aprovacao** — identidade, linguagem visual, telas, arquitetura, plano de entrega; com o [prototipo](prototipo/index.html) |
+| [10-front-end-novo.md](10-front-end-novo.md) | **Design do front-end novo (aprovado, vermelho Arasaka)** — identidade, linguagem visual, telas, arquitetura, plano de entrega; com o [prototipo](prototipo/index.html) |
 
 `privado/` (fora do git — o repositorio e publico): enderecos e dados brutos de
 producao, a lista dos outros servicos do host e as pendencias de seguranca ainda
@@ -30,7 +30,7 @@ abertas.
 | Area | Estado |
 |---|---|
 | Versao publicada | 1.15.0 (2026-09-23) |
-| Testes | 391 unitarios passando; typecheck limpo |
+| Testes | 499 unitarios passando (shared 67, servidor 128, desktop 304); e2e 80/80; typecheck limpo |
 | Conversa (texto) | funciona; sem autocompletar mencao; acoes da mensagem so no hover |
 | Voz | funciona; ajustes de audio em boa parte sem efeito; PTT global quebrado |
 | Transmissao de tela | **trava** — espectador recebe 360p15 ao lado do chat; caminho de rede instavel para quem usa relay; sem metricas |
