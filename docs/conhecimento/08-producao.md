@@ -67,7 +67,18 @@ bytes, `releaseDate 2026-09-23T07:21:46Z`). Cadastro fechado
 7. Comandos de leitura para diagnostico nao precisam de permissao; qualquer coisa
    que altere o host, sim.
 
-## Deploy completo (`deploy/scripts/deploy.sh <host>`)
+## Deploy so da API (`deploy/scripts/deploy-api.sh [host]`) — o padrao
+
+Para mudanca em `packages/server` ou `packages/shared`. Nao toca no LiveKit:
+ninguem cai da chamada. Recusa se ha mudanca nao commitada no servidor, pergunta
+ao SFU se ha gente em chamada (`FORCAR=1` passa por cima), envia so o commit
+(git archive, sem o `docker-compose.yml` do servidor), guarda a imagem atual como
+`kiroshi-api:anterior`, recria so o servico `api` e espera o `/health`. Se falhar,
+imprime o comando de volta. Primeira vez em 2026-09-24 (pacote de seguranca,
+`6f493df`): a API trocou em segundos, o LiveKit seguiu no ar e os clientes
+1.15 se reidentificaram sozinhos.
+
+## Deploy completo (`deploy/scripts/deploy.sh <host>`) — so quando o SFU muda
 
 1. Testa o SSH; resolve `~/kiroshi` no servidor.
 2. Descobre IPv6, interface da rota padrao e interface de VPN.
@@ -119,7 +130,7 @@ ssh <host> 'docker exec -i -w /app kiroshi-api node --input-type=module -' < dep
 - Sem metricas: LiveKit sem `prometheus_port`, nenhuma telemetria de video no
   cliente. Primeiro passo de qualquer trabalho em estabilidade.
 - Sem backup automatico do banco; migracoes sem backup antes.
-- `deploy.sh` sempre reinicia o LiveKit mesmo quando so a API mudou.
+- `deploy.sh` sempre reinicia o LiveKit — por isso existe o `deploy-api.sh`.
 - `/baixar/:arquivo` sem `Range`: cada atualizacao baixa 93 MiB por maquina
   (ver [07-desktop-e-entrega.md](07-desktop-e-entrega.md)).
 - Seguranca do host: ver notas privadas.

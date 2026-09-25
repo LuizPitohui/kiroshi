@@ -4,10 +4,31 @@
 > `packages/server/prisma`, `packages/server/test` e `packages/shared/src`.
 > **[I]** = deducao que precisa ser confirmada rodando.
 >
-> Os defeitos de **seguranca** encontrados nao estao descritos aqui: o
-> repositorio e publico e eles ainda estao abertos. Ficam em
-> `privado/seguranca.md` (fora do git) ate serem corrigidos; depois de
-> corrigidos, entram no historico abaixo.
+> Defeitos de **seguranca** ainda abertos nao sao descritos aqui (o
+> repositorio e publico): ficam em `privado/seguranca.md` ate serem corrigidos
+> e publicados. Os ja corrigidos estao na secao "Correcoes de seguranca".
+
+## Correcoes de seguranca (publicadas em 2026-09-24, API no `6f493df`)
+
+| O que era | O que ficou | Commit |
+|---|---|---|
+| O gateway entregava a todos os membros os eventos de canais privados (mensagens, edicoes, reacoes, fixadas, digitacao, voz) | eventos de canal so para quem tem VIEW_CHANNEL, com a mesma conta do REST (`lib/visibilidade.ts`, `services/entrega.ts`); quem perde acesso recebe CHANNEL_DELETE | `1d5e59f` |
+| `?around=<id>` devolvia mensagem de qualquer canal ou DM | a mensagem-alvo tem que ser do proprio canal | `1d5e59f` |
+| Anexo de mensagem apagada seguia servido | apagar mensagem (uma ou em massa) apaga linhas e arquivos | `1d5e59f` |
+| Digitacao, ack e busca por servidor sem conferir permissao | digitacao exige VIEW + SEND (ou ser da DM); ack e busca exigem READ_MESSAGE_HISTORY | `1d5e59f` |
+| VOICE_SERVER_UPDATE ia a todas as sessoes da conta | so a sessao que pediu (ou a gravada no VoiceState, ao mover) | `62dda74` |
+| Expulso, banido, quem sai, servidor apagado, grupo, bloqueio: seguiam na chamada | `tirarDaVoz`: apaga o estado, avisa e remove do SFU | `62dda74` |
+| `roomAdmin` no token de moderador dava a API do SFU ao cliente | fora do token; moderacao so pelo servidor | `62dda74` |
+| Bloqueio nao valia em DM existente; bloquear quem te bloqueou apagava o bloqueio dele | DM 1:1 com bloqueio recusa mensagem e chamada; bloqueio preservado | `62dda74` |
+| Sessao revogada, senha trocada ou conta excluida seguiam no gateway | IDENTIFY/RESUME conferem a sessao no banco; essas acoes fecham com 4004 | `93d9625` |
+| Filtro de SSRF dos cartoes de link aceitava IPv4 embutido em IPv6; DNS resolvido duas vezes | classificador de enderecos proprio; conexao no IP ja conferido | `93d9625` |
+| Limite por IP lia `X-Forwarded-For` de qualquer um | `CF-Connecting-IP` quando vem do cloudflared; `trustProxy` so para proxy local | `93d9625` |
+| Payloads do gateway sem validacao | zod nos opcodes 2, 3, 4, 6, 8, 12 (4002 fora do formato) | `93d9625` |
+
+Junto, confiabilidade: o RESUME passou a entregar o que aconteceu durante a
+queda, e o fechamento atrasado de um socket antigo nao derruba mais a sessao
+reanexada (`6f493df`); trocar direto de canal de voz nao derruba mais a
+chamada nova no 1.15; o barramento Redis respeita o padrao assinado.
 
 Caminhos: `S/` = `packages/server/src/`, `SH/` = `packages/shared/src/`,
 `PR/` = `packages/server/prisma/`.
@@ -75,11 +96,11 @@ notificacao por guild/canal, bloquear, grupos de DM, revogar sessoes.
   relacoes, readStates, presencas.
 - Retomada: buffer de 512 eventos por sessao; RESUME vale ate ~2,5 min.
   VOICE_SERVER_UPDATE, TYPING_START e SPEAKING_UPDATE nao entram no buffer.
-- **Defeito: o RESUME perde eventos.** `dispatchToUser/Guild/Channel` pulam
+- **Defeito (corrigido em `6f493df`): o RESUME perdia eventos.** `dispatchToUser/Guild/Channel` pulavam
   sessoes com socket fechado antes de chamar `dispatch` (`S/gateway/registry.ts:206,
   225, 246`); o evento nao entra no buffer e o RESUME devolve `replayed: 0`.
   Contradiz `docs/ARQUITETURA.md:210-213`.
-- **Defeito provavel:** RESUME que troca um socket ainda aberto
+- **Defeito (corrigido em `6f493df`):** RESUME que troca um socket ainda aberto
   (`server.ts:295-299`) — o `close` atrasado do socket antigo marca a sessao
   reanexada como desconectada; ~2 min depois `pruneExpired` a remove, tira da
   voz e pode marcar offline, com o socket novo aberto e surdo.
@@ -358,7 +379,7 @@ soundboard, busca, voz.
 
 ## Defeitos funcionais (sem os de seguranca)
 
-1. RESUME perde eventos (gateway).
+1. ~~RESUME perde eventos~~ — corrigido em `6f493df`.
 2. Herança de sobrescritas da categoria invertida.
 3. So o dono cria cargos.
 4. Atribuir cargo: sem UI e sem rota incremental.
