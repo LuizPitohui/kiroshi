@@ -12,7 +12,7 @@
 ```
   Cliente (Windows, Electron)                      arasaka (casa, atras de CGNAT)
   ---------------------------                      ------------------------------
-  REST + gateway   -> Cloudflare Tunnel (QUIC) ->  127.0.0.1:4000   kiroshi-api
+  REST + gateway   -> Cloudflare Tunnel (HTTP/2) -> 127.0.0.1:4000  kiroshi-api
   Sinalizacao voz  -> Cloudflare Tunnel        ->  :7880            kiroshi-livekit (rede do host)
   Midia            -> IPv6 direto UDP 7881     ->  interface fisica
                    -> Tailscale                ->  interface da VPN
@@ -103,8 +103,9 @@ Detalhe e analise em [04-midia.md](04-midia.md#caminhos-de-rede-em-producao-medi
 - LiveKit: 234 trocas de par ICE (a maioria de quem usa relay), 57 retomadas de
   sessao (32 por queda da sinalizacao, 10 por falha da conexao de quem publica),
   1 `publish time out`, nenhum par TCP.
-- `cloudflared` (protocolo QUIC): 43 conexoes encerradas, 77 tentativas de
-  reconexao, 25 falhas de discagem QUIC.
+- `cloudflared` (protocolo QUIC na epoca; HTTP/2 desde 2026-09-25, ver o backlog
+  F13): 43 conexoes encerradas, 77 tentativas de reconexao, 25 falhas de
+  discagem QUIC.
 - Host: CPU ociosa >= 97% nas medias de 10 min; pico de ~5 Mbit/s de saida.
 - API: 600 linhas de log; erros so no boot diario (Postgres ainda subindo).
 

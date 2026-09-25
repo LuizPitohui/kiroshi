@@ -293,7 +293,9 @@ LiveKit, 72 h ate 2026-09-24:
 `cloudflared`, 72 h: 43 conexoes encerradas, 77 tentativas de reconexao, 25 falhas
 de discagem QUIC, 51 erros no tratador de datagramas; rajada de 16 eventos em
 2026-09-24 05:46–05:48 UTC, dois minutos depois das perdas fora de ordem no
-LiveKit. Protocolo do tunel: **QUIC** (UDP), que atravessa o mesmo CGNAT.
+LiveKit. Protocolo do tunel na epoca: **QUIC** (UDP), que atravessa o mesmo CGNAT.
+Desde 2026-09-25 e **HTTP/2** (TCP), depois de uma conexao QUIC meio morta dar
+524 a parte dos clientes (backlog F13).
 
 Host (medias de 10 min do `sysstat`): CPU ociosa >= 97% nas janelas de uso; pico
 de saida de ~5 Mbit/s e de entrada de ~9 Mbit/s. Media de 10 min esconde pico
@@ -329,7 +331,7 @@ Em ordem de probabilidade, ja cruzando codigo e producao:
 | 7 | Rota ruim (Tailscale via DERP/TCP, IPv6 longo) | `DEPLOY.md:433-450` | endereco 100.x ou TCP no diagnostico |
 | 8 | Pedidos de quadro-chave em rajada, camadas pausadas pelo dynacast | [I] | `pliCount`, `keyFramesEncoded` no emissor |
 | 9 | Perda no proprio servidor (socket UDP unico, host compartilhado) | [I] | `RcvbufErrors` em `/proc/net/snmp`, `vmstat 1` |
-| 10 | Quedas da sinalizacao pelo tunel QUIC | logs do `cloudflared` | correlacionar com `SignalReconnecting` |
+| 10 | Quedas da sinalizacao pelo tunel QUIC | logs do `cloudflared` | correlacionar com `SignalReconnecting`; o tunel virou HTTP/2 em 2026-09-25, entao comparar as retomadas antes e depois |
 
 Descartadas: "simulcast desligado" (esta ligado); "um receptor ruim derruba o
 emissor" (o SFU isola, salvo por pedidos de quadro-chave).

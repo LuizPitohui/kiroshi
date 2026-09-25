@@ -516,13 +516,23 @@ cloudflared` refez as quatro e resolveu (18 de 18 depois). Pelo mesmo caminho
 falhavam as chamadas da API ao LiveKit (`LIVEKIT_URL` e `wss://voz.arasaka.fun`)
 e downloads da 2.0.1 ("stream canceled by remote"); ninguem estava em chamada.
 
-A causa de fundo e o transporte: o `cloudflared` usa QUIC (UDP) atras do CGNAT, e
-as conexoes morrem por "no recent network activity" todo dia (de 2 a 19 vezes por
-dia na ultima semana; 36 pedidos com falha so no dia 25). Proposta: HTTP/2 (TCP),
-por um arquivo de sobrescrita do systemd com
-`Environment=TUNNEL_TRANSPORT_PROTOCOL=http2`, reversivel apagando o arquivo.
-**Decisao do dono:** o tunel serve todos os projetos do servidor (pelo menos 10
-regras de entrada), entao cai na decisao delegada 5.
+A causa de fundo e o transporte: o `cloudflared` usava QUIC (UDP) atras do CGNAT,
+e as conexoes morriam por "no recent network activity" todo dia (de 2 a 19 vezes
+por dia na ultima semana; 36 pedidos com falha so no dia 25).
+
+**Trocado para HTTP/2 (TCP) no mesmo dia, com a aprovacao do dono** (o tunel
+serve todos os projetos do servidor, entao era a decisao delegada 5; custo
+nenhum, o tunel e gratuito nos dois protocolos). Sobrescrita do systemd em
+`/etc/systemd/system/cloudflared.service.d/protocolo.conf` com
+`Environment=TUNNEL_TRANSPORT_PROTOCOL=http2`; para voltar, apagar o arquivo,
+`systemctl daemon-reload` e `systemctl restart cloudflared`. Conferido depois:
+as quatro conexoes em `protocol=http2`, 18 de 18 pedidos, WebSocket do gateway
+(HELLO em 0,65 s), sinalizacao do LiveKit (401 para token invalido), instalador
+inteiro em 3,3 s. O roteamento de rede privada (WARP), unico recurso que exige
+QUIC, esta desligado. **A conferir em alguns dias:** as quedas de conexao no log
+e as retomadas por queda de sinalizacao do LiveKit (hipotese 10 do
+[04-midia.md](04-midia.md)). O `financeiro-une` ja respondia 502 antes da troca:
+nada escuta nas portas 8050/8051 do servidor.
 
 ## F14 — Documentacao desatualizada
 
