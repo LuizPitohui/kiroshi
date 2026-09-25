@@ -1,4 +1,25 @@
-import type { KiroshiApi } from '../../electron/preload.js';
+import type { KiroshiApi, PreferenciasDoApp } from '../../electron/preload.js';
+
+/** No navegador, as preferencias do processo principal ficam no armazenamento da aba. */
+const PREFERENCIAS_NO_NAVEGADOR = 'kiroshi.preferenciasDoApp';
+const PREFERENCIAS_PADRAO: PreferenciasDoApp = {
+  fecharParaBandeja: true,
+  iniciarEscondido: true,
+  atalhos: {
+    falar: null,
+    mutar: { tipo: 'tecla', codigo: 'KeyM', ctrl: true, shift: true, alt: false, meta: false },
+    ensurdecer: { tipo: 'tecla', codigo: 'KeyD', ctrl: true, shift: true, alt: false, meta: false },
+  },
+};
+
+function preferenciasNoNavegador(): PreferenciasDoApp {
+  try {
+    const salvas = JSON.parse(localStorage.getItem(PREFERENCIAS_NO_NAVEGADOR) ?? 'null') as Partial<PreferenciasDoApp> | null;
+    return salvas ? { ...PREFERENCIAS_PADRAO, ...salvas, atalhos: { ...PREFERENCIAS_PADRAO.atalhos, ...(salvas.atalhos ?? {}) } } : PREFERENCIAS_PADRAO;
+  } catch {
+    return PREFERENCIAS_PADRAO;
+  }
+}
 
 /**
  * Substituto do preload para quando a interface roda fora do Electron.
@@ -60,10 +81,29 @@ function createBrowserFallback(): KiroshiApi {
       },
       setBadge: noop,
       flash: noop,
+      aoAbrir: () => unsubscribe,
     },
     autostart: {
       get: () => Promise.resolve(false),
       set: (enabled: boolean) => Promise.resolve(enabled),
+    },
+    preferencias: {
+      ler: () => Promise.resolve(preferenciasNoNavegador()),
+      gravar: (patch: Partial<PreferenciasDoApp>) => {
+        const antes = preferenciasNoNavegador();
+        const depois = { ...antes, ...patch, atalhos: { ...antes.atalhos, ...(patch.atalhos ?? {}) } };
+        try {
+          localStorage.setItem(PREFERENCIAS_NO_NAVEGADOR, JSON.stringify(depois));
+        } catch {
+          // sem armazenamento: vale ate recarregar
+        }
+        return Promise.resolve(depois);
+      },
+    },
+    atalhos: {
+      // Fora do Electron nao ha escuta global: so a janela em foco.
+      ativos: () => Promise.resolve(false),
+      aoAcionar: () => unsubscribe,
     },
     atualizacao: {
       // Fora do Electron nao ha o que atualizar: a pagina ja e a versao nova.

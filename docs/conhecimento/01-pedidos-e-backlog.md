@@ -144,8 +144,35 @@ sair da chamada nao existia na interface nova (agora sempre ligado, decisao do
 dono), e camera e transmissao nunca chegavam ao servidor, nas duas interfaces
 — ninguem via na lista quem estava com camera ou ao vivo.
 
-Proximo: fatia 5 (ajustes do usuario, notificacoes reais, iniciar com o
-Windows, atalhos globais).
+**Fatia 5 (ajustes do usuario) entregue em 2026-09-25, no Kiroshi Beta**
+(`src/features/ajustes/`): as dez paginas do desenho, em tres grupos, e
+nenhuma decorativa.
+
+- **Meu perfil** (foto, nome de exibicao, pronomes, bio, status e frase) e
+  **Conta e seguranca** (senha com confirmacao, ou definir a primeira para
+  quem entrou pelo Google; verificacao em duas etapas com QR e codigos de
+  reserva; Google; **aparelhos conectados** com desconectar; sair de verdade;
+  excluir a conta digitando o usuario).
+- **Voz e video**: dispositivos, volume ate 200%, modo de entrada, **medidor em
+  dB com a marca do limiar**, medido entre a limpeza e o portao (o antigo media
+  depois do portao e nao dava para calibrar), teste com "ouvir minha voz" (sem
+  o estouro acima de 100% da 1.x), camera com previa. Da limpeza de ruido, so o
+  que funciona hoje; o resto e F3.
+- **Transmissao**: o padrao do seletor de tela.
+- **Notificacoes** (F7): Windows, piscar, contador no icone; nivel por servidor
+  e por canal (todas, so mencoes, nada) e silenciar por 15 min, 1 h, 8 h, 24 h
+  ou ate reativar — no clique direito de canais e DMs e no menu do servidor;
+  "Nao perturbe" respeitado; clique na notificacao abre a conversa.
+- **Atalhos globais** (falar segurando, mutar, ensurdecer) pela escuta do
+  teclado do Windows (`uiohook-napi`, aprovada pelo dono): funcionam com o jogo
+  na frente e nao tomam a tecla dele; botao lateral do mouse tambem serve.
+- **Windows** (F7): iniciar com o Windows consertado (lido e gravado do mesmo
+  jeito), abrir escondido na bandeja de verdade, e a escolha do que o X faz;
+  ligado por padrao no Kiroshi normal, na primeira abertura.
+- **Sobre e atualizacoes** e **Diagnostico** (IPv6, rede virtual, caminho,
+  latencia e perda, com relatorio para copiar).
+
+Proximo: fatia 6 (ajustes do servidor completos, dar cargo, convites por link).
 
 ## F2 — Estabilidade das transmissoes
 
@@ -291,6 +318,11 @@ notificacao por servidor/canal que ninguem usa. Autostart: le sem os mesmos
 **Proposta:** niveis por servidor e canal (todas / so mencoes / nada), silenciar
 por tempo, NP respeitado, clique abre a conversa, contador na barra de tarefas;
 autostart consertado, abrindo escondido na bandeja, ligado por padrao.
+
+**Estado:** feito na fatia 5 do F1 (Beta e servidor). A regra de quando notificar
+e pura e testada (`src/lib/notificar.ts`); os ajustes por servidor e canal
+ficam na conta e valem em todos os aparelhos. Mensagem comum de servidor passa
+a notificar (nivel "todas" por padrao, como o dono pediu).
 
 ## F8 — Convite como link
 

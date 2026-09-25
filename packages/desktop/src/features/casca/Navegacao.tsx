@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Permission, has, type Channel } from '@kiroshi/shared';
-import { ChevronDown, ChevronRight, Hash, HeadphoneOff, LogOut, Megaphone, MicOff, Phone, Settings, UserPlus, Users, Video, Volume2, X } from 'lucide-react';
+import { BellOff, ChevronDown, ChevronRight, Hash, HeadphoneOff, LogOut, Megaphone, MicOff, Phone, Settings, UserPlus, Users, Video, Volume2, X } from 'lucide-react';
 import { selectors, useChannelsOfGuild, usePrivateChannels, useStore, useVoiceMembersOf } from '../../store/index.js';
 import { navegar, useRota } from '../../app/rotas.js';
 import {
@@ -9,11 +9,17 @@ import {
   Menu,
   MenuConteudo,
   MenuGatilho,
+  MenuDeContexto,
+  MenuDeContextoConteudo,
+  MenuDeContextoGatilho,
+  MenuDeContextoItem,
+  MenuDeContextoSeparador,
   MenuItem,
   MenuSeparador,
   SeloVivo,
   cx,
 } from '../../design/primitivos/index.js';
+import { ItensDeNotificacaoDoCanal, ItensDeNotificacaoDoServidor, useCanalSilenciado, useServidorSilenciado } from '../ajustes/MenuDeNotificacao.js';
 import { entrarNaVoz } from './acoesDeVoz.js';
 import { useVoz } from './useVoz.js';
 import { agruparCanais } from './organizar.js';
@@ -89,6 +95,7 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
   const Icone = ehVoz ? Volume2 : canal.type === 'GUILD_ANNOUNCEMENT' ? Megaphone : Hash;
   // Alvo de arrastar uma pessoa de outro canal de voz (mover, com permissao).
   const [recebendo, setRecebendo] = useState(false);
+  const calado = useCanalSilenciado(canal.id);
 
   function abrir() {
     // Abrir um canal de voz tambem entra nele: e um lugar onde se esta, nao um
@@ -114,6 +121,8 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
         void moverPara(guildId, userId, canal.id);
       }}
     >
+      <MenuDeContexto>
+      <MenuDeContextoGatilho asChild>
       <button
         type="button"
         onClick={abrir}
@@ -121,18 +130,25 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
         className={cx(
           'relative flex h-[30px] w-full items-center gap-2 px-2 text-left text-14',
           recebendo && 'outline outline-1 -outline-offset-1 outline-acento',
-          ativo ? 'bg-elevado text-texto' : naoLido ? 'font-semibold text-texto hover:bg-terminal' : 'text-texto-3 hover:bg-terminal hover:text-texto-2',
+          ativo ? 'bg-elevado text-texto' : naoLido && !calado ? 'font-semibold text-texto hover:bg-terminal' : 'text-texto-3 hover:bg-terminal hover:text-texto-2',
+          calado && !ativo && 'opacity-60',
         )}
       >
         {ativo ? <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-acento shadow-brilho" /> : null}
         {!ativo && naoLido ? <span aria-hidden className="absolute -left-2 top-[11px] h-2 w-[3px] bg-texto" /> : null}
         <Icone aria-hidden className={cx(ic, ativo ? 'text-acento' : 'text-mudo')} strokeWidth={1.5} />
         <span className="min-w-0 flex-1 truncate">{canal.name}</span>
+        {calado ? <BellOff aria-label="silenciado" className="size-3.5 shrink-0 text-mudo" strokeWidth={1.5} /> : null}
         {ehVoz && presentes.length > 0 ? (
           <span className="font-mono text-10 text-mudo">{presentes.length}</span>
         ) : null}
         <Contador valor={mencoes} rotulo="menções" />
       </button>
+      </MenuDeContextoGatilho>
+      <MenuDeContextoConteudo>
+        <ItensDeNotificacaoDoCanal channelId={canal.id} deServidor />
+      </MenuDeContextoConteudo>
+      </MenuDeContexto>
       {ehVoz && presentes.length > 0 ? (
         <ul aria-label={`Na chamada ${canal.name}`}>
           {presentes.map((p) => (
@@ -147,6 +163,7 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
 function CabecalhoDoServidor({ guildId }: { guildId: string }) {
   const nome = useStore((s) => s.guilds.get(guildId)?.name ?? '');
   const membros = useStore((s) => s.guilds.get(guildId)?.memberCount ?? 0);
+  const calado = useServidorSilenciado(guildId);
 
   return (
     <Menu>
@@ -159,8 +176,9 @@ function CabecalhoDoServidor({ guildId }: { guildId: string }) {
             <span className="block truncate font-display text-18 font-bold tracking-[0.1em] text-texto">
               {nome.toUpperCase()}
             </span>
-            <span className="block font-mono text-9 uppercase tracking-rotulo-largo text-mudo">
+            <span className="flex items-center gap-1.5 font-mono text-9 uppercase tracking-rotulo-largo text-mudo">
               // servidor · {membros} membros
+              {calado ? <BellOff aria-label="servidor silenciado" className="size-3" strokeWidth={1.5} /> : null}
             </span>
           </span>
           <ChevronDown aria-hidden className="size-4 text-texto-3" strokeWidth={1.5} />
@@ -176,6 +194,7 @@ function CabecalhoDoServidor({ guildId }: { guildId: string }) {
         >
           Ajustes do servidor
         </MenuItem>
+        <ItensDeNotificacaoDoServidor guildId={guildId} />
         <MenuSeparador />
         <MenuItem icone={<LogOut className="size-4" strokeWidth={1.5} />} perigo desativado>
           Sair do servidor (em breve)
@@ -248,6 +267,7 @@ function LinhaDeConversa({ canal, ativo }: { canal: Channel; ativo: boolean }) {
   const status = useStore((s) => s.presences.get(primeiro)?.status ?? 'OFFLINE');
   const mencoes = useStore((s) => selectors.mentionCount(s, canal.id));
   const naoLido = useStore((s) => selectors.unreadCount(s, canal.id) > 0);
+  const calado = useCanalSilenciado(canal.id);
   const emChamada = useStore((s) => selectors.voiceMembersOf(s, canal.id).length > 0);
   const meChama = useStore((s) => Boolean(eu && s.calls.get(canal.id)?.ringing.includes(eu)));
   // Numa DM 1:1, onde o outro lado esta em chamada num servidor que eu tambem vejo.
@@ -260,6 +280,8 @@ function LinhaDeConversa({ canal, ativo }: { canal: Channel; ativo: boolean }) {
 
   return (
     <li className="group/dm relative">
+      <MenuDeContexto>
+      <MenuDeContextoGatilho asChild>
       <button
         type="button"
         onClick={() => navegar({ tela: 'dm', canalId: canal.id })}
@@ -283,8 +305,22 @@ function LinhaDeConversa({ canal, ativo }: { canal: Channel; ativo: boolean }) {
         {emChamada ? (
           <Phone aria-label={meChama ? 'te chamando' : 'chamada em andamento'} className={cx('size-4 shrink-0 text-fala', meChama && 'k-anima k-pulso')} strokeWidth={1.5} />
         ) : null}
+        {calado ? <BellOff aria-label="silenciada" className="size-3.5 shrink-0 text-mudo" strokeWidth={1.5} /> : null}
         <Contador valor={mencoes} rotulo="mensagens novas" />
       </button>
+      </MenuDeContextoGatilho>
+      <MenuDeContextoConteudo>
+        <ItensDeNotificacaoDoCanal channelId={canal.id} deServidor={false} />
+        {canal.type === 'DM' ? (
+          <>
+            <MenuDeContextoSeparador />
+            <MenuDeContextoItem icone={<X className="size-4" strokeWidth={1.5} />} aoEscolher={() => void fecharConversa(canal.id)}>
+              Fechar a conversa
+            </MenuDeContextoItem>
+          </>
+        ) : null}
+      </MenuDeContextoConteudo>
+      </MenuDeContexto>
       {canal.type === 'DM' ? (
         <button
           type="button"

@@ -178,4 +178,7 @@ de teste estaveis.
 | Chamada em DM: toque, registro, 3 minutos | `packages/server/src/services/chamadas.ts` (+ `lib/chamada.ts`, testado) |
 | Interface nova: inicio e amigos | `packages/desktop/src/features/inicio/` (`amigos.ts` puro, testado) |
 | Chamada em DM no app (puro, testado) | `packages/desktop/src/features/chamada/dm.ts` |
+| Interface nova: configuracoes | `packages/desktop/src/features/ajustes/` (uma pagina por arquivo) |
+| Quando notificar (puro, testado) | `packages/desktop/src/lib/notificar.ts` |
+| Atalhos globais e preferencias do processo principal | `packages/desktop/electron/{atalhos,preferencias}.ts` (+ `src/app/atalhos.ts`, testado) |
 | Deploy | `deploy/scripts/deploy.sh`, `docs/DEPLOY.md` |

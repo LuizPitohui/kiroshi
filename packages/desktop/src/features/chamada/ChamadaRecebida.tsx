@@ -117,7 +117,8 @@ function CartaoAoVivo({ chamada }: { chamada: Call }) {
   // Toque, Windows e leitor de tela: uma vez por chamada que chega.
   useEffect(() => {
     const parar = tocarToque('recebida');
-    window.kiroshi?.notifications.show(`${titulo} está te ligando`, 'Abra o Kiroshi para atender ou recusar.', true);
+    // Silenciosa (o toque e nosso); o clique abre a conversa da chamada.
+    window.kiroshi?.notifications.show(`${titulo} está te ligando`, 'Abra o Kiroshi para atender ou recusar.', true, `#/dm/${chamada.channelId}`);
     window.kiroshi?.notifications.flash();
     anunciar(`${titulo} está te ligando. Atender ou recusar.`, 'urgente');
     return parar;

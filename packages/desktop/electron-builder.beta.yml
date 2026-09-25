@@ -31,6 +31,10 @@ files:
 electronLanguages:
   - pt-BR
   - en-US
+# Nada de recompilar dependencias nativas: a unica (uiohook-napi, a escuta
+# dos atalhos globais) ja vem com o binario pronto para cada sistema, e
+# recompilar exigiria o Visual Studio instalado so para empacotar.
+npmRebuild: false
 asar: true
 extraResources:
   - from: resources/modelos

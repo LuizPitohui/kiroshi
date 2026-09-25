@@ -88,6 +88,8 @@ export interface VoiceParticipant {
 export interface VoiceSettings {
   inputDeviceId: string | null;
   outputDeviceId: string | null;
+  /** A camera escolhida em Voz e video; null = a padrao do Windows. */
+  cameraDeviceId: string | null;
   inputMode: InputMode;
   /**
    * Limiar do portao no modo por atividade de voz, em dB.
@@ -180,6 +182,7 @@ const SETTINGS_KEY = 'kiroshi.voice';
 const DEFAULT_SETTINGS: VoiceSettings = {
   inputDeviceId: null,
   outputDeviceId: null,
+  cameraDeviceId: null,
   inputMode: 'voice-activity',
   limiarDeVozDb: LIMIAR_PADRAO_DB,
   noiseSuppression: true,
@@ -1151,7 +1154,7 @@ class VoiceController {
     this.emit({ error: null });
 
     try {
-      this.cameraTrack = await this.abrirCamera(deviceId);
+      this.cameraTrack = await this.abrirCamera(deviceId ?? this.settings.cameraDeviceId ?? undefined);
 
       await room.localParticipant.publishTrack(this.cameraTrack, {
         source: Track.Source.Camera,

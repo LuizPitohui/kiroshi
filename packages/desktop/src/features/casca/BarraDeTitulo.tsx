@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Hash, Minus, Square, Volume2, X } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import { useRota } from '../../app/rotas.js';
+import { usePreferenciasDoApp } from '../../app/preferenciasDoApp.js';
 import { Marca } from './Marca.js';
 
 /**
@@ -10,6 +12,11 @@ import { Marca } from './Marca.js';
  */
 export function BarraDeTitulo(): React.JSX.Element {
   const rota = useRota();
+  // O X diz o que faz: esconde na bandeja ou fecha de vez (Configuracoes > Windows).
+  const fecharParaBandeja = usePreferenciasDoApp((s) => s.preferencias?.fecharParaBandeja ?? true);
+  useEffect(() => {
+    void usePreferenciasDoApp.getState().carregar();
+  }, []);
   const servidor = useStore((s) => (rota.tela === 'servidor' || rota.tela === 'ajustes-servidor' ? s.guilds.get(rota.guildId)?.name : undefined));
   const canal = useStore((s) => {
     if (rota.tela === 'servidor' && rota.canalId) return s.channels.get(rota.canalId);
@@ -67,7 +74,8 @@ export function BarraDeTitulo(): React.JSX.Element {
         </button>
         <button
           type="button"
-          aria-label="Fechar (continua na bandeja)"
+          aria-label={fecharParaBandeja ? 'Fechar (continua na bandeja)' : 'Fechar o Kiroshi'}
+          title={fecharParaBandeja ? 'Fechar (continua na bandeja)' : 'Fechar o Kiroshi'}
           onClick={() => window.kiroshi.window.close()}
           className="grid h-full w-11 place-items-center text-texto-3 hover:bg-vivo hover:text-branco"
         >

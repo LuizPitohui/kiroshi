@@ -1,5 +1,7 @@
 import { toPlainText, type Message } from '@kiroshi/shared';
 import { useStore } from '../store/index.js';
+import { deveNotificar } from '../lib/notificar.js';
+import { lerPreferenciasDeNotificacao } from '../lib/preferenciasDeNotificacao.js';
 import { voice } from '../voice/controller.js';
 import { gateway } from './gateway.js';
 
@@ -167,6 +169,10 @@ export function installGatewayHandlers(): void {
     }
   });
 
+  // Ajustes de notificacao mudados em outro aparelho valem aqui na hora.
+  gateway.on('USER_GUILD_SETTINGS_UPDATE', (ajuste) => store().setGuildSettings(ajuste));
+  gateway.on('USER_CHANNEL_SETTINGS_UPDATE', (ajuste) => store().setChannelSettings(ajuste));
+
   // Chamada em DM: quem esta sendo chamado, e quando ela acaba.
   gateway.on('CALL_CREATE', (call) => store().setCall(call));
   gateway.on('CALL_UPDATE', (call) => store().setCall(call));
@@ -193,29 +199,45 @@ export function installGatewayHandlers(): void {
   window.addEventListener('beforeunload', () => clearInterval(typingTimer));
 }
 
-/** Notificacao nativa quando a mensagem merece: mencao ou DM. */
+/*
+  A mesma mensagem pode chegar duas vezes: a DM vem pelo aviso da pessoa e pelo
+  do canal (defeito conhecido do servidor, 03-servidor.md). Guardar as ultimas
+  avisadas evita notificacao dupla.
+*/
+const avisadas: string[] = [];
+
+/**
+ * Notificacao do Windows quando a mensagem merece, pela regra testada em
+ * lib/notificar.ts: nivel do servidor e do canal (todas, mencoes, nada),
+ * silencio com prazo, Nao perturbe. O clique abre a conversa.
+ */
 function notifyIfNeeded(message: Message): void {
   const state = useStore.getState();
   const selfId = state.user?.id;
-  if (!selfId || message.authorId === selfId) return;
+  if (!selfId || avisadas.includes(message.id)) return;
 
   const channel = state.channels.get(message.channelId);
-  const isDm = channel?.type === 'DM' || channel?.type === 'GROUP_DM';
-  const mentionsMe = message.mentionedUserIds.includes(selfId);
+  const guildId = channel?.guildId ?? null;
+  const preferencias = lerPreferenciasDeNotificacao();
+  const notificar = deveNotificar({
+    mensagem: message,
+    euSou: selfId,
+    canal: channel ? { guildId } : undefined,
+    meusCargos: guildId ? (state.members.get(`${guildId}:${selfId}`)?.roleIds ?? []) : [],
+    ajusteDoServidor: guildId ? state.notificacoesDoServidor.get(guildId) : undefined,
+    ajusteDoCanal: state.notificacoesDoCanal.get(message.channelId),
+    meuStatus: state.presences.get(selfId)?.status ?? 'ONLINE',
+    olhandoAConversa: state.selectedChannelId === message.channelId && document.hasFocus(),
+    notificacoesLigadas: preferencias.windows,
+    agora: Date.now(),
+  });
+  if (!notificar) return;
 
-  const mentionsMyRole = channel?.guildId
-    ? (() => {
-        const member = state.members.get(`${channel.guildId}:${selfId}`);
-        return member?.roleIds.some((id) => message.mentionedRoleIds.includes(id)) ?? false;
-      })()
-    : false;
+  avisadas.push(message.id);
+  if (avisadas.length > 200) avisadas.shift();
 
-  if (!isDm && !mentionsMe && !mentionsMyRole && !message.mentionsEveryone) return;
-
-  // Nao incomoda com o que a pessoa esta olhando agora.
-  if (state.selectedChannelId === message.channelId && document.hasFocus()) return;
-
-  const author = state.users.get(message.authorId)?.displayName ?? 'Alguem';
+  const isDm = !guildId;
+  const author = state.users.get(message.authorId)?.displayName ?? message.author.displayName ?? 'Alguem';
   const where = isDm ? '' : ` em #${channel?.name ?? ''}`;
 
   const preview = toPlainText(message.content, {
@@ -224,9 +246,8 @@ function notifyIfNeeded(message: Message): void {
     role: (id) => state.roles.get(id)?.name,
   });
 
-  window.kiroshi?.notifications.show(
-    `${author}${where}`,
-    preview.slice(0, 160) || 'enviou um anexo',
-  );
-  window.kiroshi?.notifications.flash();
+  // O endereco da conversa: o clique na notificacao abre ali (interface nova).
+  const alvo = guildId ? `#/s/${guildId}/${message.channelId}` : `#/dm/${message.channelId}`;
+  window.kiroshi?.notifications.show(`${author}${where}`, preview.slice(0, 160) || 'enviou um anexo', false, alvo);
+  if (preferencias.piscar) window.kiroshi?.notifications.flash();
 }

@@ -24,6 +24,35 @@ export interface AtualizacaoEstado {
   erro: string | null;
 }
 
+/**
+ * Um atalho global: uma tecla (o `KeyboardEvent.code` do navegador, com os
+ * modificadores) ou um botao do mouse (numeracao da escuta: 3 meio, 4 voltar,
+ * 5 avancar).
+ */
+export type Atalho =
+  | {
+      tipo: 'tecla';
+      codigo: string;
+      ctrl: boolean;
+      shift: boolean;
+      alt: boolean;
+      meta: boolean;
+      /** O caractere que a tecla escreve no teclado de quem escolheu (ABNT2: "Ç"), so para mostrar. */
+      nome?: string;
+    }
+  | { tipo: 'mouse'; botao: 3 | 4 | 5 };
+
+export type AcaoDeAtalho = 'falar' | 'mutar' | 'ensurdecer';
+
+/** O que o processo principal guarda e le sozinho (electron/preferencias.ts). */
+export interface PreferenciasDoApp {
+  /** Fechar a janela deixa o Kiroshi na bandeja; desligado, fecha de vez. */
+  fecharParaBandeja: boolean;
+  /** Iniciando com o Windows, abre escondido na bandeja. */
+  iniciarEscondido: boolean;
+  atalhos: Record<AcaoDeAtalho, Atalho | null>;
+}
+
 export interface ScreenSource {
   id: string;
   name: string;
@@ -104,8 +133,16 @@ const api = {
   },
 
   notifications: {
-    show: (title: string, body: string, silent = false) =>
-      ipcRenderer.send('notify', { title, body, silent }),
+    /** `alvo`: o endereco (hash) que o clique na notificacao abre. */
+    show: (title: string, body: string, silent = false, alvo?: string) =>
+      ipcRenderer.send('notify', { title, body, silent, alvo }),
+    aoAbrir: (handler: (alvo: string) => void): (() => void) => {
+      const listener = (_event: unknown, alvo: string): void => handler(alvo);
+      ipcRenderer.on('notificacao:abrir', listener);
+      return () => {
+        ipcRenderer.removeListener('notificacao:abrir', listener);
+      };
+    },
     setBadge: (count: number) => ipcRenderer.send('badge:set', count),
     flash: () => ipcRenderer.send('flash'),
   },
@@ -113,6 +150,24 @@ const api = {
   autostart: {
     get: (): Promise<boolean> => ipcRenderer.invoke('autostart:get'),
     set: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke('autostart:set', enabled),
+  },
+
+  preferencias: {
+    ler: (): Promise<PreferenciasDoApp> => ipcRenderer.invoke('preferencias:ler'),
+    gravar: (patch: Partial<PreferenciasDoApp>): Promise<PreferenciasDoApp> =>
+      ipcRenderer.invoke('preferencias:gravar', patch),
+  },
+
+  atalhos: {
+    /** A escuta global de teclado esta de pe (sem ela, atalhos so com a janela em foco). */
+    ativos: (): Promise<boolean> => ipcRenderer.invoke('atalhos:ativos'),
+    aoAcionar: (handler: (acao: AcaoDeAtalho, pressionado: boolean) => void): (() => void) => {
+      const listener = (_event: unknown, acao: AcaoDeAtalho, pressionado: boolean): void => handler(acao, pressionado);
+      ipcRenderer.on('atalho', listener);
+      return () => {
+        ipcRenderer.removeListener('atalho', listener);
+      };
+    },
   },
 
   /**

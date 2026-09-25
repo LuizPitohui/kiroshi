@@ -5,7 +5,15 @@ import { avisar } from '../../design/primitivos/index.js';
 import { useVoz } from '../casca/useVoz.js';
 import { alternarFone, alternarMicrofone, avisarServidor } from '../casca/acoesDeVoz.js';
 import { useEstadoDoPalco } from './estadoDoPalco.js';
+import { teclaBate, useAtalhos, type AcaoDeAtalho } from '../../app/atalhos.js';
 import * as videos from './videos.js';
+
+/** Um atalho acionado: falar segura o microfone aberto; mutar e ensurdecer alternam. */
+function acionar(acao: AcaoDeAtalho, pressionado: boolean): void {
+  if (acao === 'falar') void voice.setPushToTalkActive(pressionado);
+  else if (pressionado && acao === 'mutar') void alternarMicrofone();
+  else if (pressionado && acao === 'ensurdecer') void alternarFone();
+}
 
 /** Quais videos existem na chamada agora: camera ligada, ou tela minha ou assistida. */
 function videosVivos(v: VoiceState): string {
@@ -27,9 +35,9 @@ function videosVivos(v: VoiceState): string {
  * - chamada encerrada, escolhas do palco zeradas;
  * - erro da voz (camera ocupada, microfone negado, queda) vira aviso, em vez
  *   de ficar parado num campo que so a 1.x lia;
- * - com a chamada aberta, os atalhos do Discord: Ctrl+Shift+M (microfone) e
- *   Ctrl+Shift+D (som). Com a janela em foco; os globais, com jogo na frente,
- *   chegam com os ajustes de atalhos.
+ * - os atalhos da chamada (falar, mutar, ensurdecer), escolhidos em
+ *   Configuracoes > Atalhos: pela escuta global do processo principal, com o
+ *   jogo na frente; sem ela, os mesmos atalhos com a janela em foco.
  */
 export function ZeladorDaChamada() {
   useAnunciarChamada({ somSempreLigado: true });
@@ -67,22 +75,37 @@ export function ZeladorDaChamada() {
     voice.clearError();
   }, [erro]);
 
+  const atalhos = useAtalhos((s) => s.atalhos);
+  const globais = useAtalhos((s) => s.globais);
+
   useEffect(() => {
-    if (!naChamada) return;
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return;
-      const tecla = e.key.toLowerCase();
-      if (tecla === 'm') {
-        e.preventDefault();
-        void alternarMicrofone();
-      } else if (tecla === 'd') {
-        e.preventDefault();
-        void alternarFone();
+    void useAtalhos.getState().carregar();
+    return window.kiroshi?.atalhos?.aoAcionar(acionar);
+  }, []);
+
+  // Sem a escuta global (fora do Electron, ou o modulo nativo nao carregou):
+  // os mesmos atalhos, com a janela em foco.
+  useEffect(() => {
+    if (globais) return;
+    const acoes: AcaoDeAtalho[] = ['falar', 'mutar', 'ensurdecer'];
+    const descer = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      for (const acao of acoes) {
+        if (!teclaBate(atalhos[acao], e, acao)) continue;
+        if (acao !== 'falar') e.preventDefault();
+        acionar(acao, true);
       }
     };
-    window.addEventListener('keydown', aoTeclar);
-    return () => window.removeEventListener('keydown', aoTeclar);
-  }, [naChamada]);
+    const subir = (e: KeyboardEvent) => {
+      if (teclaBate(atalhos.falar, e, 'falar')) acionar('falar', false);
+    };
+    window.addEventListener('keydown', descer);
+    window.addEventListener('keyup', subir);
+    return () => {
+      window.removeEventListener('keydown', descer);
+      window.removeEventListener('keyup', subir);
+    };
+  }, [globais, atalhos]);
 
   return null;
 }

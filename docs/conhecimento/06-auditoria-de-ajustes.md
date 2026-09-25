@@ -15,6 +15,15 @@
 
 ## Ajustes do usuario
 
+> **No Kiroshi Beta, fatia 5 (2026-09-25):** refeitos na interface nova, e o que
+> esta tabela aponta como quebrado foi consertado — iniciar com o Windows e
+> `--hidden`, notificacoes com nivel e silencio, Nao perturbe, clique abrindo a
+> conversa, contador no icone, 2FA que atualiza a tela, sair que encerra a
+> sessao e a chamada, aparelhos conectados, medidor em dB antes do portao,
+> teste de microfone acima de 100%, camera com previa, push-to-talk global de
+> verdade. Enter/Shift+Enter e o aviso sonoro deixaram de ser opcao. A tabela
+> abaixo continua descrevendo a 1.15.0.
+
 ### Seguranca
 
 | Controle | Veredito | O que acontece | Proposta |

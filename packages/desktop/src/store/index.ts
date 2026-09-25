@@ -4,6 +4,9 @@ import {
   compareIds,
   type Call,
   type Channel,
+  type ChannelSettings,
+  type GuildSettings,
+  type NotificationSettings,
   type Emoji,
   type GuildMember,
   type GuildWithState,
@@ -81,6 +84,9 @@ interface AppState {
   voiceStates: Map<string, VoiceState>;
   /** Chave: canal. Chamadas no ar nas DMs e grupos, com quem esta sendo chamado. */
   calls: Map<string, Call>;
+  /** Ajustes de notificacao da conta: por servidor e por canal (DMs inclusive). */
+  notificacoesDoServidor: Map<string, GuildSettings>;
+  notificacoesDoCanal: Map<string, ChannelSettings>;
   typing: Map<string, TypingEntry[]>;
 
   // --- Navegacao ---
@@ -105,6 +111,7 @@ interface AppState {
     users: PublicUser[];
     privateVoiceStates?: VoiceState[];
     calls?: Call[];
+    notificationSettings?: NotificationSettings;
   }) => void;
   upsertGuild: (guild: GuildWithState) => void;
   removeGuild: (guildId: string) => void;
@@ -119,6 +126,8 @@ interface AppState {
   removeRelationship: (id: string) => void;
   setVoiceState: (state: VoiceState) => void;
   setCall: (call: Call) => void;
+  setGuildSettings: (settings: GuildSettings) => void;
+  setChannelSettings: (settings: ChannelSettings) => void;
   removeCall: (channelId: string) => void;
   setGuildEmojis: (guildId: string, emojis: Emoji[]) => void;
   setGuildStickers: (guildId: string, stickers: Sticker[]) => void;
@@ -219,6 +228,8 @@ export const useStore = create<AppState>((set, get) => ({
   readStates: new Map(),
   voiceStates: new Map(),
   calls: new Map(),
+  notificacoesDoServidor: new Map(),
+  notificacoesDoCanal: new Map(),
   typing: new Map(),
 
   selectedGuildId: null,
@@ -243,6 +254,8 @@ export const useStore = create<AppState>((set, get) => ({
       readStates: new Map(),
       voiceStates: new Map(),
       calls: new Map(),
+      notificacoesDoServidor: new Map(),
+      notificacoesDoCanal: new Map(),
       typing: new Map(),
       selectedGuildId: null,
       selectedChannelId: null,
@@ -276,6 +289,10 @@ export const useStore = create<AppState>((set, get) => ({
       for (const state of payload.privateVoiceStates ?? []) voiceStates.set(state.userId, state);
       const calls = new Map<string, Call>();
       for (const call of payload.calls ?? []) calls.set(call.channelId, call);
+      const notificacoesDoServidor = new Map<string, GuildSettings>();
+      for (const ajuste of payload.notificationSettings?.guilds ?? []) notificacoesDoServidor.set(ajuste.guildId, ajuste);
+      const notificacoesDoCanal = new Map<string, ChannelSettings>();
+      for (const ajuste of payload.notificationSettings?.channels ?? []) notificacoesDoCanal.set(ajuste.channelId, ajuste);
 
       const relationships = new Map<string, Relationship>();
       for (const relationship of payload.relationships) {
@@ -301,6 +318,8 @@ export const useStore = create<AppState>((set, get) => ({
         readStates,
         voiceStates,
         calls,
+        notificacoesDoServidor,
+        notificacoesDoCanal,
       };
     }),
 
@@ -507,6 +526,20 @@ export const useStore = create<AppState>((set, get) => ({
       const calls = new Map(state.calls);
       calls.set(call.channelId, call);
       return { calls };
+    }),
+
+  setGuildSettings: (settings) =>
+    set((state) => {
+      const notificacoesDoServidor = new Map(state.notificacoesDoServidor);
+      notificacoesDoServidor.set(settings.guildId, settings);
+      return { notificacoesDoServidor };
+    }),
+
+  setChannelSettings: (settings) =>
+    set((state) => {
+      const notificacoesDoCanal = new Map(state.notificacoesDoCanal);
+      notificacoesDoCanal.set(settings.channelId, settings);
+      return { notificacoesDoCanal };
     }),
 
   removeCall: (channelId) =>

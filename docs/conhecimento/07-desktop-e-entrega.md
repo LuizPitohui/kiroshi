@@ -46,6 +46,16 @@ Caminhos relativos a `packages/desktop/`.
 
 ## Processo principal (`electron/main.ts`)
 
+> **Mudou na fatia 5 do F1 (2026-09-25):** iniciar com o Windows le e grava com
+> os mesmos argumentos, `--hidden` e obedecido (abre so na bandeja), o X
+> respeita "fechar para a bandeja" (antes escondia sempre), e o Kiroshi normal
+> liga o inicio automatico na primeira abertura. Preferencias do processo
+> principal num JSON na pasta de dados (`electron/preferencias.ts`). Atalhos
+> globais pela escuta do teclado (`electron/atalhos.ts`, `uiohook-napi`, com
+> binario pronto; por isso `npmRebuild: false` nos dois `electron-builder`,
+> ou o empacotamento pediria o Visual Studio). Notificacao com endereco: o
+> clique abre a conversa. O levantamento abaixo e de antes.
+
 - **Janela unica** (`195-300`): 1280x800, minimo 940x560, sem moldura,
   fundo `#0b0d12`, `backgroundThrottling: false` (`227`). Fechar esconde na
   bandeja (`264-268`). O comentario cita "Ctrl+Q", que nao existe.

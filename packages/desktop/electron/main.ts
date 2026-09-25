@@ -18,7 +18,9 @@ import {
   Tray,
 } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import type { AtualizacaoEstado } from './preload.js';
+import type { AcaoDeAtalho, AtualizacaoEstado, PreferenciasDoApp } from './preload.js';
+import { gravarPreferencias, lerPreferencias, primeiraExecucao } from './preferencias.js';
+import { atalhosGlobaisAtivos, configurarAtalhos, pararAtalhos } from './atalhos.js';
 
 /** Id do app no Windows (notificacoes, atalhos), trocado na compilacao: Kiroshi ou Kiroshi Beta. */
 declare const __APP_ID__: string;
@@ -261,11 +263,25 @@ function createWindow(): void {
    */
   mainWindow.webContents.setWebRTCIPHandlingPolicy('default');
 
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
+  /*
+    Aberto pelo Windows ao iniciar (`--hidden`, posto no registro so quando a
+    pessoa escolhe abrir escondido): fica na bandeja. Antes a opcao era gravada
+    e nunca lida — a janela aparecia sempre.
+  */
+  const escondido = process.argv.includes('--hidden');
+  mainWindow.once('ready-to-show', () => {
+    if (!escondido) mainWindow?.show();
+  });
 
-  // Fechar esconde na bandeja; sair mesmo e pelo menu da bandeja ou Ctrl+Q.
+  // Fechar esconde na bandeja (sair mesmo e pelo menu dela), a menos que a
+  // pessoa tenha escolhido fechar de vez.
   mainWindow.on('close', (event) => {
     if (isQuitting) return;
+    if (!lerPreferencias().fecharParaBandeja) {
+      isQuitting = true;
+      app.quit();
+      return;
+    }
     event.preventDefault();
     mainWindow?.hide();
   });
@@ -527,7 +543,17 @@ function registerIpc(): void {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
     else mainWindow?.maximize();
   });
-  ipcMain.on('window:close', () => mainWindow?.hide());
+  // O X da barra de titulo: esconde na bandeja, ou fecha de vez se a pessoa
+  // escolheu (Configuracoes > Windows). Antes escondia sempre, e a escolha so
+  // valia pelo Alt+F4.
+  ipcMain.on('window:close', () => {
+    if (lerPreferencias().fecharParaBandeja) {
+      mainWindow?.hide();
+      return;
+    }
+    isQuitting = true;
+    app.quit();
+  });
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
   ipcMain.on('app:quit', () => {
@@ -613,7 +639,7 @@ function registerIpc(): void {
   });
 
   // ---- Notificacoes ----
-  ipcMain.on('notify', (_event, payload: { title: string; body: string; silent?: boolean }) => {
+  ipcMain.on('notify', (_event, payload: { title: string; body: string; silent?: boolean; alvo?: string }) => {
     if (!Notification.isSupported()) return;
     // Nao notifica quando a janela ja esta na frente da pessoa.
     if (mainWindow?.isFocused() && mainWindow.isVisible()) return;
@@ -625,8 +651,11 @@ function registerIpc(): void {
       icon: resolveIcon(),
     });
     notification.on('click', () => {
+      if (mainWindow?.isMinimized()) mainWindow.restore();
       mainWindow?.show();
       mainWindow?.focus();
+      // O clique abre a conversa da mensagem, e nao so a janela.
+      if (payload.alvo) mainWindow?.webContents.send('notificacao:abrir', payload.alvo);
     });
     notification.show();
   });
@@ -649,11 +678,23 @@ function registerIpc(): void {
   });
 
   // ---- Inicio automatico ----
-  ipcMain.handle('autostart:get', () => app.getLoginItemSettings().openAtLogin);
+  ipcMain.handle('autostart:get', () => iniciaComOWindows());
   ipcMain.handle('autostart:set', (_event, enabled: boolean) => {
-    app.setLoginItemSettings({ openAtLogin: enabled, args: ['--hidden'] });
-    return enabled;
+    definirInicioComOWindows(enabled);
+    return iniciaComOWindows();
   });
+
+  // ---- Preferencias do processo principal e atalhos globais ----
+  ipcMain.handle('preferencias:ler', () => lerPreferencias());
+  ipcMain.handle('preferencias:gravar', async (_event, patch: Partial<PreferenciasDoApp>) => {
+    const iniciava = iniciaComOWindows();
+    const preferencias = gravarPreferencias(patch);
+    // Abrir escondido muda o que o Windows passa ao iniciar: regrava a entrada.
+    if (patch.iniciarEscondido !== undefined && iniciava) definirInicioComOWindows(true);
+    if (patch.atalhos) await configurarAtalhos(preferencias.atalhos, enviarAtalho);
+    return preferencias;
+  });
+  ipcMain.handle('atalhos:ativos', () => atalhosGlobaisAtivos());
 
   ipcMain.handle('app:version', () => app.getVersion());
   ipcMain.handle('app:platform', () => process.platform);
@@ -680,9 +721,50 @@ function registerIpc(): void {
   });
 }
 
+/*
+  Iniciar com o Windows.
+
+  A entrada do registro guarda o caminho E os argumentos. Antes ela era
+  gravada com `--hidden` e lida sem argumento nenhum: no Windows a leitura
+  voltava falsa e o interruptor aparecia desligado a cada reabertura. Agora
+  le e grava do mesmo jeito, com ou sem `--hidden` conforme a escolha de
+  abrir escondido.
+*/
+function argumentosDoInicio(): string[] {
+  return lerPreferencias().iniciarEscondido ? ['--hidden'] : [];
+}
+
+function iniciaComOWindows(): boolean {
+  return (
+    app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin ||
+    app.getLoginItemSettings({ args: [] }).openAtLogin
+  );
+}
+
+function definirInicioComOWindows(ligado: boolean): void {
+  // Tira as duas formas antes: trocar de "escondido" nao pode deixar duas entradas.
+  app.setLoginItemSettings({ openAtLogin: false, args: ['--hidden'] });
+  app.setLoginItemSettings({ openAtLogin: false, args: [] });
+  if (ligado) app.setLoginItemSettings({ openAtLogin: true, args: argumentosDoInicio() });
+}
+
+function enviarAtalho(acao: AcaoDeAtalho, pressionado: boolean): void {
+  mainWindow?.webContents.send('atalho', acao, pressionado);
+}
+
 app.whenReady().then(() => {
   // Sem isto o Windows usa o nome do executavel nas notificacoes.
   if (process.platform === 'win32') app.setAppUserModelId(__APP_ID__);
+
+  /*
+    Iniciar com o Windows vem ligado (pedido do dono, F7), escondido na
+    bandeja: marca-se uma vez, na primeira abertura, e a pessoa desliga se
+    quiser. So no Kiroshi normal — o Beta abrindo sozinho ao lado dele seria
+    dois apps na bandeja de quem testa.
+  */
+  if (!isDev && !__APP_ID__.endsWith('.beta') && primeiraExecucao()) definirInicioComOWindows(true);
+
+  void configurarAtalhos(lerPreferencias().atalhos, enviarAtalho);
 
   setupAtualizacao();
   // Antes da janela: o autoteste do modelo roda logo que a interface abre.
@@ -714,5 +796,6 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  pararAtalhos();
   globalShortcut.unregisterAll();
 });

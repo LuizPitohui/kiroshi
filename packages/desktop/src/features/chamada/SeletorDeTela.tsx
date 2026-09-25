@@ -4,30 +4,16 @@ import type { ScreenSource } from '../../../electron/preload.js';
 import { voice } from '../../voice/controller.js';
 import { explicarFalhaDeMidia } from '../../voice/falhas.js';
 import type { ConteudoDaTela } from '../../voice/qualidade.js';
+import {
+  QUALIDADES,
+  gravarEscolhaDaTransmissao,
+  lerEscolhaDaTransmissao,
+  type QualidadeDaTransmissao,
+} from './escolhaDaTransmissao.js';
 import { Aviso, Botao, Carregando, Dialogo, Escolha, LinhaDeInterruptor, cx } from '../../design/primitivos/index.js';
 
-type Qualidade = '720p30' | '1080p30' | '1080p60';
-
-const QUALIDADES: Record<Qualidade, { maxHeight: number; fps: number }> = {
-  '720p30': { maxHeight: 720, fps: 30 },
-  '1080p30': { maxHeight: 1080, fps: 30 },
-  '1080p60': { maxHeight: 1080, fps: 60 },
-};
-
-const CHAVE = 'kiroshi.transmissao';
-
-function lerEscolha(): { conteudo: ConteudoDaTela; qualidade: Qualidade; som: boolean } {
-  try {
-    const v = JSON.parse(localStorage.getItem(CHAVE) ?? '{}') as Record<string, unknown>;
-    return {
-      conteudo: v.conteudo === 'detalhe' ? 'detalhe' : 'movimento',
-      qualidade: v.qualidade === '720p30' || v.qualidade === '1080p60' ? v.qualidade : '1080p30',
-      som: v.som !== false,
-    };
-  } catch {
-    return { conteudo: 'movimento', qualidade: '1080p30', som: true };
-  }
-}
+type Qualidade = QualidadeDaTransmissao;
+const lerEscolha = lerEscolhaDaTransmissao;
 
 /**
  * O que transmitir: tela ou janela, e COMO — jogo (fluidez) ou texto
@@ -76,11 +62,7 @@ export function SeletorDeTela({ aberto, aoMudar }: { aberto: boolean; aoMudar: (
     trava.current = true;
     setComecando(true);
     setErro(null);
-    try {
-      localStorage.setItem(CHAVE, JSON.stringify({ conteudo, qualidade, som }));
-    } catch {
-      // sem armazenamento: so nao lembra
-    }
+    gravarEscolhaDaTransmissao({ conteudo, qualidade, som });
     try {
       const { motivoSemSom } = await voice.startScreenShare(escolhida, { withAudio: som, conteudo, ...QUALIDADES[qualidade] });
       // No ar, mas sem o som pedido: o dialogo fica com o aviso (e sem botao

@@ -41,6 +41,13 @@ export interface ProcessadorDeLimpeza
   definirIntensidade(valor: number): void;
   /** Liga, desliga ou muda o limiar do portao, ao vivo. `null` = sem portao. */
   definirPortao(limiarDb: number | null): Promise<void>;
+  /**
+   * O som depois da limpeza e ANTES do portao — o que o portao compara com o
+   * limiar. Para o medidor do teste de microfone: medir depois do portao
+   * mostrava zero em tudo abaixo do limiar, e o limiar nao tinha como ser
+   * calibrado no olho.
+   */
+  medidorAntesDoPortao?(): AnalyserNode | null;
 }
 
 export interface OpcoesDoProcessador {
@@ -154,6 +161,8 @@ export abstract class ProcessadorBase implements ProcessadorDeLimpeza {
   private saidaDoModelo: AudioNode | null = null;
   private portao: AudioWorkletNode | null = null;
   private destino: MediaStreamAudioDestinationNode | null = null;
+  /** Derivacao so de leitura na saida do modelo: nao muda nada no que sai. */
+  private medidor: AnalyserNode | null = null;
 
   constructor(protected readonly opcoes: OpcoesDoProcessador) {}
 
@@ -182,6 +191,7 @@ export abstract class ProcessadorBase implements ProcessadorDeLimpeza {
       this.saidaDoModelo?.disconnect();
       this.portao?.disconnect();
       this.destino?.disconnect();
+      this.medidor?.disconnect();
     } catch {
       // Ja desfeito.
     }
@@ -197,6 +207,7 @@ export abstract class ProcessadorBase implements ProcessadorDeLimpeza {
     this.saidaDoModelo = null;
     this.portao = null;
     this.destino = null;
+    this.medidor = null;
     this.processedTrack = undefined;
 
     if (contexto) await contexto.close().catch(() => undefined);
@@ -205,6 +216,10 @@ export abstract class ProcessadorBase implements ProcessadorDeLimpeza {
   definirIntensidade(valor: number): void {
     this.opcoes.intensidade = valor;
     this.aplicarIntensidade(valor);
+  }
+
+  medidorAntesDoPortao(): AnalyserNode | null {
+    return this.medidor;
   }
 
   /**
@@ -232,6 +247,8 @@ export abstract class ProcessadorBase implements ProcessadorDeLimpeza {
       this.origem = origem;
       this.saidaDoModelo = modelo;
       this.destino = destino;
+      this.medidor = contexto.createAnalyser();
+      this.medidor.fftSize = 1024;
 
       await this.ligarSaida(contexto);
       this.processedTrack = destino.stream.getAudioTracks()[0];
@@ -271,6 +288,8 @@ export abstract class ProcessadorBase implements ProcessadorDeLimpeza {
     } else {
       modelo.connect(destino);
     }
+    // O disconnect acima solta tambem o medidor: religa.
+    if (this.medidor) modelo.connect(this.medidor);
     this.portao = novoPortao;
   }
 }

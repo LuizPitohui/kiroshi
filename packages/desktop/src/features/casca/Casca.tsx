@@ -12,6 +12,7 @@ import { Conversa } from '../conversa/Conversa.js';
 import { TelaDaChamada } from '../chamada/TelaDaChamada.js';
 import { MiniPalco } from '../chamada/MiniPalco.js';
 import { ZeladorDaChamada } from '../chamada/ZeladorDaChamada.js';
+import { NotificacoesDaJanela } from './NotificacoesDaJanela.js';
 import { ChamadasDiretas } from '../chamada/ChamadaRecebida.js';
 import { BotoesDeLigar, ChamadaNaConversa } from '../chamada/ChamadaNaConversa.js';
 import { Inicio } from '../inicio/Inicio.js';
@@ -221,6 +222,7 @@ export function Casca(): React.JSX.Element {
   return (
     <ContextoDaChamada.Provider value={fonteAoVivo}>
     <ZeladorDaChamada />
+    <NotificacoesDaJanela />
     <div className="grid h-full grid-rows-[32px_minmax(0,1fr)_22px]">
       {/* Botao, e nao link `#conteudo`: com rotas por hash, a ancora trocaria a rota. */}
       <button

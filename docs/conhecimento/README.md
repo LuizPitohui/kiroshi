@@ -30,7 +30,7 @@ abertas.
 | Area | Estado |
 |---|---|
 | Versao publicada | 1.15.0 (2026-09-23) |
-| Testes | 640 unitarios passando (shared 67, servidor 139, desktop 434); e2e 91/91; typecheck limpo |
+| Testes | 668 unitarios passando (shared 67, servidor 139, desktop 462); e2e 96/96; typecheck limpo |
 | Conversa (texto) | 1.x: funciona, sem autocompletar e com acoes so no hover. Beta: autocompletar, acoes por teclado, densidade real |
 | Voz | funciona; ajustes de audio em boa parte sem efeito; PTT global quebrado. Beta: silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada |
 | Transmissao de tela | 1.x: **trava** — espectador recebe 360p15 ao lado do chat, sem metricas. Beta: nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Rede de quem usa relay: a medir |
@@ -38,12 +38,12 @@ abertas.
 | Chamada em DM | Beta: ligar e atender com toque, recusar, registro na conversa, desliga quem fica 3 min sozinho |
 | Cargos | criar so o dono; **dar cargo nao existe na interface**; 3 permissoes sem efeito |
 | Convites | codigo com validade/usos; sem link, sem lista na interface |
-| Notificacoes | so DM e mencoes; sem ajustes; icone falta no app instalado |
-| Iniciar com o Windows | quebrado |
+| Notificacoes | 1.x: so DM e mencoes, sem ajustes. Beta: nivel por servidor e canal, silenciar por tempo, Nao perturbe, clique abre a conversa, contador no icone |
+| Iniciar com o Windows | 1.x: quebrado. Beta: consertado, abre escondido na bandeja |
 | Atualizacao automatica | funciona, mas baixa 93 MiB inteiros por versao |
 | Cadastro | so com convite (`ALLOW_OPEN_REGISTRATION=false`); criar com Google ja existe no servidor |
 | Seguranca | servidor: 13 falhas corrigidas e publicadas (API `6f493df`); abertas: casca Electron e host (ver `privado/`) |
-| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca), 2 (conversa), 3 (chamada e palco) e 4 (inicio, amigos e DM) no Kiroshi Beta |
+| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca), 2 (conversa), 3 (chamada e palco), 4 (inicio, amigos e DM) e 5 (ajustes do usuario) no Kiroshi Beta |
 
 ## Como manter
 
