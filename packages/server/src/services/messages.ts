@@ -11,10 +11,13 @@ import { config } from '../config.js';
 import { prisma } from '../db.js';
 import { ApiError, badRequest, forbidden, notFound } from '../errors.js';
 import { logger } from '../logger.js';
-import { emitToChannel, emitToGuild, emitToUser } from '../gateway/events.js';
+import { emitToChannel, emitToUser } from '../gateway/events.js';
 import { MESSAGE_INCLUDE, toMessage, type MessageRow } from '../lib/serialize.js';
-import { resolveChannelPermissions } from './permissions.js';
+import { canaisComPermissao } from '../lib/visibilidade.js';
+import { carregarRetratoDaGuild, resolveChannelPermissions } from './permissions.js';
 import { buildEmbeds } from './embeds.js';
+import { emitirParaQuemVe } from './entrega.js';
+import { deleteFile } from './storage.js';
 
 /**
  * Criacao, edicao e leitura de mensagens.
@@ -245,10 +248,12 @@ async function fanOutMessage(
   const withoutNonce = { ...message, nonce: null };
 
   if (channel.guildId) {
-    emitToGuild(channel.guildId, 'MESSAGE_CREATE', withoutNonce, {
+    // O autor primeiro: e a copia com nonce que reconcilia o envio otimista, e
+    // ela nao precisa esperar a conta de quem mais enxerga o canal.
+    emitToUser(message.authorId, 'MESSAGE_CREATE', message);
+    await emitirParaQuemVe(channel.guildId, channel.id, 'MESSAGE_CREATE', withoutNonce, {
       exceptUserId: message.authorId,
     });
-    emitToUser(message.authorId, 'MESSAGE_CREATE', message);
   } else {
     const recipients = await prisma.channelRecipient.findMany({
       where: { channelId: channel.id },
@@ -372,12 +377,26 @@ export async function editMessage(
   const serialized = toMessage(full as unknown as MessageRow, userId, config.publicBaseUrl);
 
   if (existing.guildId) {
-    emitToGuild(existing.guildId, 'MESSAGE_UPDATE', serialized);
+    await emitirParaQuemVe(existing.guildId, existing.channelId, 'MESSAGE_UPDATE', serialized);
   } else {
     await emitToDm(existing.channelId, 'MESSAGE_UPDATE', serialized);
   }
 
   return serialized;
+}
+
+/**
+ * Apaga do disco os arquivos de anexos cujas linhas ja sairam do banco.
+ *
+ * Existe porque apagar a mensagem apagava so a linha: o arquivo ficava no
+ * disco e a URL continuava servindo, para sempre, para quem a tivesse. Uma
+ * falha aqui nao desfaz a exclusao — `deleteFile` ja trata arquivo ausente
+ * como sucesso, e o resto vira aviso no log.
+ */
+async function apagarArquivosDeAnexos(storageKeys: string[]): Promise<void> {
+  const resultados = await Promise.allSettled(storageKeys.map((key) => deleteFile(key)));
+  const falhas = resultados.filter((r) => r.status === 'rejected').length;
+  if (falhas > 0) logger.warn({ falhas }, 'nao consegui apagar arquivos de anexos');
 }
 
 export async function deleteMessage(messageId: string, userId: string): Promise<void> {
@@ -393,20 +412,28 @@ export async function deleteMessage(messageId: string, userId: string): Promise<
     throw forbidden('Voce nao pode apagar mensagens de outras pessoas aqui.');
   }
 
-  await prisma.$transaction(async (tx) => {
+  const arquivos = await prisma.$transaction(async (tx) => {
     await tx.message.update({
       where: { id: messageId },
       data: { deletedAt: new Date(), content: '', embeds: [], pinned: false },
     });
     // Reacoes e anexos vao junto: nao ha mais mensagem a que pertencer.
     await tx.reaction.deleteMany({ where: { messageId } });
+    const anexos = await tx.attachment.findMany({
+      where: { messageId },
+      select: { storageKey: true },
+    });
     await tx.attachment.deleteMany({ where: { messageId } });
+    return anexos.map((a) => a.storageKey);
   });
+
+  // Depois do commit: se a transacao falhasse, o arquivo nao pode ter sumido.
+  await apagarArquivosDeAnexos(arquivos);
 
   const payload = { id: messageId, channelId: existing.channelId, guildId: existing.guildId };
 
   if (existing.guildId) {
-    emitToGuild(existing.guildId, 'MESSAGE_DELETE', payload);
+    await emitirParaQuemVe(existing.guildId, existing.channelId, 'MESSAGE_DELETE', payload);
   } else {
     await emitToDm(existing.channelId, 'MESSAGE_DELETE', payload);
   }
@@ -427,21 +454,47 @@ export async function bulkDeleteMessages(
     throw badRequest('Informe de 1 a 100 mensagens.');
   }
 
-  const { count } = await prisma.message.updateMany({
+  /*
+    So as mensagens que sao DESTE canal e ainda existem.
+
+    Antes as reacoes eram apagadas pela lista inteira que chegou, sem olhar o
+    canal: um id de outro canal na lista perdia as reacoes sem ter sido
+    apagado. E o evento repetia a lista crua, avisando exclusoes que nao
+    aconteceram.
+  */
+  const alvos = await prisma.message.findMany({
     where: { id: { in: messageIds }, channelId, deletedAt: null },
-    data: { deletedAt: new Date(), content: '', embeds: [], pinned: false },
+    select: { id: true },
+  });
+  const ids = alvos.map((m) => m.id);
+  if (ids.length === 0) return 0;
+
+  const arquivos = await prisma.$transaction(async (tx) => {
+    await tx.message.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { deletedAt: new Date(), content: '', embeds: [], pinned: false },
+    });
+    await tx.reaction.deleteMany({ where: { messageId: { in: ids } } });
+    // A exclusao em massa nem apagava as linhas de anexo: os arquivos ficavam
+    // servidos pela URL como se a mensagem existisse.
+    const anexos = await tx.attachment.findMany({
+      where: { messageId: { in: ids } },
+      select: { storageKey: true },
+    });
+    await tx.attachment.deleteMany({ where: { messageId: { in: ids } } });
+    return anexos.map((a) => a.storageKey);
   });
 
-  await prisma.reaction.deleteMany({ where: { messageId: { in: messageIds } } });
+  await apagarArquivosDeAnexos(arquivos);
 
-  const payload = { ids: messageIds, channelId, guildId };
+  const payload = { ids, channelId, guildId };
   if (guildId) {
-    emitToGuild(guildId, 'MESSAGE_DELETE_BULK', payload);
+    await emitirParaQuemVe(guildId, channelId, 'MESSAGE_DELETE_BULK', payload);
   } else {
     await emitToDm(channelId, 'MESSAGE_DELETE_BULK', payload);
   }
 
-  return count;
+  return ids.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -472,7 +525,12 @@ export async function fetchMessages(args: FetchArgs): Promise<ApiMessage[]> {
         orderBy: { id: 'desc' },
         take: half,
       }),
-      prisma.message.findUnique({ where: { id: args.around }, include: MESSAGE_INCLUDE }),
+      // O alvo tem que ser DESTE canal. Buscar so pelo id devolvia a mensagem
+      // de qualquer canal ou DM a quem pudesse ler um canal qualquer.
+      prisma.message.findFirst({
+        where: { id: args.around, channelId: args.channelId },
+        include: MESSAGE_INCLUDE,
+      }),
       prisma.message.findMany({
         where: { channelId: args.channelId, deletedAt: null, id: { gt: args.around } },
         include: MESSAGE_INCLUDE,
@@ -531,8 +589,12 @@ export async function searchMessages(args: {
     }
     channelIds = [args.channelId];
   } else if (args.guildId) {
-    const { visibleChannelIds } = await import('./permissions.js');
-    channelIds = [...(await visibleChannelIds(args.guildId, args.userId))];
+    // Ver o canal nao basta para buscar nele: a busca devolve historico, e
+    // historico exige READ_MESSAGE_HISTORY canal por canal, como o GET.
+    const retrato = await carregarRetratoDaGuild(args.guildId);
+    channelIds = retrato
+      ? [...canaisComPermissao(retrato, args.userId, Permission.READ_MESSAGE_HISTORY)]
+      : [];
   } else {
     const rows = await prisma.channelRecipient.findMany({
       where: { userId: args.userId },
@@ -694,7 +756,7 @@ async function emitReactionChange(
   };
 
   if (message.guildId) {
-    emitToGuild(message.guildId, event, payload);
+    await emitirParaQuemVe(message.guildId, message.channelId, event, payload);
   } else {
     await emitToDm(message.channelId, event, payload);
   }
@@ -738,7 +800,7 @@ export async function setPinned(messageId: string, userId: string, pinned: boole
   };
 
   if (message.guildId) {
-    emitToGuild(message.guildId, 'CHANNEL_PINS_UPDATE', payload);
+    await emitirParaQuemVe(message.guildId, message.channelId, 'CHANNEL_PINS_UPDATE', payload);
   } else {
     await emitToDm(message.channelId, 'CHANNEL_PINS_UPDATE', payload);
   }
@@ -766,6 +828,14 @@ export async function acknowledge(
   userId: string,
   messageId: string,
 ): Promise<void> {
+  // Marcar como lido e sobre um canal que a pessoa le. Sem esta conferencia,
+  // qualquer um gravava estado de leitura em canal alheio, e um canal
+  // inexistente estourava a chave estrangeira como erro 500.
+  const { permissions } = await resolveChannelPermissions(channelId, userId);
+  if (!has(permissions, Permission.READ_MESSAGE_HISTORY)) {
+    throw forbidden('Voce nao pode ler este canal.');
+  }
+
   const existing = await prisma.readState.findUnique({
     where: { userId_channelId: { userId, channelId } },
     select: { lastReadMessageId: true },

@@ -6,9 +6,11 @@ import {
   GatewayOpcode,
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_TIMEOUT_MS,
+  Permission,
   RATE_LIMITS,
   TYPING_TIMEOUT_MS,
   generateId,
+  has,
   type GatewayEnvelope,
   type IdentifyPayload,
   type PresenceUpdatePayload,
@@ -21,6 +23,8 @@ import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { verifyAccessToken } from '../auth/tokens.js';
 import { MEMBER_INCLUDE, toMember } from '../lib/serialize.js';
+import { emitirParaQuemVe } from '../services/entrega.js';
+import { resolveChannelPermissions } from '../services/permissions.js';
 import { buildReadyPayload } from '../services/ready.js';
 import { handleVoiceStateUpdate, disconnectFromVoice } from '../services/voice.js';
 import { emitToGuild, emitToUser } from './events.js';
@@ -416,12 +420,32 @@ async function handleTyping(
   };
 
   if (channel.guildId) {
-    emitToGuild(channel.guildId, 'TYPING_START', event, { exceptUserId: session.userId });
+    /*
+      Digitar e anunciar atividade num canal. So vale para quem ve o canal e
+      pode escrever nele, e o aviso so chega a quem o enxerga.
+
+      Antes nao havia conferencia nenhuma: qualquer conta mandava "fulano esta
+      digitando" para o id que quisesse, e o aviso ia para o servidor inteiro.
+    */
+    if (channel.type === 'GUILD_CATEGORY') return;
+    // Canal apagado entre a consulta acima e esta: um aviso de digitacao nao
+    // justifica derrubar a conexao, que e o que uma excecao aqui faria.
+    const resolvido = await resolveChannelPermissions(channel.id, session.userId).catch(() => null);
+    if (!resolvido || !has(resolvido.permissions, Permission.VIEW_CHANNEL | Permission.SEND_MESSAGES)) {
+      return;
+    }
+
+    await emitirParaQuemVe(channel.guildId, channel.id, 'TYPING_START', event, {
+      exceptUserId: session.userId,
+    });
   } else {
     const recipients = await prisma.channelRecipient.findMany({
       where: { channelId: channel.id },
       select: { userId: true },
     });
+    // So quem participa da conversa avisa que esta digitando nela.
+    if (!recipients.some((r) => r.userId === session.userId)) return;
+
     for (const recipient of recipients) {
       if (recipient.userId === session.userId) continue;
       emitToUser(recipient.userId, 'TYPING_START', event);

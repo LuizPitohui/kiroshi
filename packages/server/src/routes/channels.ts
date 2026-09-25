@@ -12,11 +12,14 @@ import {
 } from '@kiroshi/shared';
 import { prisma } from '../db.js';
 import { badRequest, forbidden, notFound } from '../errors.js';
+import { logger } from '../logger.js';
 import { requireAuth } from '../auth/middleware.js';
 import { CHANNEL_INCLUDE, toChannel } from '../lib/serialize.js';
+import { membrosComPermissao, type RetratoDaGuild } from '../lib/visibilidade.js';
 import { emitToGuild } from '../gateway/events.js';
 import {
   assertGuildPermissions,
+  carregarRetratoDaGuild,
   resolveChannelPermissions,
   resolveMember,
   visibleChannelIds,
@@ -104,7 +107,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
 
     const serialized = toChannel(channel);
     // Um canal restrito nao deve aparecer para quem nao pode ve-lo.
-    await emitChannelEvent(guildId, 'CHANNEL_CREATE', serialized, channel.id);
+    await avisarCanalCriado(guildId, serialized);
     await recordAudit(guildId, userId, 'CHANNEL_CREATE', channel.id, { name: body.name });
 
     return reply.status(201).send(serialized);
@@ -152,6 +155,10 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
 
     const isVoice = channel.type === 'GUILD_VOICE';
 
+    // Trocar de categoria troca as sobrescritas herdadas, e com elas quem ve o
+    // canal. Guarda o antes para avisar quem deixou de ver.
+    const antes = body.parentId !== undefined ? await carregarRetratoDaGuild(channel.guildId) : null;
+
     const updated = await prisma.channel.update({
       where: { id: channelId },
       data: {
@@ -170,7 +177,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
     });
 
     const serialized = toChannel(updated);
-    await emitChannelEvent(channel.guildId, 'CHANNEL_UPDATE', serialized, channelId);
+    await avisarCanaisAlterados(channel.guildId, [channelId], antes);
     await recordAudit(channel.guildId, userId, 'CHANNEL_UPDATE', channelId, { ...body });
 
     return serialized;
@@ -187,6 +194,9 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
     const ids = body.positions.map((p) => p.id);
     const owned = await prisma.channel.count({ where: { guildId, id: { in: ids } } });
     if (owned !== ids.length) throw badRequest('Algum canal nao pertence a este servidor.');
+
+    const trocaDePai = body.positions.some((p) => p.parentId !== undefined);
+    const antes = trocaDePai ? await carregarRetratoDaGuild(guildId) : null;
 
     await prisma.$transaction(
       body.positions.map((p) =>
@@ -205,9 +215,11 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
       include: CHANNEL_INCLUDE,
       orderBy: [{ position: 'asc' }, { id: 'asc' }],
     });
-    for (const channel of channels) {
-      await emitChannelEvent(guildId, 'CHANNEL_UPDATE', toChannel(channel), channel.id);
-    }
+    await avisarCanaisAlterados(
+      guildId,
+      channels.map((c) => c.id),
+      antes,
+    );
 
     return channels.map(toChannel);
   });
@@ -226,6 +238,15 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
 
     await assertGuildPermissions(channel.guildId, userId, Permission.MANAGE_CHANNELS);
 
+    // Quem via o canal, calculado enquanto ele ainda existe: depois de apagado
+    // nao ha mais sobrescrita para consultar.
+    const antes = await carregarRetratoDaGuild(channel.guildId);
+    const viam = antes ? membrosComPermissao(antes, channelId) : new Set<string>();
+    const filhos =
+      channel.type === 'GUILD_CATEGORY' && antes
+        ? antes.channels.filter((c) => c.parentId === channelId).map((c) => c.id)
+        : [];
+
     // Tira todo mundo da voz antes de sumir com o canal.
     if (channel.type === 'GUILD_VOICE') {
       const occupants = await prisma.voiceState.findMany({
@@ -238,7 +259,14 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
     const serialized = toChannel(channel);
     await prisma.channel.delete({ where: { id: channelId } });
 
-    emitToGuild(channel.guildId, 'CHANNEL_DELETE', serialized);
+    // So quem via o canal fica sabendo que ele sumiu: o aviso para o servidor
+    // inteiro revelava a existencia de canal privado.
+    emitToGuild(channel.guildId, 'CHANNEL_DELETE', serialized, { onlyUserIds: viam });
+
+    // Apagar uma categoria solta os canais dela (o pai vira nulo), e eles
+    // perdem as sobrescritas que herdavam: quem ve cada um pode ter mudado.
+    if (filhos.length > 0) await avisarCanaisAlterados(channel.guildId, filhos, antes);
+
     await recordAudit(channel.guildId, userId, 'CHANNEL_DELETE', channelId, {
       name: channel.name,
     });
@@ -257,7 +285,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
 
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
-      select: { guildId: true },
+      select: { guildId: true, type: true },
     });
     if (!channel?.guildId) throw notFound('Canal');
 
@@ -289,6 +317,8 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
       if (!member) throw badRequest('Esta pessoa nao e membro do servidor.');
     }
 
+    const antes = await carregarRetratoDaGuild(channel.guildId);
+
     await prisma.permissionOverwrite.upsert({
       where: { channelId_targetId: { channelId, targetId } },
       create: { channelId, targetId, targetType: body.targetType, allow, deny },
@@ -300,7 +330,11 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
       include: CHANNEL_INCLUDE,
     });
 
-    await emitChannelEvent(channel.guildId, 'CHANNEL_UPDATE', toChannel(updated), channelId);
+    await avisarCanaisAlterados(
+      channel.guildId,
+      canaisAfetadosPorSobrescrita(antes, channelId, channel.type),
+      antes,
+    );
     await recordAudit(channel.guildId, userId, 'CHANNEL_OVERWRITE_UPDATE', channelId, {
       targetId,
       allow: body.allow,
@@ -316,7 +350,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
 
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
-      select: { guildId: true },
+      select: { guildId: true, type: true },
     });
     if (!channel?.guildId) throw notFound('Canal');
 
@@ -325,38 +359,96 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
       Permission.MANAGE_CHANNELS,
     ]);
 
+    const antes = await carregarRetratoDaGuild(channel.guildId);
+
     await prisma.permissionOverwrite.deleteMany({ where: { channelId, targetId } });
 
     const updated = await prisma.channel.findUniqueOrThrow({
       where: { id: channelId },
       include: CHANNEL_INCLUDE,
     });
-    await emitChannelEvent(channel.guildId, 'CHANNEL_UPDATE', toChannel(updated), channelId);
+    await avisarCanaisAlterados(
+      channel.guildId,
+      canaisAfetadosPorSobrescrita(antes, channelId, channel.type),
+      antes,
+    );
 
     return toChannel(updated);
   });
 }
 
 /**
- * Manda o evento so para quem enxerga o canal. Sem isso, criar um canal
- * privado avisaria o servidor inteiro que ele existe.
+ * Canais cuja visibilidade muda com a sobrescrita de `channelId`: ele mesmo e,
+ * se for categoria, os canais dentro dela, que herdam as sobrescritas do pai.
  */
-async function emitChannelEvent(
-  guildId: string,
-  event: 'CHANNEL_CREATE' | 'CHANNEL_UPDATE',
-  payload: ReturnType<typeof toChannel>,
+function canaisAfetadosPorSobrescrita(
+  antes: RetratoDaGuild | null,
   channelId: string,
+  tipo: string,
+): string[] {
+  if (tipo !== 'GUILD_CATEGORY' || !antes) return [channelId];
+  return [channelId, ...antes.channels.filter((c) => c.parentId === channelId).map((c) => c.id)];
+}
+
+/** Avisa a criacao de um canal so a quem pode ve-lo. */
+async function avisarCanalCriado(
+  guildId: string,
+  canal: ReturnType<typeof toChannel>,
 ): Promise<void> {
-  const members = await prisma.guildMember.findMany({
-    where: { guildId },
-    select: { userId: true },
-  });
-
-  const allowed = new Set<string>();
-  for (const member of members) {
-    const visible = await visibleChannelIds(guildId, member.userId);
-    if (visible.has(channelId)) allowed.add(member.userId);
+  try {
+    const retrato = await carregarRetratoDaGuild(guildId);
+    if (!retrato) return;
+    emitToGuild(guildId, 'CHANNEL_CREATE', canal, {
+      onlyUserIds: membrosComPermissao(retrato, canal.id),
+    });
+  } catch (error) {
+    logger.error({ error, guildId, channelId: canal.id }, 'nao consegui avisar o canal novo');
   }
+}
 
-  emitToGuild(guildId, event, payload, { onlyUserIds: allowed });
+/**
+ * Poe em dia a lista de canais de cada membro depois de uma mudanca.
+ *
+ * Quem ve o canal agora recebe CHANNEL_UPDATE, que o app trata como "crie se
+ * nao tiver" — entao serve tambem para quem acabou de ganhar acesso. Quem via
+ * antes e deixou de ver recebe CHANNEL_DELETE: sem isso o canal ficaria na
+ * tela dessa pessoa, mudo, porque os eventos dele ja nao chegam para ela.
+ *
+ * `antes` e nulo quando a mudanca nao mexe em quem ve o canal (nome, posicao):
+ * nesse caso so ha o que atualizar.
+ *
+ * Nao lanca: a mudanca ja foi gravada, e um aviso que falhou vira log.
+ */
+async function avisarCanaisAlterados(
+  guildId: string,
+  channelIds: string[],
+  antes: RetratoDaGuild | null,
+): Promise<void> {
+  try {
+    const [depois, canais] = await Promise.all([
+      carregarRetratoDaGuild(guildId),
+      prisma.channel.findMany({
+        where: { id: { in: channelIds }, guildId },
+        include: CHANNEL_INCLUDE,
+        orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      }),
+    ]);
+    if (!depois) return;
+
+    for (const canal of canais) {
+      const serializado = toChannel(canal);
+      const veemAgora = membrosComPermissao(depois, canal.id);
+      emitToGuild(guildId, 'CHANNEL_UPDATE', serializado, { onlyUserIds: veemAgora });
+
+      if (!antes) continue;
+      const perderam = new Set(
+        [...membrosComPermissao(antes, canal.id)].filter((id) => !veemAgora.has(id)),
+      );
+      if (perderam.size > 0) {
+        emitToGuild(guildId, 'CHANNEL_DELETE', serializado, { onlyUserIds: perderam });
+      }
+    }
+  } catch (error) {
+    logger.error({ error, guildId }, 'nao consegui avisar a mudanca de canais');
+  }
 }

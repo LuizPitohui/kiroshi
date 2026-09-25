@@ -5,7 +5,7 @@ import { ApiError, forbidden, notFound } from '../errors.js';
 import { requireAuth } from '../auth/middleware.js';
 import { toVoiceState } from '../lib/serialize.js';
 import { emitToGuild } from '../gateway/events.js';
-import { resolveChannelPermissions } from '../services/permissions.js';
+import { membrosQueVeem, resolveChannelPermissions } from '../services/permissions.js';
 import { createVoiceToken, disconnectFromVoice, isVoiceEnabled } from '../services/voice.js';
 import { montarIceServers } from '../services/turn.js';
 import { config } from '../config.js';
@@ -159,7 +159,25 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
       throw forbidden('Este som e de outro servidor.');
     }
 
-    emitToGuild(guildId, 'VOICE_CHANNEL_EFFECT', { channelId, guildId, userId, soundId: sound.id });
+    /*
+      O som e para quem esta NA chamada, e so entre quem enxerga o canal.
+
+      Ia para o servidor inteiro: revelava atividade de canal privado, e o app
+      toca o arquivo ao receber o evento sem conferir se esta no canal — o som
+      tocava para quem nem estava na voz.
+    */
+    const [quemVe, ocupantes] = await Promise.all([
+      membrosQueVeem(guildId, channelId),
+      prisma.voiceState.findMany({ where: { channelId }, select: { userId: true } }),
+    ]);
+    const destino = new Set(ocupantes.map((o) => o.userId).filter((id) => quemVe.has(id)));
+
+    emitToGuild(
+      guildId,
+      'VOICE_CHANNEL_EFFECT',
+      { channelId, guildId, userId, soundId: sound.id },
+      { onlyUserIds: destino },
+    );
 
     return { ok: true };
   });

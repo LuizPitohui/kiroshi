@@ -87,6 +87,37 @@ function connectGateway(token, label) {
   });
 }
 
+/**
+ * Espera um evento que chegue DEPOIS da chamada e case com o filtro.
+ *
+ * O `waitFor` acima devolve o primeiro evento daquele tipo ja recebido, mesmo
+ * antigo. Para conferir privacidade isso nao serve: o que importa e o que
+ * chega depois de uma acao especifica. Chame ANTES da acao.
+ */
+function esperarNovo(conexao, nome, filtro = () => true, ms = 8000) {
+  const inicio = conexao.events.length;
+  return new Promise((resolve, reject) => {
+    const limite = Date.now() + ms;
+    const olhar = () => {
+      const achado = conexao.events.slice(inicio).find((e) => e.t === nome && filtro(e.d));
+      if (achado) return resolve(achado.d);
+      if (Date.now() > limite) return reject(new Error(`timeout esperando ${nome}`));
+      setTimeout(olhar, 50);
+    };
+    olhar();
+  });
+}
+
+/** Verdadeiro se nenhum evento daquele tipo, casando com o filtro, chegar a tempo. */
+async function naoChega(conexao, nome, filtro = () => true, ms = 2000) {
+  try {
+    await esperarNovo(conexao, nome, filtro, ms);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function main() {
   console.log('\n--- AUTENTICACAO ---');
 
@@ -306,6 +337,79 @@ async function main() {
     'mencao valida e preservada',
     realMention.body?.mentionedUserIds?.includes(bob.ready.user.id),
   );
+
+  console.log('\n--- CANAL PRIVADO NAO VAZA PELO GATEWAY ---');
+
+  // Um canal que so o dono (e quem tem ADMINISTRATOR) ve: o everyone perde o
+  // bit 0, VIEW_CHANNEL. O segundo usuario do seed nao e administrador.
+  const privado = await api('POST', `/api/v1/guilds/${guild.id}/channels`, {
+    token, body: { name: 'privado-e2e', type: 'GUILD_TEXT' },
+  });
+  check('cria o canal do teste de privacidade', privado.status === 201, `status ${privado.status}`);
+  const privadoId = privado.body?.id;
+
+  const bobPerde = esperarNovo(bob, 'CHANNEL_DELETE', (d) => d?.id === privadoId);
+  const fechar = await api('PUT', `/api/v1/channels/${privadoId}/permissions/${guild.id}`, {
+    token, body: { targetType: 'ROLE', allow: '0', deny: '1' },
+  });
+  check('fecha o canal para o everyone', fechar.status === 200, `status ${fechar.status}`);
+  check(
+    'quem perdeu o acesso recebe CHANNEL_DELETE',
+    Boolean(await bobPerde.catch(() => null)),
+  );
+
+  const historicoAlheio = await api('GET', `/api/v1/channels/${privadoId}/messages`, { token: token2 });
+  check('o canal ficou mesmo fechado para o outro usuario', historicoAlheio.status === 403, `status ${historicoAlheio.status}`);
+
+  // Mensagem e digitacao no canal privado nao podem chegar a quem nao o ve.
+  const semMensagem = naoChega(bob, 'MESSAGE_CREATE', (d) => d?.channelId === privadoId, 2500);
+  const semDigitacao = naoChega(bob, 'TYPING_START', (d) => d?.channelId === privadoId, 2500);
+  alice.ws.send(JSON.stringify({ op: 12, d: { channelId: privadoId } }));
+  const segredo = await api('POST', `/api/v1/channels/${privadoId}/messages`, {
+    token, body: { content: 'so para quem ve o canal' },
+  });
+  check('o dono escreve no canal privado', segredo.status === 201, `status ${segredo.status}`);
+  check('mensagem de canal privado nao chega a quem nao ve', await semMensagem);
+  check('digitacao em canal privado nao chega a quem nao ve', await semDigitacao);
+
+  // Controle: a mesma conexao continua recebendo o canal aberto. Sem isto, as
+  // duas checagens acima passariam tambem com o gateway quebrado.
+  const bobRecebeAberto = esperarNovo(bob, 'MESSAGE_CREATE', (d) => d?.channelId === textChannel.id);
+  const aberto = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token, body: { content: 'mensagem no canal aberto' },
+  });
+  const recebidaAberta = await bobRecebeAberto.catch(() => null);
+  check('no canal aberto a mesma conexao recebe', recebidaAberta?.id === aberto.body?.id);
+
+  console.log('\n--- AROUND SO DENTRO DO PROPRIO CANAL ---');
+
+  // A mensagem-alvo do `around` tem que ser do canal pedido: pedir em volta de
+  // uma mensagem do canal privado, pelo canal aberto, nao pode devolve-la.
+  const cruzado = await api(
+    'GET',
+    `/api/v1/channels/${textChannel.id}/messages?around=${segredo.body?.id}&limit=5`,
+    { token: token2 },
+  );
+  check(
+    'around nao traz mensagem de outro canal',
+    cruzado.status === 200 && Array.isArray(cruzado.body) && !cruzado.body.some((m) => m.id === segredo.body?.id),
+    `status ${cruzado.status}`,
+  );
+  const noProprio = await api(
+    'GET',
+    `/api/v1/channels/${textChannel.id}/messages?around=${aberto.body?.id}&limit=5`,
+    { token: token2 },
+  );
+  check(
+    'around continua trazendo a mensagem do proprio canal',
+    Array.isArray(noProprio.body) && noProprio.body.some((m) => m.id === aberto.body?.id),
+  );
+
+  // Apagar o canal privado: o aviso vai so para quem o via.
+  const semAvisoDeExclusao = naoChega(bob, 'CHANNEL_DELETE', (d) => d?.id === privadoId, 2000);
+  const apagouPrivado = await api('DELETE', `/api/v1/channels/${privadoId}`, { token });
+  check('apaga o canal privado', apagouPrivado.status === 200, `status ${apagouPrivado.status}`);
+  check('quem nao via o canal nao e avisado de que ele sumiu', await semAvisoDeExclusao);
 
   console.log('\n--- CORPO VAZIO COM CONTENT-TYPE JSON (regressao) ---');
 

@@ -12,6 +12,12 @@ import {
 } from '@kiroshi/shared';
 import { prisma } from '../db.js';
 import { ApiError, forbidden, missingPermissions, notFound } from '../errors.js';
+import {
+  canaisComPermissao,
+  membrosComPermissao,
+  type CanalDoRetrato,
+  type RetratoDaGuild,
+} from '../lib/visibilidade.js';
 
 /**
  * Resolve permissoes consultando o banco. A logica de bits vive em @kiroshi/shared
@@ -209,31 +215,85 @@ export async function assertCanManageRole(
   }
 }
 
+const OVERWRITE_SELECT = {
+  select: { targetId: true, targetType: true, allow: true, deny: true },
+} as const;
+
+function paraCanalDoRetrato(canal: {
+  id: string;
+  parentId: string | null;
+  overwrites: OverwriteLike[];
+}): CanalDoRetrato {
+  return { id: canal.id, parentId: canal.parentId, overwrites: canal.overwrites };
+}
+
+/**
+ * Tudo que decide quem ve o que num servidor, em quatro consultas.
+ *
+ * Carregado a cada evento de canal, sem cache: os servidores daqui sao de uma
+ * dezena de pessoas, e um cache so valeria a pena se fosse invalidado certo em
+ * toda mudanca de cargo, membro, sobrescrita e canal. Errar essa invalidacao
+ * e voltar a entregar canal privado a quem nao devia.
+ */
+export async function carregarRetratoDaGuild(guildId: string): Promise<RetratoDaGuild | null> {
+  const [guild, roles, members, channels] = await Promise.all([
+    prisma.guild.findUnique({ where: { id: guildId }, select: { ownerId: true } }),
+    prisma.role.findMany({
+      where: { guildId },
+      select: { id: true, position: true, permissions: true },
+    }),
+    prisma.guildMember.findMany({
+      where: { guildId },
+      select: { userId: true, roles: { select: { roleId: true } } },
+    }),
+    prisma.channel.findMany({
+      where: { guildId },
+      select: { id: true, parentId: true, overwrites: OVERWRITE_SELECT },
+    }),
+  ]);
+  if (!guild) return null;
+
+  // Pai citado por id que nao e deste servidor: ver o comentario em
+  // `RetratoDaGuild.paisDeFora`.
+  const doServidor = new Set(channels.map((c) => c.id));
+  const faltando = [
+    ...new Set(
+      channels
+        .map((c) => c.parentId)
+        .filter((id): id is string => id !== null && !doServidor.has(id)),
+    ),
+  ];
+  const paisDeFora = faltando.length
+    ? await prisma.channel.findMany({
+        where: { id: { in: faltando } },
+        select: { id: true, parentId: true, overwrites: OVERWRITE_SELECT },
+      })
+    : [];
+
+  return {
+    guildId,
+    ownerId: guild.ownerId,
+    roles,
+    members: members.map((m) => ({ userId: m.userId, roleIds: m.roles.map((r) => r.roleId) })),
+    channels: channels.map(paraCanalDoRetrato),
+    paisDeFora: paisDeFora.map(paraCanalDoRetrato),
+  };
+}
+
+/** Membros do servidor com `permissao` no canal; por padrao, quem o enxerga. */
+export async function membrosQueVeem(
+  guildId: string,
+  channelId: string,
+  permissao: bigint = Permission.VIEW_CHANNEL,
+): Promise<Set<string>> {
+  const retrato = await carregarRetratoDaGuild(guildId);
+  if (!retrato) return new Set();
+  return membrosComPermissao(retrato, channelId, permissao);
+}
+
 /** Ids dos canais do servidor que o usuario consegue ver. */
 export async function visibleChannelIds(guildId: string, userId: string): Promise<Set<string>> {
-  const resolved = await resolveMember(guildId, userId);
-  if (!resolved) return new Set();
-
-  const channels = await prisma.channel.findMany({
-    where: { guildId },
-    select: {
-      id: true,
-      parentId: true,
-      overwrites: { select: { targetId: true, targetType: true, allow: true, deny: true } },
-    },
-  });
-
-  const byId = new Map(channels.map((c) => [c.id, c]));
-  const visible = new Set<string>();
-
-  for (const channel of channels) {
-    const parent = channel.parentId ? byId.get(channel.parentId) : undefined;
-    const overwrites = [...(parent?.overwrites ?? []), ...channel.overwrites];
-    const permissions = normalizeChannelPermissions(
-      computeChannelPermissions(resolved.ctx, overwrites),
-    );
-    if (has(permissions, Permission.VIEW_CHANNEL)) visible.add(channel.id);
-  }
-
-  return visible;
+  const retrato = await carregarRetratoDaGuild(guildId);
+  if (!retrato) return new Set();
+  return canaisComPermissao(retrato, userId, Permission.VIEW_CHANNEL);
 }

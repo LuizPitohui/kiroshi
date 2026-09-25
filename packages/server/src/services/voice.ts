@@ -11,8 +11,9 @@ import { montarIceServers } from './turn.js';
 import { prisma } from '../db.js';
 import { ApiError, forbidden, notFound } from '../errors.js';
 import { logger } from '../logger.js';
-import { emitToGuild, emitToUser } from '../gateway/events.js';
+import { emitToUser } from '../gateway/events.js';
 import { toVoiceState } from '../lib/serialize.js';
+import { emitirParaQuemVe } from './entrega.js';
 import { resolveChannelPermissions, resolveMember } from './permissions.js';
 
 /**
@@ -246,7 +247,16 @@ export async function handleVoiceStateUpdate(
     },
   });
 
-  // Se mudou de canal, quem ficou no antigo precisa ver a saida.
+  /*
+    Se mudou de canal, quem ficou no antigo precisa ver a saida — mas a propria
+    pessoa NAO recebe esse aviso.
+
+    Ela ja esta na sala nova quando este pedido chega (o cliente conecta
+    primeiro e avisa depois). O aviso "voce saiu da voz" sobre ela mesma e o
+    que o app trata como desconexao feita por moderador: ele largava a chamada
+    que tinha acabado de abrir. E a mesma corrida que `disconnectFromVoice`
+    evita ao nao ecoar a saida para quem saiu.
+  */
   if (previous && changedChannel) {
     await announceLeave(previous.channelId, previous.guildId, userId);
     await removeFromRoom(previous.channelId, userId);
@@ -254,7 +264,9 @@ export async function handleVoiceStateUpdate(
 
   const serialized = toVoiceState(state);
   if (channel.guildId) {
-    emitToGuild(channel.guildId, 'VOICE_STATE_UPDATE', serialized);
+    await emitirParaQuemVe(channel.guildId, channel.id, 'VOICE_STATE_UPDATE', serialized, {
+      incluir: [userId],
+    });
   } else {
     await emitToDmRecipients(channel.id, 'VOICE_STATE_UPDATE', serialized);
   }
@@ -312,17 +324,20 @@ export async function disconnectFromVoice(
   if (sessionId && state.sessionId !== sessionId) return;
 
   await prisma.voiceState.delete({ where: { userId } }).catch(() => undefined);
-  await announceLeave(state.channelId, state.guildId, userId, {
-    exceptUserId: options.notifyUser ? undefined : userId,
-  });
+  await announceLeave(state.channelId, state.guildId, userId, { notifyUser: options.notifyUser });
   await removeFromRoom(state.channelId, userId);
 }
 
+/**
+ * Avisa que alguem saiu de um canal de voz, para quem enxerga o canal.
+ *
+ * A propria pessoa so recebe com `notifyUser` — ver `disconnectFromVoice`.
+ */
 async function announceLeave(
   channelId: string,
   guildId: string | null,
   userId: string,
-  options: { exceptUserId?: string } = {},
+  options: { notifyUser?: boolean } = {},
 ): Promise<void> {
   const payload = {
     userId,
@@ -339,9 +354,20 @@ async function announceLeave(
   };
 
   if (guildId) {
-    emitToGuild(guildId, 'VOICE_STATE_UPDATE', payload, { exceptUserId: options.exceptUserId });
+    await emitirParaQuemVe(
+      guildId,
+      channelId,
+      'VOICE_STATE_UPDATE',
+      payload,
+      options.notifyUser ? { incluir: [userId] } : { exceptUserId: userId },
+    );
   } else {
-    await emitToDmRecipients(channelId, 'VOICE_STATE_UPDATE', payload, options.exceptUserId);
+    await emitToDmRecipients(
+      channelId,
+      'VOICE_STATE_UPDATE',
+      payload,
+      options.notifyUser ? undefined : userId,
+    );
   }
 }
 
@@ -400,7 +426,9 @@ export async function setServerMute(
     where: { userId: targetId },
     data: { serverMute: muted },
   });
-  emitToGuild(guildId, 'VOICE_STATE_UPDATE', toVoiceState(updated));
+  await emitirParaQuemVe(guildId, updated.channelId, 'VOICE_STATE_UPDATE', toVoiceState(updated), {
+    incluir: [targetId],
+  });
 
   // Silenciar de verdade acontece no SFU: sem isso o cliente poderia ignorar.
   if (config.voice.enabled) {
@@ -443,7 +471,9 @@ export async function setServerDeafen(
     where: { userId: targetId },
     data: { serverDeaf: deafened },
   });
-  emitToGuild(guildId, 'VOICE_STATE_UPDATE', toVoiceState(updated));
+  await emitirParaQuemVe(guildId, updated.channelId, 'VOICE_STATE_UPDATE', toVoiceState(updated), {
+    incluir: [targetId],
+  });
 }
 
 /** Move alguem para outro canal de voz, ou desconecta quando destino e null. */
@@ -487,7 +517,20 @@ export async function moveMember(
   });
 
   await removeFromRoom(previousChannelId, targetId);
-  emitToGuild(guildId, 'VOICE_STATE_UPDATE', toVoiceState(updated));
+
+  /*
+    Dois avisos, porque os dois canais podem ter plateias diferentes: quem via
+    o canal de antes precisa ver a pessoa sair dele, e quem ve o destino, ela
+    chegar. Um aviso so, para o destino, deixaria um fantasma na tela de quem
+    enxerga o canal antigo e nao o novo.
+
+    A saida nao vai para a propria pessoa: para o app, "voce saiu da voz" e
+    ordem de largar a chamada, e aqui ela esta sendo movida, nao desconectada.
+  */
+  await announceLeave(previousChannelId, guildId, targetId);
+  await emitirParaQuemVe(guildId, destinationChannelId, 'VOICE_STATE_UPDATE', toVoiceState(updated), {
+    incluir: [targetId],
+  });
 
   // A pessoa movida precisa de um token novo para a sala de destino.
   if (config.voice.enabled) {
