@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { Permission, has, joinVoiceSchema, playSoundSchema } from '@kiroshi/shared';
+import { Permission, callRingSchema, has, joinVoiceSchema, playSoundSchema } from '@kiroshi/shared';
 import { prisma } from '../db.js';
 import { ApiError, forbidden, notFound } from '../errors.js';
 import { requireAuth } from '../auth/middleware.js';
@@ -9,6 +9,7 @@ import { emitToGuild } from '../gateway/events.js';
 import { membrosQueVeem, resolveChannelPermissions } from '../services/permissions.js';
 import { createVoiceToken, disconnectFromVoice, isVoiceEnabled } from '../services/voice.js';
 import { montarIceServers } from '../services/turn.js';
+import { pararDeTocar, tocar } from '../services/chamadas.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 
@@ -99,6 +100,25 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
       serverMute,
       serverDeaf,
     };
+  });
+
+  /*
+    Chamada em DM: tocar de novo e parar de tocar (recusar). Ligar e atender
+    nao tem rota propria: sao entrar na voz da conversa, pelo caminho de
+    sempre, e o servidor faz tocar e para de tocar sozinho.
+  */
+  app.post('/channels/:channelId/call/ring', async (request) => {
+    const { channelId } = request.params as { channelId: string };
+    const body = callRingSchema.parse(request.body ?? {});
+    await tocar(channelId, request.auth!.userId, body.recipients);
+    return { ok: true };
+  });
+
+  app.post('/channels/:channelId/call/stop-ringing', async (request) => {
+    const { channelId } = request.params as { channelId: string };
+    const body = callRingSchema.parse(request.body ?? {});
+    await pararDeTocar(channelId, request.auth!.userId, body.recipients);
+    return { ok: true };
   });
 
   app.post('/voice/leave', async (request) => {

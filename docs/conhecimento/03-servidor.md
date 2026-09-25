@@ -327,9 +327,18 @@ nenhum tipo. Hoje toda notificacao e decidida no cliente.
 - **VOICE_SERVER_UPDATE vai para todas as sessoes da conta** (`voice.ts:266`) —
   foi a causa do commit `bc4ad67` ("um segundo aparelho entrava na chamada
   sozinho"). O cliente se protegeu; o servidor nao mudou.
-- **Chamada em DM existe no servidor.** Falta: toque/convite, mensagem CALL,
-  estado de voz das DMs no READY (`ready.ts:170`), tirar da chamada quem sai do
-  grupo ou e bloqueado. E a interface inteira.
+- **Chamada em DM** (`services/chamadas.ts`, fatia 4): existe enquanto houver
+  alguem na voz da conversa. Entrar na voz de uma DM sem chamada cria a
+  chamada, grava a mensagem de sistema (tipo CALL, com `call` =
+  participantes e fim, coluna nova da migracao `chamada_na_mensagem`) e toca
+  para os outros (`lib/chamada.ts`, testado: nao toca para quem tem bloqueio
+  com quem liga). Eventos CALL_CREATE/UPDATE/DELETE para todos da conversa; o
+  toque para ao entrar, ao recusar (`POST /channels/:c/call/stop-ringing`) e
+  em 30 s; quem esta na chamada toca de novo (`POST .../call/ring`). Sozinho
+  por 3 min, o servidor tira da voz com `leaveReason: 'ALONE_TIMEOUT'`. Estado
+  em memoria, com uma fila por conversa. O READY traz `privateVoiceStates` e
+  `calls`. Tirar da chamada quem sai do grupo ou e bloqueado ja existia
+  (`tirarDaVoz`).
 - Mover (`moveMember`): o token da sala nova vem antes de tudo (e ele confere o
   CONNECT do alvo; sem ele, 403 e nada muda) e e entregue antes de a pessoa sair
   da sala antiga. O app troca de sala sozinho; 5 s depois o servidor tira da
@@ -404,8 +413,8 @@ soundboard, busca, voz.
 7. ~~Mover fantasma~~ — corrigido na fatia 3; join REST ignora limite e nao cria estado.
 8. ~~Deafen sem efeito; mute nao persiste no SFU~~ — corrigido na fatia 3.
 9. Busca: `has` ignorado.
-10. DM: MESSAGE_CREATE chega duplicado (`messages.ts:266-272`), sem voz no READY,
-    sem fixar.
+10. DM: MESSAGE_CREATE chega duplicado (`messages.ts:266-272`); ~~sem voz no
+    READY~~ e ~~sem fixar~~ corrigidos (fatias 4 e 2).
 11. Ajustes de notificacao sem efeito.
 12. Transferir posse da 500.
 13. Exclusao de conta incompleta; Google preso a conta morta; `/privacidade` promete o que nao faz.

@@ -17,6 +17,7 @@ import { emitirParaQuemVe } from './entrega.js';
 import { resolveChannelPermissions, resolveMember } from './permissions.js';
 import { bloqueioNaDm } from './relacoes.js';
 import { fontesPermitidas, type Moderacao } from '../lib/direitos-de-voz.js';
+import { aoEntrarNaChamada, aoSairDaChamada } from './chamadas.js';
 
 /**
  * Voz, video e compartilhamento de tela via LiveKit (SFU).
@@ -323,6 +324,7 @@ export async function handleVoiceStateUpdate(
   if (previous && changedChannel) {
     await announceLeave(previous.channelId, previous.guildId, userId);
     await removeFromRoom(previous.channelId, userId);
+    if (!previous.guildId) aoSairDaChamada(previous.channelId);
   }
 
   const serialized = toVoiceState(state);
@@ -332,6 +334,8 @@ export async function handleVoiceStateUpdate(
     });
   } else {
     await emitToDmRecipients(channel.id, 'VOICE_STATE_UPDATE', serialized);
+    // Em DM e grupo, entrar e ligar (ou atender): e o que faz tocar.
+    if (changedChannel) aoEntrarNaChamada(channel.id, userId);
   }
 
   // O token e emitido ao entrar e ao reconectar, nao a cada mute.
@@ -409,19 +413,23 @@ export async function disconnectFromVoice(
 export async function tirarDaVoz(
   userId: string,
   onde: { guildId?: string; channelId?: string },
+  motivo?: MotivoDaSaida,
 ): Promise<void> {
   const state = await prisma.voiceState.findUnique({ where: { userId } });
   if (!state) return;
   if (onde.guildId !== undefined && state.guildId !== onde.guildId) return;
   if (onde.channelId !== undefined && state.channelId !== onde.channelId) return;
 
-  await encerrarVoz(state, { notifyUser: true });
+  await encerrarVoz(state, { notifyUser: true, motivo });
 }
+
+/** Por que o servidor tirou alguem da voz, quando foi uma regra (ver VoiceState). */
+type MotivoDaSaida = 'ALONE_TIMEOUT';
 
 /** Apaga o estado, avisa quem enxerga o canal e tira da sala no SFU. */
 async function encerrarVoz(
   state: { userId: string; channelId: string; guildId: string | null; sessionId: string },
-  options: { notifyUser?: boolean },
+  options: { notifyUser?: boolean; motivo?: MotivoDaSaida },
 ): Promise<void> {
   // Apaga so o estado que foi lido. Se a pessoa trocou de canal ou de sessao
   // entre a leitura e aqui, o estado novo e dela e fica.
@@ -432,8 +440,10 @@ async function encerrarVoz(
 
   await announceLeave(state.channelId, state.guildId, state.userId, {
     notifyUser: options.notifyUser,
+    motivo: options.motivo,
   });
   await removeFromRoom(state.channelId, state.userId);
+  if (!state.guildId) aoSairDaChamada(state.channelId);
 }
 
 /**
@@ -445,9 +455,10 @@ async function announceLeave(
   channelId: string,
   guildId: string | null,
   userId: string,
-  options: { notifyUser?: boolean } = {},
+  options: { notifyUser?: boolean; motivo?: MotivoDaSaida } = {},
 ): Promise<void> {
   const payload = {
+    ...(options.motivo ? { leaveReason: options.motivo } : {}),
     userId,
     guildId,
     channelId: null as unknown as string,

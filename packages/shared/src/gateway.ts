@@ -18,6 +18,7 @@
 
 import type {
   Activity,
+  Call,
   Channel,
   Emoji,
   Guild,
@@ -200,7 +201,10 @@ export type GatewayEventName =
   | 'VOICE_STATE_UPDATE'
   | 'VOICE_SERVER_UPDATE'
   | 'VOICE_CHANNEL_EFFECT'
-  | 'SPEAKING_UPDATE';
+  | 'SPEAKING_UPDATE'
+  | 'CALL_CREATE'
+  | 'CALL_UPDATE'
+  | 'CALL_DELETE';
 
 export interface ReadyEvent {
   gatewayVersion: number;
@@ -215,6 +219,13 @@ export interface ReadyEvent {
   presences: Presence[];
   /** Usuarios referenciados por DMs e amizades, para evitar buscas extras. */
   users: PublicUser[];
+  /**
+   * Quem esta na voz das DMs e grupos (os de servidor vem dentro de cada
+   * servidor). Servidores antigos nao mandam.
+   */
+  privateVoiceStates?: VoiceState[];
+  /** Chamadas no ar nas DMs e grupos, com quem esta sendo chamado agora. */
+  calls?: Call[];
 }
 
 export interface ResumedEvent {
@@ -347,6 +358,10 @@ export interface RelationshipRemoveEvent {
   userId: Snowflake;
 }
 
+export interface CallDeleteEvent {
+  channelId: Snowflake;
+}
+
 /** Mapa de evento para payload, para tipar o dispatcher nas duas pontas. */
 export interface GatewayEventMap {
   READY: ReadyEvent;
@@ -386,6 +401,9 @@ export interface GatewayEventMap {
   VOICE_SERVER_UPDATE: VoiceServerUpdateEvent;
   VOICE_CHANNEL_EFFECT: VoiceChannelEffectEvent;
   SPEAKING_UPDATE: SpeakingUpdateEvent;
+  CALL_CREATE: Call;
+  CALL_UPDATE: Call;
+  CALL_DELETE: CallDeleteEvent;
 }
 
 // ---------------------------------------------------------------------------

@@ -276,6 +276,14 @@ export const createDmSchema = z.object({
   recipientIds: z.array(snowflake).min(1).max(LIMITS.groupDmRecipients),
 });
 
+/**
+ * Tocar, ou parar de tocar, numa chamada de DM. Sem lista: tocar vale para
+ * todos que ainda nao entraram, e parar vale para quem pediu (recusar).
+ */
+export const callRingSchema = z.object({
+  recipients: z.array(snowflake).min(1).max(LIMITS.groupDmRecipients).optional(),
+});
+
 export const updateGroupDmSchema = z.object({
   name: z.string().trim().max(LIMITS.channelName.max).nullable().optional(),
   iconUrl: z.string().url().nullable().optional(),

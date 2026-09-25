@@ -370,6 +370,66 @@ async function main() {
     outroAparelho.close();
   }
 
+  console.log('\n--- CHAMADA EM DM ---');
+  {
+    // Ligar e atender nao tem rota propria: e entrar na voz da conversa
+    // (opcode 4). O servidor faz tocar, para de tocar e registra a chamada.
+    const aliceId = me.body.id;
+    const bobId = (await api('GET', '/api/v1/users/@me', { token: token2 })).body?.id;
+    const dm = await api('POST', '/api/v1/users/@me/channels', { token, body: { recipientIds: [bobId] } });
+    check('abre a DM para ligar', dm.status === 200 || dm.status === 201, `status ${dm.status}`);
+    const dmId = dm.body?.id;
+    const entrar = (conexao, channelId) =>
+      conexao.ws.send(JSON.stringify({ op: 4, d: { guildId: null, channelId, selfMute: true, selfDeaf: false } }));
+
+    // O segundo aparelho de quem recebe: o toque vai para todos, e para em todos.
+    const bobNoNotebook = await connectGateway(token2, 'bob-2');
+    const tocouNoBob = esperarNovo(bob, 'CALL_CREATE', (d) => d?.channelId === dmId);
+    const tocouNoNotebook = esperarNovo(bobNoNotebook, 'CALL_CREATE', (d) => d?.channelId === dmId);
+    const registrou = esperarNovo(bob, 'MESSAGE_CREATE', (d) => d?.channelId === dmId && d?.type === 'CALL');
+
+    entrar(alice, dmId);
+
+    const chamada = await tocouNoBob.catch(() => null);
+    check('ligar faz tocar para o outro lado', Boolean(chamada?.ringing?.includes(bobId)), JSON.stringify(chamada));
+    check('toca em todos os aparelhos de quem recebe', Boolean(await tocouNoNotebook.catch(() => null)));
+    const registro = await registrou.catch(() => null);
+    check(
+      'a chamada fica registrada na conversa, com quem ligou',
+      registro?.call?.endedAt === null && registro?.call?.participantIds?.[0] === aliceId,
+      JSON.stringify(registro?.call),
+    );
+
+    const pararam = esperarNovo(bobNoNotebook, 'CALL_UPDATE', (d) => d?.channelId === dmId && !d.ringing.includes(bobId));
+    const recusa = await api('POST', `/api/v1/channels/${dmId}/call/stop-ringing`, { token: token2 });
+    check('recusar responde', recusa.status === 200, `status ${recusa.status}`);
+    check('recusar para de tocar nos outros aparelhos', Boolean(await pararam.catch(() => null)));
+
+    const tocouDeNovo = esperarNovo(bob, 'CALL_UPDATE', (d) => d?.channelId === dmId && d.ringing.includes(bobId));
+    const deNovo = await api('POST', `/api/v1/channels/${dmId}/call/ring`, { token });
+    check('quem esta na chamada toca de novo', deNovo.status === 200 && Boolean(await tocouDeNovo.catch(() => null)));
+
+    const semEntrar = await api('POST', `/api/v1/channels/${dmId}/call/ring`, { token: token2 });
+    check('quem nao entrou na chamada nao toca para ninguem', semEntrar.status === 403, `status ${semEntrar.status}`);
+
+    const atendeu = esperarNovo(alice, 'CALL_UPDATE', (d) => d?.channelId === dmId && d.ringing.length === 0);
+    entrar(bob, dmId);
+    check('atender para o toque', Boolean(await atendeu.catch(() => null)));
+
+    const acabou = esperarNovo(bobNoNotebook, 'CALL_DELETE', (d) => d?.channelId === dmId);
+    const fechou = esperarNovo(bob, 'MESSAGE_UPDATE', (d) => d?.id === registro?.id && Boolean(d?.call?.endedAt));
+    entrar(bob, null);
+    entrar(alice, null);
+    check('a chamada acaba quando a ultima pessoa sai', Boolean(await acabou.catch(() => null)));
+    const fechada = await fechou.catch(() => null);
+    check(
+      'o registro final guarda quem participou',
+      fechada?.call?.participantIds?.length === 2 && fechada.call.participantIds.includes(bobId),
+      JSON.stringify(fechada?.call),
+    );
+    bobNoNotebook.close();
+  }
+
   console.log('\n--- MENCOES INVALIDAS (regressao) ---');
 
   // Um id inventado quebrava o envio com 500 por violacao de chave

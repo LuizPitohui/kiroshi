@@ -351,6 +351,8 @@ model Message {
   author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
   content   String      @db.VarChar(4000)
   type      MessageType @default(DEFAULT)
+  // So nas mensagens de chamada (CALL): quem participou e quando acabou.
+  call      Json?
 
   replyToId String?
   replyTo   Message?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)

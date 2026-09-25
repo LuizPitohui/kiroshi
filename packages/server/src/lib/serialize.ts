@@ -6,6 +6,7 @@ import type {
   Guild as ApiGuild,
   GuildMember as ApiMember,
   Message as ApiMessage,
+  MessageCall,
   PublicUser,
   Reaction as ApiReaction,
   Role as ApiRole,
@@ -310,6 +311,8 @@ export interface MessageRow {
   deletedAt: Date | null;
   createdAt: Date;
   replyToId: string | null;
+  /** Registro da chamada, so nas mensagens do tipo CALL. */
+  call?: unknown;
   author: UserRow;
   attachments: Parameters<typeof toAttachment>[0][];
   reactions: ReactionRow[];
@@ -322,6 +325,16 @@ function asStringArray(value: unknown): string[] {
 
 function asEmbeds(value: unknown): Embed[] {
   return Array.isArray(value) ? (value as Embed[]) : [];
+}
+
+/** O registro da chamada gravado na mensagem, conferido campo a campo. */
+function asCall(value: unknown): MessageCall | null {
+  if (!value || typeof value !== 'object') return null;
+  const registro = value as { participantIds?: unknown; endedAt?: unknown };
+  return {
+    participantIds: asStringArray(registro.participantIds),
+    endedAt: typeof registro.endedAt === 'string' ? registro.endedAt : null,
+  };
 }
 
 export function toMessage(
@@ -339,6 +352,7 @@ export function toMessage(
     // Mensagem apagada continua existindo para nao quebrar quem respondeu a ela.
     content: row.deletedAt ? '' : row.content,
     type: row.type as ApiMessage['type'],
+    call: row.type === 'CALL' ? asCall(row.call) : null,
     attachments: row.deletedAt ? [] : row.attachments.map((a) => toAttachment(a, baseUrl)),
     embeds: row.deletedAt ? [] : asEmbeds(row.embeds),
     reactions: row.deletedAt ? [] : toReactions(row.reactions, viewerId),

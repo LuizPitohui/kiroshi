@@ -27,6 +27,7 @@ import {
   toVoiceState,
 } from '../lib/serialize.js';
 import { visibleChannelIds } from './permissions.js';
+import { chamadasEm } from './chamadas.js';
 
 /**
  * Monta o payload do READY: tudo que o cliente precisa para desenhar a
@@ -55,7 +56,7 @@ export async function buildReadyPayload(
 
   const guilds = await Promise.all(guildIds.map((id) => buildGuildState(id, userId)));
 
-  const [privateChannelRows, relationshipRows, readStateRows] = await Promise.all([
+  const [privateChannelRows, relationshipRows, readStateRows, privateVoiceRows] = await Promise.all([
     prisma.channel.findMany({
       where: {
         type: { in: ['DM', 'GROUP_DM'] },
@@ -74,6 +75,10 @@ export async function buildReadyPayload(
       },
     }),
     prisma.readState.findMany({ where: { userId } }),
+    // Voz das DMs e grupos de que a pessoa participa (os de servidor vem em cada servidor).
+    prisma.voiceState.findMany({
+      where: { guildId: null, channel: { recipients: { some: { userId } } } },
+    }),
   ]);
 
   const relationships: Relationship[] = relationshipRows.map((row) => {
@@ -132,6 +137,8 @@ export async function buildReadyPayload(
     })),
     presences,
     users,
+    privateVoiceStates: privateVoiceRows.map(toVoiceState),
+    calls: chamadasEm(new Set(privateChannelRows.map((c) => c.id))),
   };
 }
 

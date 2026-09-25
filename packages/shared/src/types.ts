@@ -210,6 +210,17 @@ export interface MessageReference {
   guildId: Snowflake | null;
 }
 
+/**
+ * O registro de uma chamada em conversa direta, na propria mensagem de
+ * sistema que a anuncia (tipo CALL).
+ */
+export interface MessageCall {
+  /** Quem passou pela chamada, na ordem em que entrou. */
+  participantIds: Snowflake[];
+  /** Quando a ultima pessoa saiu; null enquanto a chamada esta no ar. */
+  endedAt: string | null;
+}
+
 export interface Message {
   id: Snowflake;
   channelId: Snowflake;
@@ -218,6 +229,8 @@ export interface Message {
   author: PublicUser;
   content: string;
   type: MessageType;
+  /** So nas mensagens de chamada (tipo CALL). Servidores antigos nao mandam. */
+  call?: MessageCall | null;
   attachments: Attachment[];
   embeds: Embed[];
   reactions: Reaction[];
@@ -288,6 +301,25 @@ export interface VoiceState {
   selfStream: boolean;
   selfVideo: boolean;
   joinedAt: string;
+  /**
+   * Por que a pessoa saiu, quando foi o servidor que a tirou por uma regra.
+   * So vem no aviso de saida; hoje a unica regra e a dos 3 minutos sozinho
+   * numa chamada de DM.
+   */
+  leaveReason?: 'ALONE_TIMEOUT';
+}
+
+/**
+ * Uma chamada no ar numa DM ou grupo. Existe enquanto houver alguem na voz da
+ * conversa; o toque e so para quem ainda nao entrou.
+ */
+export interface Call {
+  channelId: Snowflake;
+  /** A mensagem de sistema que registra a chamada. */
+  messageId: Snowflake;
+  /** Quem esta sendo chamado agora: sai ao atender, recusar ou no fim do toque. */
+  ringing: Snowflake[];
+  startedAt: string;
 }
 
 export interface VoiceConnectionInfo {

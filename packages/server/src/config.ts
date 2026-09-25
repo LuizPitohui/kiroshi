@@ -88,6 +88,14 @@ const schema = z.object({
   CLOUDFLARE_TURN_KEY_ID: z.string().optional(),
   CLOUDFLARE_TURN_API_TOKEN: z.string().optional(),
   FORCE_TURN_RELAY: boolish(false),
+  /*
+    Chamada em conversa direta: quanto dura o toque e quanto tempo alguem pode
+    ficar sozinho antes de o servidor desligar (a regra dos 3 minutos, F5 em
+    docs/conhecimento/01-pedidos-e-backlog.md). Mudar so para teste: ninguem
+    espera 3 minutos de verdade num teste de ponta a ponta.
+  */
+  DM_CALL_RING_SECONDS: z.coerce.number().int().min(5).max(300).default(30),
+  DM_CALL_ALONE_SECONDS: z.coerce.number().int().min(5).max(3600).default(180),
 
   /*
     Credenciais do login com Google.
@@ -194,6 +202,8 @@ function load() {
       turnKeyId: env.CLOUDFLARE_TURN_KEY_ID ?? null,
       turnApiToken: env.CLOUDFLARE_TURN_API_TOKEN ?? null,
       forceRelay: env.FORCE_TURN_RELAY,
+      toqueMs: env.DM_CALL_RING_SECONDS * 1000,
+      sozinhoMs: env.DM_CALL_ALONE_SECONDS * 1000,
     },
 
     contatoPrivacidade: env.CONTATO_PRIVACIDADE ?? null,
