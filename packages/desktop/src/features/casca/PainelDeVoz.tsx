@@ -5,6 +5,7 @@ import { navegar } from '../../app/rotas.js';
 import { Avatar, BotaoIcone, cx } from '../../design/primitivos/index.js';
 import { alternarFone, alternarMicrofone, sairDaVoz } from './acoesDeVoz.js';
 import { useVoz } from './useVoz.js';
+import { nomeDaConversa } from '../chamada/dm.js';
 
 const ic = 'size-[18px]';
 
@@ -33,8 +34,10 @@ export function PainelDeVoz(): React.JSX.Element | null {
   const guildId = useVoz((v) => v.guildId);
   const onde = useStore((s) => {
     if (!canalId) return '';
-    const canal = s.channels.get(canalId)?.name ?? 'Chamada';
-    return guildId ? `${s.guilds.get(guildId)?.name ?? ''} / ${canal}` : canal;
+    const canal = s.channels.get(canalId);
+    if (guildId) return `${s.guilds.get(guildId)?.name ?? ''} / ${canal?.name ?? 'Chamada'}`;
+    if (!canal) return 'Chamada';
+    return `Chamada · ${nomeDaConversa(canal, s.user?.id ?? null, (id) => s.users.get(id)?.displayName ?? '?')}`;
   });
 
   if (!conectado && !conectando) return null;

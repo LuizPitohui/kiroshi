@@ -67,7 +67,8 @@ const ic = 'size-4';
 export function itensDaMensagem(m: Message, euSou: string | null, p: Permissoes, acoes: AcoesDaLista): ItemDoMenu[][] {
   const minha = m.authorId === euSou;
   const pendente = idsOtimistas.has(m.id);
-  if (pendente) return [];
+  // Registro de chamada e do sistema: nada para responder, editar, fixar ou apagar.
+  if (pendente || m.type === 'CALL') return [];
   const principais: ItemDoMenu[] = [];
   if (p.reagir) principais.push({ chave: 'reagir', rotulo: 'Reagir', icone: <SmilePlus className={ic} strokeWidth={1.5} />, atalho: '+', acao: () => acoes.reagir(m.id) });
   principais.push({ chave: 'responder', rotulo: 'Responder', icone: <Reply className={ic} strokeWidth={1.5} />, atalho: 'R', acao: () => acoes.responder(m) });

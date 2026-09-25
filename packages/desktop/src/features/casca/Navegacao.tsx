@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Permission, has, type Channel } from '@kiroshi/shared';
-import { ChevronDown, ChevronRight, Hash, Headphones, HeadphoneOff, LogOut, Megaphone, MicOff, Settings, UserPlus, Video, Volume2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, HeadphoneOff, LogOut, Megaphone, MicOff, Phone, Settings, UserPlus, Users, Video, Volume2, X } from 'lucide-react';
 import { selectors, useChannelsOfGuild, usePrivateChannels, useStore, useVoiceMembersOf } from '../../store/index.js';
 import { navegar, useRota } from '../../app/rotas.js';
 import {
@@ -20,6 +20,7 @@ import { agruparCanais } from './organizar.js';
 import { usePermissoesNoServidor } from '../../app/permissoes.js';
 import { CartaoNaChamada } from '../chamada/CartaoNaChamada.js';
 import { moverPara } from '../chamada/moderacao.js';
+import { fecharConversa } from '../inicio/acoes.js';
 
 const ic = 'size-4 shrink-0';
 
@@ -247,28 +248,59 @@ function LinhaDeConversa({ canal, ativo }: { canal: Channel; ativo: boolean }) {
   const status = useStore((s) => s.presences.get(primeiro)?.status ?? 'OFFLINE');
   const mencoes = useStore((s) => selectors.mentionCount(s, canal.id));
   const naoLido = useStore((s) => selectors.unreadCount(s, canal.id) > 0);
+  const emChamada = useStore((s) => selectors.voiceMembersOf(s, canal.id).length > 0);
+  const meChama = useStore((s) => Boolean(eu && s.calls.get(canal.id)?.ringing.includes(eu)));
+  // Numa DM 1:1, onde o outro lado esta em chamada num servidor que eu tambem vejo.
+  const ondeEsta = useStore((s) => {
+    if (canal.type !== 'DM' || !primeiro) return null;
+    const v = s.voiceStates.get(primeiro);
+    if (!v?.channelId || !v.guildId) return null;
+    return `${s.guilds.get(v.guildId)?.name ?? 'servidor'} / ${s.channels.get(v.channelId)?.name ?? 'voz'}`;
+  });
 
   return (
-    <li>
+    <li className="group/dm relative">
       <button
         type="button"
         onClick={() => navegar({ tela: 'dm', canalId: canal.id })}
         aria-current={ativo ? 'page' : undefined}
         className={cx(
           'relative flex h-11 w-full items-center gap-2.5 px-2 text-left',
+          canal.type === 'DM' && 'group-hover/dm:pr-8 group-focus-within/dm:pr-8',
           ativo ? 'bg-elevado text-texto' : naoLido ? 'text-texto hover:bg-terminal' : 'text-texto-3 hover:bg-terminal hover:text-texto-2',
         )}
       >
         {ativo ? <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-acento" /> : null}
         <Avatar nome={nome} id={primeiro || canal.id} url={avatar} tamanho={32} status={canal.type === 'DM' ? status : undefined} />
-        <span className={cx('min-w-0 flex-1 truncate text-14', naoLido && 'font-semibold')}>{nome}</span>
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className={cx('block truncate text-14', naoLido && 'font-semibold')}>{nome}</span>
+          {emChamada ? (
+            <span className="block truncate font-mono text-10 uppercase tracking-rotulo text-fala">{meChama ? 'Te chamando' : 'Em chamada'}</span>
+          ) : ondeEsta ? (
+            <span className="block truncate text-11 text-texto-3">Na chamada · {ondeEsta}</span>
+          ) : null}
+        </span>
+        {emChamada ? (
+          <Phone aria-label={meChama ? 'te chamando' : 'chamada em andamento'} className={cx('size-4 shrink-0 text-fala', meChama && 'k-anima k-pulso')} strokeWidth={1.5} />
+        ) : null}
         <Contador valor={mencoes} rotulo="mensagens novas" />
       </button>
+      {canal.type === 'DM' ? (
+        <button
+          type="button"
+          aria-label={`Fechar a conversa com ${nome}`}
+          title="Fechar a conversa"
+          onClick={() => void fecharConversa(canal.id)}
+          className="absolute right-1.5 top-1/2 hidden size-6 -translate-y-1/2 place-items-center text-texto-3 hover:text-texto focus-visible:grid group-hover/dm:grid group-focus-within/dm:grid"
+        >
+          <X aria-hidden className="size-4" strokeWidth={1.5} />
+        </button>
+      ) : null}
     </li>
   );
 }
 
-function ConversasDiretas({ canalAtivo }: { canalAtivo: string | null }) {
+function ConversasDiretas({ canalAtivo, noInicio }: { canalAtivo: string | null; noInicio: boolean }) {
   const conversas = usePrivateChannels();
   const pedidos = useStore((s) => selectors.pendingRequests(s).filter((r) => r.type === 'PENDING_INCOMING').length);
 
@@ -283,9 +315,14 @@ function ConversasDiretas({ canalAtivo }: { canalAtivo: string | null }) {
         <button
           type="button"
           onClick={() => navegar({ tela: 'inicio', aba: 'online' })}
-          className="flex h-9 w-full items-center gap-2.5 px-2 text-14 text-texto-2 hover:bg-terminal hover:text-texto"
+          aria-current={noInicio ? 'page' : undefined}
+          className={cx(
+            'relative flex h-9 w-full items-center gap-2.5 px-2 text-14',
+            noInicio ? 'bg-elevado text-texto' : 'text-texto-2 hover:bg-terminal hover:text-texto',
+          )}
         >
-          <Headphones aria-hidden className={ic} strokeWidth={1.5} />
+          {noInicio ? <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-acento" /> : null}
+          <Users aria-hidden className={ic} strokeWidth={1.5} />
           <span className="flex-1 text-left">Amigos</span>
           <Contador valor={pedidos} rotulo="pedidos de amizade" />
         </button>
@@ -312,7 +349,7 @@ export function Navegacao(): React.JSX.Element {
       {rota.tela === 'servidor' || rota.tela === 'ajustes-servidor' ? (
         <CanaisDoServidor guildId={rota.guildId} canalAtivo={rota.tela === 'servidor' ? rota.canalId : null} />
       ) : (
-        <ConversasDiretas canalAtivo={rota.tela === 'dm' ? rota.canalId : null} />
+        <ConversasDiretas canalAtivo={rota.tela === 'dm' ? rota.canalId : null} noInicio={rota.tela === 'inicio'} />
       )}
     </div>
   );

@@ -89,6 +89,8 @@ export function Avisos(): React.JSX.Element {
           success: 'border-l-ok',
           warning: 'border-l-aviso',
           info: 'border-l-info',
+          actionButton:
+            'ml-auto shrink-0 self-center border border-borda-2 px-2.5 py-1 font-mono text-11 uppercase tracking-rotulo text-texto-2 hover:border-texto-3 hover:text-texto',
         },
       }}
     />
@@ -101,4 +103,11 @@ export const avisar = {
   ok: (titulo: string, detalhe?: string) => toast.success(titulo, { description: detalhe }),
   info: (titulo: string, detalhe?: string) => toast.info(titulo, { description: detalhe }),
   aviso: (titulo: string, detalhe?: string) => toast.warning(titulo, { description: detalhe }),
+  /**
+   * Fica ate a pessoa dispensar. Para o que acontece enquanto ela nao esta
+   * olhando (desligado por ficar sozinho na chamada): um aviso de quatro
+   * segundos sumiria antes de ela voltar.
+   */
+  lembrete: (titulo: string, detalhe?: string) =>
+    toast.info(titulo, { description: detalhe, duration: Infinity, action: { label: 'Entendi', onClick: () => undefined } }),
 };

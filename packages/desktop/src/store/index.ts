@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import {
   compareIds,
+  type Call,
   type Channel,
   type Emoji,
   type GuildMember,
@@ -78,6 +79,8 @@ interface AppState {
   readStates: Map<string, ReadState>;
   /** Chave: userId. Um usuario esta em no maximo um canal de voz. */
   voiceStates: Map<string, VoiceState>;
+  /** Chave: canal. Chamadas no ar nas DMs e grupos, com quem esta sendo chamado. */
+  calls: Map<string, Call>;
   typing: Map<string, TypingEntry[]>;
 
   // --- Navegacao ---
@@ -100,6 +103,8 @@ interface AppState {
     readStates: ReadState[];
     presences: Presence[];
     users: PublicUser[];
+    privateVoiceStates?: VoiceState[];
+    calls?: Call[];
   }) => void;
   upsertGuild: (guild: GuildWithState) => void;
   removeGuild: (guildId: string) => void;
@@ -113,6 +118,8 @@ interface AppState {
   upsertRelationship: (relationship: Relationship) => void;
   removeRelationship: (id: string) => void;
   setVoiceState: (state: VoiceState) => void;
+  setCall: (call: Call) => void;
+  removeCall: (channelId: string) => void;
   setGuildEmojis: (guildId: string, emojis: Emoji[]) => void;
   setGuildStickers: (guildId: string, stickers: Sticker[]) => void;
   setGuildSounds: (guildId: string, sounds: SoundboardSound[]) => void;
@@ -211,6 +218,7 @@ export const useStore = create<AppState>((set, get) => ({
   relationships: new Map(),
   readStates: new Map(),
   voiceStates: new Map(),
+  calls: new Map(),
   typing: new Map(),
 
   selectedGuildId: null,
@@ -234,6 +242,7 @@ export const useStore = create<AppState>((set, get) => ({
       relationships: new Map(),
       readStates: new Map(),
       voiceStates: new Map(),
+      calls: new Map(),
       typing: new Map(),
       selectedGuildId: null,
       selectedChannelId: null,
@@ -263,6 +272,10 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       for (const channel of payload.privateChannels) channels.set(channel.id, channel);
+      // Voz das DMs e grupos: vem fora dos servidores (servidores antigos nao mandam).
+      for (const state of payload.privateVoiceStates ?? []) voiceStates.set(state.userId, state);
+      const calls = new Map<string, Call>();
+      for (const call of payload.calls ?? []) calls.set(call.channelId, call);
 
       const relationships = new Map<string, Relationship>();
       for (const relationship of payload.relationships) {
@@ -287,6 +300,7 @@ export const useStore = create<AppState>((set, get) => ({
         presences,
         readStates,
         voiceStates,
+        calls,
       };
     }),
 
@@ -486,6 +500,21 @@ export const useStore = create<AppState>((set, get) => ({
       if (!voiceState.channelId) voiceStates.delete(voiceState.userId);
       else voiceStates.set(voiceState.userId, voiceState);
       return { voiceStates };
+    }),
+
+  setCall: (call) =>
+    set((state) => {
+      const calls = new Map(state.calls);
+      calls.set(call.channelId, call);
+      return { calls };
+    }),
+
+  removeCall: (channelId) =>
+    set((state) => {
+      if (!state.calls.has(channelId)) return {};
+      const calls = new Map(state.calls);
+      calls.delete(channelId);
+      return { calls };
     }),
 
   setGuildEmojis: (guildId, emojis) =>

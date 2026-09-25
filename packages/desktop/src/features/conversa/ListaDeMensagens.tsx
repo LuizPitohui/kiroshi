@@ -19,6 +19,7 @@ import {
   cx,
 } from '../../design/primitivos/index.js';
 import { Mensagem, itensDaMensagem, type AcoesDaLista, type Permissoes } from './Mensagem.js';
+import { MensagemDeChamada } from './MensagemDeChamada.js';
 import { apagar, alternarFixada, carregarAnteriores, carregarHistorico, copiarTexto, marcarComoLida, motivo } from './acoes.js';
 import { horaCurta, montarLinhas } from './linhas.js';
 import { useSalto } from './salto.js';
@@ -361,12 +362,14 @@ export function ListaDeMensagens({ canalId, guildId, euSou, permissoes, editando
         return;
       case 'Delete':
       case 'Backspace':
-        if (minha || permissoes.gerenciar) {
+        if (m.type !== 'CALL' && (minha || permissoes.gerenciar)) {
           e.preventDefault();
           pedirApagar(m, e.shiftKey);
         }
         return;
     }
+    // Registro de chamada nao se responde, edita, fixa nem reage.
+    if (m.type === 'CALL') return;
     if (e.ctrlKey && e.key.toLowerCase() === 'c' && !window.getSelection()?.toString() && m.content) {
       e.preventDefault();
       void copiarTexto(paraEdicao(m.content, dicionarioDoCanal(canalId)));
@@ -484,6 +487,13 @@ export function ListaDeMensagens({ canalId, guildId, euSou, permissoes, editando
                   }
                   const m = itens[linha.indice]!;
                   const anterior = linhas[i - 1];
+                  if (m.type === 'CALL') {
+                    return (
+                      <li key={linha.chave}>
+                        <MensagemDeChamada mensagem={m} euSou={euSou} focavel={m.id === ativa} />
+                      </li>
+                    );
+                  }
                   return (
                     <li key={linha.chave}>
                       <Mensagem

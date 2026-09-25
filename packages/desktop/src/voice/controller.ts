@@ -231,6 +231,15 @@ export interface VoiceState {
    */
   assistindo: string[];
   /**
+   * Saindo da chamada: do pedido ate a sala ser largada.
+   *
+   * Sair desliga camera e tela, e quem vigia essas mudancas para avisar o
+   * servidor precisa saber que nao e uma mudanca de verdade. Sem isto o aviso
+   * "estou no canal, camera desligada" saia logo depois do "sai", e o servidor
+   * punha a pessoa de volta na chamada — um fantasma, com token novo.
+   */
+  saindo: boolean;
+  /**
    * O que esta REALMENTE limpando o microfone agora, e nao o que foi pedido.
    *
    * `null` sem microfone aberto. Existe porque a tela antiga dizia "limpeza
@@ -282,6 +291,7 @@ class VoiceController {
     ping: null,
     mediaVersion: 0,
     assistindo: [],
+    saindo: false,
     limpeza: null,
   };
 
@@ -933,6 +943,7 @@ class VoiceController {
 
   async leave(): Promise<void> {
     this.saindoDeProposito = true;
+    this.emit({ saindo: true });
 
     // Avisa os outros antes de derrubar as faixas: despublicar com a sala
     // ainda de pe tira o quadro da tela de quem ficou na hora, em vez de
@@ -956,6 +967,7 @@ class VoiceController {
       screenSharing: false,
       ping: null,
       assistindo: [],
+      saindo: false,
       limpeza: null,
     });
   }
@@ -1815,12 +1827,12 @@ class VoiceController {
    * pessoa; a propria saida nao volta como eco. So age se ainda estivermos no
    * canal citado, para nao derrubar uma chamada seguinte por engano.
    */
-  async leaveByRemote(channelId: string | null): Promise<void> {
+  async leaveByRemote(channelId: string | null, motivo?: 'ALONE_TIMEOUT'): Promise<void> {
     if (channelId && this.state.channelId !== channelId) return;
     await this.leave();
-    // Moderador, expulsao, canal apagado, bloqueio: sem isto a chamada sumia
-    // da tela sem explicacao nenhuma.
-    this.emit({ error: 'Você foi desconectado da chamada.' });
+    // Moderador, expulsao, canal apagado, bloqueio, a regra dos 3 minutos: sem
+    // isto a chamada sumia da tela sem explicacao nenhuma.
+    this.emit({ error: motivo === 'ALONE_TIMEOUT' ? AVISO_DE_SOLIDAO : AVISO_DE_DESCONEXAO });
   }
 
   /**
@@ -1931,7 +1943,7 @@ class VoiceController {
       a ele. Tambem nao e a rede.
     */
     if (motivo === DisconnectReason.PARTICIPANT_REMOVED) {
-      this.emit({ error: 'Você foi desconectado da chamada.' });
+      this.emit({ error: AVISO_DE_DESCONEXAO });
       return;
     }
 
@@ -2140,6 +2152,16 @@ class VoiceController {
     }
   }
 }
+
+/** Tirado da chamada pelo servidor (moderador, expulsao, canal apagado, bloqueio). */
+export const AVISO_DE_DESCONEXAO = 'Você foi desconectado da chamada.';
+
+/**
+ * A regra dos 3 minutos sozinho numa chamada de DM. Texto nosso, no tom do
+ * operador (10-front-end-novo.md, 2.8): diz o que houve e por que.
+ */
+export const AVISO_DE_SOLIDAO =
+  'Você saiu da chamada porque ficou sozinho por 3 minutos. Falar sozinho é liberado; pela internet do servidor, nem tanto.';
 
 export const voice = new VoiceController();
 

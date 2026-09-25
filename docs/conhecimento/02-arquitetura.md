@@ -175,4 +175,7 @@ de teste estaveis.
 | Markdown, autocompletar e mencoes (puros, testados) | `packages/desktop/src/features/conversa/{markdown,mencoes,linhas}.ts` |
 | Palco: quadros, medicao, recepcao (puros, testados) | `packages/desktop/src/features/chamada/{quadros,medicao}.ts`, `src/voice/recepcao.ts` |
 | Direitos de voz no SFU (puro, testado) | `packages/server/src/lib/direitos-de-voz.ts` |
+| Chamada em DM: toque, registro, 3 minutos | `packages/server/src/services/chamadas.ts` (+ `lib/chamada.ts`, testado) |
+| Interface nova: inicio e amigos | `packages/desktop/src/features/inicio/` (`amigos.ts` puro, testado) |
+| Chamada em DM no app (puro, testado) | `packages/desktop/src/features/chamada/dm.ts` |
 | Deploy | `deploy/scripts/deploy.sh`, `docs/DEPLOY.md` |

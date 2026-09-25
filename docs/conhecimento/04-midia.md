@@ -315,6 +315,13 @@ emissor" (o SFU isola, salvo por pedidos de quadro-chave).
 
 ## Chamada em DM
 
+> **Feita na fatia 4 (2026-09-25).** Servidor em
+> [03-servidor.md](03-servidor.md#voz-no-servidor); no app, o cartao de chamada
+> recebida e o palco no topo da DM (`features/chamada/ChamadaRecebida.tsx`,
+> `ChamadaNaConversa.tsx`). O toque e sintetizado como os outros avisos
+> (`voice/sons.ts`) e ainda sai no dispositivo padrao, como eles (ajuste da
+> fatia 5). O levantamento abaixo e de antes.
+
 Ja existe no servidor: `isVoiceCapable` aceita DM e grupo
 (`services/voice.ts:36-39`); `DM_PERMISSIONS` inclui CONNECT/SPEAK/STREAM; token
 emitido para `channel_<dmId>`; VOICE_STATE_UPDATE vai aos participantes.

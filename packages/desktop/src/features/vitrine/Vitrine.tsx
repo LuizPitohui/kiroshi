@@ -48,6 +48,8 @@ import {
 import { aplicarTema, type Tema } from '../../app/tema.js';
 import { aplicarMovimento, type Movimento } from '../../lib/movimento.js';
 import { PalcoDeDemonstracao } from '../chamada/PalcoDeDemonstracao.js';
+import { CartaoDeChamadaRecebida } from '../chamada/ChamadaRecebida.js';
+import { LinhaDeChamada } from '../conversa/MensagemDeChamada.js';
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -307,6 +309,26 @@ export default function Vitrine(): React.JSX.Element {
 
           <Secao id="palco" titulo="Palco da chamada (vídeo sintético)">
             <PalcoDeDemonstracao />
+          </Secao>
+
+          <Secao id="chamada-dm" titulo="Chamada em conversa direta">
+            <div className="flex flex-wrap items-start gap-8">
+              <CartaoDeChamadaRecebida
+                titulo="rafa"
+                subtitulo="Chamada de voz · conversa direta"
+                avatarId="rafa"
+                avatarUrl={null}
+                grupo={false}
+                restante={0.62}
+                aoAtender={() => avisar.ok('Atender', 'Entraria na chamada da conversa.')}
+                aoRecusar={() => avisar.info('Recusar', 'O toque pararia em todos os aparelhos.')}
+              />
+              <div className="w-[520px] border border-borda bg-void py-2">
+                <LinhaDeChamada texto="rafa iniciou uma chamada." perdida={false} noAr hora="22:31" aoEntrar={() => avisar.ok('Entrar', 'Entraria na chamada.')} />
+                <LinhaDeChamada texto="Você iniciou uma chamada que durou 12 minutos." perdida={false} noAr={false} hora="21:04" />
+                <LinhaDeChamada texto="Chamada perdida de kaya." perdida noAr={false} hora="19:47" />
+              </div>
+            </div>
           </Secao>
 
           <Secao id="estados" titulo="Estados">

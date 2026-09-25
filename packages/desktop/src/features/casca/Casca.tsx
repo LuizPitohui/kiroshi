@@ -12,6 +12,9 @@ import { Conversa } from '../conversa/Conversa.js';
 import { TelaDaChamada } from '../chamada/TelaDaChamada.js';
 import { MiniPalco } from '../chamada/MiniPalco.js';
 import { ZeladorDaChamada } from '../chamada/ZeladorDaChamada.js';
+import { ChamadasDiretas } from '../chamada/ChamadaRecebida.js';
+import { BotoesDeLigar, ChamadaNaConversa } from '../chamada/ChamadaNaConversa.js';
+import { Inicio } from '../inicio/Inicio.js';
 import { ContextoDaChamada } from '../chamada/fonte.js';
 import { fonteAoVivo } from '../chamada/fonteAoVivo.js';
 import { Ajustes } from '../ajustes/Ajustes.js';
@@ -115,21 +118,21 @@ function ConversaDaChamada({ canalId }: { canalId: string }) {
 }
 
 function AreaPrincipal({ rota }: { rota: Rota }) {
-  const amigos = useStore((s) => selectors.friends(s).length);
-
   switch (rota.tela) {
     case 'servidor':
       return rota.canalId ? <CanalAberto guildId={rota.guildId} canalId={rota.canalId} /> : null;
     case 'dm':
-      return <Conversa key={rota.canalId} canalId={rota.canalId} />;
-    case 'inicio':
+      // A chamada da conversa direta abre no topo dela, como no Discord.
       return (
-        <EstadoVazio rotulo="Início" titulo={amigos === 0 ? 'Sua rede começa aqui' : amigos === 1 ? '1 amigo' : `${amigos} amigos`}>
-          {amigos === 0
-            ? 'Adicione alguém pelo nome de usuário, crie um servidor ou entre por convite.'
-            : 'A lista de amigos nova — online, pendentes, bloqueados — chega na fatia 4.'}
-        </EstadoVazio>
+        <Conversa
+          key={rota.canalId}
+          canalId={rota.canalId}
+          topo={<ChamadaNaConversa canalId={rota.canalId} />}
+          extraNoCabecalho={<BotoesDeLigar canalId={rota.canalId} />}
+        />
       );
+    case 'inicio':
+      return <Inicio aba={rota.aba} />;
     case 'ajustes':
       return <Ajustes />;
     case 'ajustes-servidor':
@@ -236,6 +239,8 @@ export function Casca(): React.JSX.Element {
           <Identidade />
         </aside>
         <main id="conteudo" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 bg-void outline-none">
+          {/* Primeiro no documento: o Tab chega na chamada recebida antes da conversa. */}
+          <ChamadasDiretas />
           <AreaPrincipal rota={rota} />
           <MiniPalco />
         </main>

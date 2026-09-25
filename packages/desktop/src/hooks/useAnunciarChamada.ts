@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useStore, selectors } from '../store/index.js';
 import { useVoiceState } from './useVoice.js';
 import { anunciar } from '../lib/anunciar.js';
-import { voice } from '../voice/controller.js';
+import { AVISO_DE_DESCONEXAO, AVISO_DE_SOLIDAO, voice } from '../voice/controller.js';
 import { tocarAviso } from '../voice/sons.js';
 
 /**
@@ -21,18 +21,19 @@ import { tocarAviso } from '../voice/sons.js';
  * frase que estiver sendo lida: quem esta falando precisa saber AGORA que
  * ninguem mais esta ouvindo.
  */
-export function useAnunciarChamada(): void {
+export function useAnunciarChamada(opcoes: { somSempreLigado?: boolean } = {}): void {
   const voz = useVoiceState();
-  const store = useStore();
+  // Na interface nova o som de entrar e sair nao tem opcao: e sempre ligado
+  // (decisao do dono, 10-front-end-novo.md 2.7). A 1.x segue o ajuste.
+  const comSom = (): boolean => Boolean(opcoes.somSempreLigado) || voice.getSettings().avisosSonoros;
 
   const anteriores = useRef<Set<string> | null>(null);
   const estavaConectado = useRef(false);
   const erroAnterior = useRef<string | null>(null);
 
-  // Em ref: a funcao de nome depende do estado inteiro, que muda o tempo todo,
-  // e nao deve reiniciar a comparacao de participantes.
-  const nomeDe = useRef((id: string) => selectors.displayNameOf(store, id, null));
-  nomeDe.current = (id: string) => selectors.displayNameOf(store, id, null);
+  // Lido na hora do anuncio, sem assinar o store inteiro: antes o gancho
+  // redesenhava a cada mensagem, presenca ou digitacao de qualquer canal.
+  const nomeDe = useRef((id: string) => selectors.displayNameOf(useStore.getState(), id, null));
 
   useEffect(() => {
     const agora = new Set(voz.participants.filter((p) => !p.isLocal).map((p) => p.userId));
@@ -64,7 +65,7 @@ export function useAnunciarChamada(): void {
       um aviso por evento, nao por pessoa. Cinco pessoas entrando nao viram
       cinco bipes.
     */
-    if (voice.getSettings().avisosSonoros) {
+    if (comSom()) {
       if (entraram.length > 0) tocarAviso('entrada');
       if (sairam.length > 0) tocarAviso('saida');
     }
@@ -81,15 +82,15 @@ export function useAnunciarChamada(): void {
 
   // Entrou e saiu da propria chamada.
   useEffect(() => {
-    const comSom = voice.getSettings().avisosSonoros;
+    const som = comSom();
 
     if (voz.connected && !estavaConectado.current) {
       anunciar('Voce entrou na chamada');
-      if (comSom) tocarAviso('entrada');
+      if (som) tocarAviso('entrada');
     }
     if (!voz.connected && estavaConectado.current && !voz.error) {
       anunciar('Voce saiu da chamada');
-      if (comSom) tocarAviso('saida');
+      if (som) tocarAviso('saida');
     }
     estavaConectado.current = voz.connected;
   }, [voz.connected, voz.error]);
@@ -97,7 +98,9 @@ export function useAnunciarChamada(): void {
   // A queda corta o que estiver sendo lido.
   useEffect(() => {
     if (voz.error && voz.error !== erroAnterior.current) {
-      anunciar('A chamada caiu. Suas mensagens de texto continuam disponiveis.', 'urgente');
+      // Tirado pelo servidor nao e queda: diz o que houve de verdade.
+      const tirado = voz.error === AVISO_DE_DESCONEXAO || voz.error === AVISO_DE_SOLIDAO;
+      anunciar(tirado ? voz.error : 'A chamada caiu. Suas mensagens de texto continuam disponiveis.', 'urgente');
     }
     erroAnterior.current = voz.error;
   }, [voz.error]);

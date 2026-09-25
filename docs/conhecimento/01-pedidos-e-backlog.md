@@ -116,7 +116,36 @@ instancias do Beta e um LiveKit local
 Fica para depois: telemetria enviada ao servidor (as medidas ficam na tela) e o
 estado do motor por evento (regra 5 de 04-midia).
 
-Proximo: fatia 4 (inicio, amigos e DM, com a chamada em DM e o toque de F5).
+**Fatia 4 (inicio, amigos e DM) entregue em 2026-09-25, no Kiroshi Beta**
+(`src/features/inicio/`, `src/features/chamada/`), com a chamada em DM de F5:
+
+- **Inicio** com os amigos em quatro abas (online, todos, pendentes com os
+  recebidos primeiro, bloqueados), busca, adicionar pelo nome de usuario, e em
+  cada linha conversar, ligar, ligar com video, desfazer amizade e bloquear
+  (com confirmacao); o quadro **agora** mostra que amigos estao em chamada e
+  onde, com um clique para ir;
+- **conversas diretas** na navegacao com o indicador de chamada ("em chamada",
+  "te chamando"), onde o outro lado esta em chamada num servidor, e fechar a
+  conversa;
+- **ligar e atender**: botoes no cabecalho da DM; o cartao de **chamada
+  recebida** (a holochamada do desenho) com toque, notificacao do Windows e
+  piscar da janela; o toque para em todos os aparelhos ao atender ou recusar
+  num deles, e acaba sozinho em 30 s; quem liga ouve o "chamando" e pode chamar
+  de novo;
+- **a chamada no topo da conversa**, com o mesmo palco e os mesmos controles do
+  canal de voz, e a faixa para entrar quando ha chamada sem voce;
+- **registro na conversa**: "iniciou uma chamada", "durou 12 minutos",
+  "chamada perdida";
+- **a regra dos 3 minutos**: sozinho numa chamada de DM, o servidor desliga, e o
+  aviso fica na tela ate a pessoa voltar (texto nosso).
+
+Tambem entraram duas faltas achadas no teste da fatia 3: o som de entrar e
+sair da chamada nao existia na interface nova (agora sempre ligado, decisao do
+dono), e camera e transmissao nunca chegavam ao servidor, nas duas interfaces
+— ninguem via na lista quem estava com camera ou ao vivo.
+
+Proximo: fatia 5 (ajustes do usuario, notificacoes reais, iniciar com o
+Windows, atalhos globais).
 
 ## F2 — Estabilidade das transmissoes
 
@@ -220,7 +249,11 @@ com aceitar/recusar e tempo limite, mensagem de sistema de chamada (iniciada,
 duracao, perdida), video e tela iguais aos do canal de voz; e desconexao apos 3 min
 sozinho, com timer no servidor e aviso com texto nosso no mesmo tom.
 
-**Estado:** desenho junto com F1 (a interface da chamada e a mesma).
+**Estado:** feito na fatia 4 do F1 (Beta e servidor). O servidor faz tocar,
+parar de tocar, registrar e desligar quem fica sozinho (`services/chamadas.ts`);
+ligar e atender sao entrar na voz da conversa, pelo caminho de sempre. Tempo do
+toque e da solidao configuraveis so para teste (`DM_CALL_RING_SECONDS`,
+`DM_CALL_ALONE_SECONDS`).
 
 ## F6 — Ajustes do usuario que nao funcionam
 

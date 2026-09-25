@@ -163,9 +163,14 @@ export function installGatewayHandlers(): void {
     // para nao derrubar a chamada seguinte quando alguem sai e entra rapido.
     const selfId = store().user?.id;
     if (state.userId === selfId && !state.channelId) {
-      void voice.leaveByRemote(null);
+      void voice.leaveByRemote(null, state.leaveReason);
     }
   });
+
+  // Chamada em DM: quem esta sendo chamado, e quando ela acaba.
+  gateway.on('CALL_CREATE', (call) => store().setCall(call));
+  gateway.on('CALL_UPDATE', (call) => store().setCall(call));
+  gateway.on('CALL_DELETE', ({ channelId }) => store().removeCall(channelId));
 
   gateway.on('VOICE_SERVER_UPDATE', (payload) => {
     void voice.connect(payload);

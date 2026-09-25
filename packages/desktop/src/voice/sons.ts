@@ -60,7 +60,7 @@ function obterContexto(): AudioContext | null {
   }
 }
 
-function tocarNota(ctx: AudioContext, hz: number, inicio: number): void {
+function tocarNota(ctx: AudioContext, hz: number, inicio: number, duracao = DURACAO, volume = VOLUME): void {
   const osc = ctx.createOscillator();
   const ganho = ctx.createGain();
 
@@ -77,20 +77,56 @@ function tocarNota(ctx: AudioContext, hz: number, inicio: number): void {
     resolvem, e sao curtos demais para alguem perceber como rampa.
   */
   ganho.gain.setValueAtTime(0, inicio);
-  ganho.gain.linearRampToValueAtTime(VOLUME, inicio + 0.005);
-  ganho.gain.setValueAtTime(VOLUME, inicio + DURACAO - 0.02);
-  ganho.gain.linearRampToValueAtTime(0, inicio + DURACAO);
+  ganho.gain.linearRampToValueAtTime(volume, inicio + 0.005);
+  ganho.gain.setValueAtTime(volume, inicio + duracao - 0.02);
+  ganho.gain.linearRampToValueAtTime(0, inicio + duracao);
 
   osc.connect(ganho);
   ganho.connect(ctx.destination);
   osc.start(inicio);
-  osc.stop(inicio + DURACAO + 0.01);
+  osc.stop(inicio + duracao + 0.01);
 }
 
 /**
  * Toca o aviso. Nunca estoura: som e enfeite, e enfeite que derruba a chamada
  * nao vale a pena.
  */
+/**
+ * O toque de uma chamada em DM, em laco ate quem chamou parar.
+ *
+ *   recebida  alguem esta te ligando: tres notas subindo, repetidas. Mais
+ *             alto que o aviso de entrada, porque precisa ser ouvido de longe
+ *             do computador — e ainda assim longe de um alarme.
+ *   feita     voce esta ligando e o outro lado ainda nao atendeu: um pulso
+ *             baixo e espacado, so para saber que esta chamando.
+ *
+ * Devolve a funcao que para. Parar no meio de uma frase deixa as notas ja
+ * agendadas terminarem sozinhas: cada uma dura menos de um quinto de segundo.
+ */
+export function tocarToque(tipo: 'recebida' | 'feita'): () => void {
+  const ctx = obterContexto();
+  if (!ctx) return () => undefined;
+
+  const frase = (): void => {
+    try {
+      const agora = ctx.currentTime;
+      if (tipo === 'recebida') {
+        // La5 -> Do#6 -> Mi6: o acorde de La maior dos outros avisos, subindo.
+        [880.0, 1108.73, 1318.51].forEach((hz, i) => tocarNota(ctx, hz, agora + i * 0.13, 0.12, 0.09));
+      } else {
+        tocarNota(ctx, 587.33, agora, 0.18, 0.045);
+        tocarNota(ctx, 587.33, agora + 0.3, 0.18, 0.045);
+      }
+    } catch {
+      // Som e enfeite: falhar aqui nao pode derrubar a chamada.
+    }
+  };
+
+  frase();
+  const laco = setInterval(frase, tipo === 'recebida' ? 2000 : 3200);
+  return () => clearInterval(laco);
+}
+
 export function tocarAviso(aviso: Aviso): void {
   const ctx = obterContexto();
   if (!ctx) return;

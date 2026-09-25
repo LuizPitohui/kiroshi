@@ -131,7 +131,18 @@ function editavel(el: Element | null): boolean {
  * painel tem o seu) e sempre compacta — 300 px nao comportam foto de 40 px e
  * calha de 72 em cada mensagem.
  */
-export function Conversa({ canalId, extraNoCabecalho, lateral = false }: { canalId: string; extraNoCabecalho?: ReactNode; lateral?: boolean }) {
+export function Conversa({
+  canalId,
+  extraNoCabecalho,
+  topo,
+  lateral = false,
+}: {
+  canalId: string;
+  extraNoCabecalho?: ReactNode;
+  /** Entre o cabecalho e as mensagens: a chamada da conversa direta. */
+  topo?: ReactNode;
+  lateral?: boolean;
+}) {
   const canal = useStore((s) => s.channels.get(canalId));
   const euSou = useStore((s) => s.user?.id ?? null);
   const bits = usePermissoesNoCanal(canalId);
@@ -239,6 +250,7 @@ export function Conversa({ canalId, extraNoCabecalho, lateral = false }: { canal
       {lateral ? null : (
         <Cabecalho canal={canal} euSou={euSou} aoBuscar={() => setBuscando(true)} podeFixar={permissoes.fixar} extra={extraNoCabecalho} />
       )}
+      {topo}
       <ListaDeMensagens
         canalId={canalId}
         guildId={canal.guildId}

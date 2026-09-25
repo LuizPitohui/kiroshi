@@ -11,14 +11,24 @@ import { avisar } from '../../design/primitivos/index.js';
   Aqui toda mudanca de estado da voz sai para o servidor na mesma hora.
 */
 
-function avisarServidor(): void {
+/**
+ * O estado da propria voz, inteiro, para o servidor.
+ *
+ * Camera e tela vao junto. Antes iam so microfone e fone: o servidor gravava
+ * camera e tela como desligadas a cada mute, e ninguem via na lista quem
+ * estava com camera ou ao vivo — nas duas interfaces.
+ */
+export function avisarServidor(): void {
   const v = voice.getState();
-  if (!v.channelId) return;
+  // Saindo, o servidor ja sabe: qualquer aviso agora poria a pessoa de volta no canal.
+  if (!v.channelId || v.saindo) return;
   gateway.updateVoiceState({
     guildId: v.guildId,
     channelId: v.channelId,
     selfMute: v.selfMuted,
     selfDeaf: v.selfDeafened,
+    selfVideo: v.cameraOn,
+    selfStream: v.screenSharing,
   });
 }
 

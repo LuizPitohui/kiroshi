@@ -9,6 +9,7 @@ import { useFonteDaChamada } from './fonte.js';
 import { montarQuadros, quadroEmDestaque } from './quadros.js';
 import { useEstadoDoPalco } from './estadoDoPalco.js';
 import { Quadro } from './Quadro.js';
+import { nomeDaConversa } from './dm.js';
 
 const nada = () => undefined;
 
@@ -25,7 +26,12 @@ export function MiniPalco() {
   const canalDaChamada = useVoz((v) => (v.connected ? v.channelId : null));
   const guildId = useVoz((v) => v.guildId);
   const escolhido = useEstadoDoPalco((s) => s.destaque);
-  const nomeDoCanal = useStore((s) => (canalDaChamada ? (s.channels.get(canalDaChamada)?.name ?? 'chamada') : ''));
+  const nomeDoCanal = useStore((s) => {
+    const canal = canalDaChamada ? s.channels.get(canalDaChamada) : undefined;
+    if (!canal) return canalDaChamada ? 'chamada' : '';
+    if (canal.guildId) return canal.name ?? 'chamada';
+    return nomeDaConversa(canal, s.user?.id ?? null, (id) => s.users.get(id)?.displayName ?? '?');
+  });
 
   const quadros = useMemo(() => montarQuadros(participantes, assistindoEu), [participantes, assistindoEu]);
   const destaque = quadroEmDestaque(quadros, escolhido);

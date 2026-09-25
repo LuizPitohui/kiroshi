@@ -169,7 +169,8 @@ Existem no servidor e **nao funcionam** (nao chegam a ninguem). Sem UI.
 - Mencoes: sem autocompletar; so `@everyone`/`@here` funcionam na pratica (as
   outras exigem digitar `<@id>` a mao).
 - DM: sem botao de chamada; sem remover amigo, bloquear, criar grupo, fechar DM
-  (todas existem no servidor).
+  (todas existem no servidor). No Beta (fatia 4): chamada, desfazer amizade,
+  bloquear e fechar DM; criar grupo ainda nao.
 - Pedidos de amizade enviados nao aparecem em lugar nenhum.
 - Acoes da mensagem so no `:hover` (inalcancaveis por teclado).
 - O produto **nao tem toast**: o provedor so e montado na vitrine. Por isso tantos
