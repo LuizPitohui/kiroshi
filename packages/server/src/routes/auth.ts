@@ -39,6 +39,7 @@ import {
 import { requireAuth, requireFreshAuth } from '../auth/middleware.js';
 import { createSession } from '../auth/sessao.js';
 import { encerrarSessoesDeGateway } from '../gateway/server.js';
+import { emitToUser } from '../gateway/events.js';
 import { ipDaRequisicao } from '../lib/ip-do-cliente.js';
 import { consume } from '../lib/ratelimit.js';
 import { SELF_USER_SELECT, toSelfUser } from '../lib/serialize.js';
@@ -56,6 +57,16 @@ import { SELF_USER_SELECT, toSelfUser } from '../lib/serialize.js';
  * o campo opcional, e sem esta funcao "opcional no schema" viraria
  * "dispensavel de verdade".
  */
+/**
+ * Os aparelhos da pessoa ficam sabendo que a conta mudou (2FA ligado ou
+ * desligado). Antes a tela continuava em "Ativar" ate reconectar, e clicar de
+ * novo falhava calado.
+ */
+async function avisarContaMudou(userId: string): Promise<void> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: SELF_USER_SELECT });
+  emitToUser(userId, 'USER_UPDATE', toSelfUser(user));
+}
+
 async function confirmarComSenha(
   passwordHash: string | null,
   informada: string | undefined,
@@ -383,6 +394,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     });
 
     logger.info({ userId: auth.userId }, '2FA ativado');
+    await avisarContaMudou(auth.userId);
     // Os codigos aparecem uma unica vez; depois so restam os hashes.
     return { ok: true, backupCodes };
   });
@@ -407,6 +419,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     });
 
     logger.info({ userId: auth.userId }, '2FA desativado');
+    await avisarContaMudou(auth.userId);
     return { ok: true };
   });
 

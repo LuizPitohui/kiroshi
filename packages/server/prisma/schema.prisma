@@ -556,6 +556,8 @@ model UserGuildSettings {
   guildId           String
   guild             Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
   muted             Boolean           @default(false)
+  // Silenciar por um tempo; nulo com muted ligado e sem prazo.
+  mutedUntil        DateTime?
   notificationLevel NotificationLevel @default(ALL)
 
   @@id([userId, guildId])
@@ -567,6 +569,7 @@ model UserChannelSettings {
   channelId         String
   channel           Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
   muted             Boolean            @default(false)
+  mutedUntil        DateTime?
   notificationLevel NotificationLevel?
 
   @@id([userId, channelId])

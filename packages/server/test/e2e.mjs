@@ -430,6 +430,46 @@ async function main() {
     bobNoNotebook.close();
   }
 
+  console.log('\n--- NOTIFICACOES POR SERVIDOR E SEGURANCA ---');
+  {
+    const avisou = esperarNovo(alice, 'USER_GUILD_SETTINGS_UPDATE', (d) => d?.guildId === guild.id);
+    const ate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const silenciou = await api('PATCH', `/api/v1/users/@me/guilds/${guild.id}/settings`, {
+      token,
+      body: { muted: true, mutedUntil: ate, notificationLevel: 'MENTIONS' },
+    });
+    check(
+      'silenciar o servidor por um prazo',
+      silenciou.status === 200 && Boolean(silenciou.body?.mutedUntil) && silenciou.body?.notificationLevel === 'MENTIONS',
+      JSON.stringify(silenciou.body),
+    );
+    check('os outros aparelhos ficam sabendo do ajuste', Boolean(await avisou.catch(() => null)));
+
+    const canalCalado = await api('PATCH', `/api/v1/users/@me/channels/${textChannel.id}/settings`, {
+      token,
+      body: { muted: true, mutedUntil: null },
+    });
+    check('silenciar um canal ate reativar', canalCalado.status === 200 && canalCalado.body?.muted === true && canalCalado.body?.mutedUntil === null);
+
+    const lidos = await api('GET', '/api/v1/users/@me/settings', { token });
+    check(
+      'a leitura traz servidores e canais em listas separadas',
+      Array.isArray(lidos.body?.guilds) && lidos.body.guilds.some((g) => g.guildId === guild.id) && lidos.body?.channels?.some((c) => c.channelId === textChannel.id),
+      JSON.stringify(lidos.body).slice(0, 200),
+    );
+
+    // Volta como estava, para as proximas rodadas.
+    await api('PATCH', `/api/v1/users/@me/guilds/${guild.id}/settings`, { token, body: { muted: false, notificationLevel: 'ALL' } });
+    await api('PATCH', `/api/v1/users/@me/channels/${textChannel.id}/settings`, { token, body: { muted: false } });
+
+    const seguranca = await api('GET', '/api/v1/users/@me/security', { token });
+    check(
+      'a seguranca diz se ha senha, sem o hash',
+      seguranca.status === 200 && seguranca.body?.hasPassword === true && !JSON.stringify(seguranca.body).includes('$'),
+      JSON.stringify(seguranca.body),
+    );
+  }
+
   console.log('\n--- MENCOES INVALIDAS (regressao) ---');
 
   // Um id inventado quebrava o envio com 500 por violacao de chave

@@ -303,6 +303,21 @@ Ajustes por guild e canal existem no banco e na API (`users.ts:172-250`) e **o
 servidor nao usa em lugar nenhum**; o cliente nunca chama. Nao ha push de
 nenhum tipo. Hoje toda notificacao e decidida no cliente.
 
+## Notificacoes e seguranca da conta (fatia 5)
+
+- `GET /users/@me/settings` devolve `{ guilds, channels }`. Antes cada servidor
+  voltava com os ajustes de TODOS os canais da pessoa (o filtro era
+  `() => true`) e os de DM so apareciam se houvesse algum servidor.
+- Os `PATCH` de servidor e canal aceitam `mutedUntil` (silenciar por tempo;
+  migracao `silenciar_por_tempo`) e avisam os outros aparelhos
+  (`USER_GUILD_SETTINGS_UPDATE`, `USER_CHANNEL_SETTINGS_UPDATE`). O READY traz
+  `notificationSettings`.
+- Quem decide notificar continua sendo o cliente; o servidor so guarda.
+- `GET /users/@me/security` diz se a conta tem senha (quem entrou pelo Google
+  pode nao ter), sem o hash.
+- Ativar e desativar o 2FA emitem `USER_UPDATE`: a tela ficava em "Ativar" ate
+  reconectar.
+
 ## Voz no servidor
 
 - Token (`createVoiceToken`, `services/voice.ts`): sala `channel_<id>` (vale

@@ -382,15 +382,24 @@ export interface ReadState {
 
 export type NotificationLevel = 'ALL' | 'MENTIONS' | 'NOTHING';
 
+/** Silenciar: com `mutedUntil`, ate aquela hora; sem, ate a pessoa reativar. */
 export interface ChannelSettings {
   channelId: Snowflake;
   muted: boolean;
+  mutedUntil: string | null;
+  /** null herda do servidor (numa DM, vale "todas"). */
   notificationLevel: NotificationLevel | null;
 }
 
 export interface GuildSettings {
   guildId: Snowflake;
   muted: boolean;
+  mutedUntil: string | null;
   notificationLevel: NotificationLevel;
-  channelOverrides: ChannelSettings[];
+}
+
+/** Os ajustes de notificacao da pessoa: por servidor e por canal, DMs inclusive. */
+export interface NotificationSettings {
+  guilds: GuildSettings[];
+  channels: ChannelSettings[];
 }

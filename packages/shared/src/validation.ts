@@ -333,13 +333,18 @@ export const joinVoiceSchema = z.object({
 
 export const notificationLevelSchema = z.enum(['ALL', 'MENTIONS', 'NOTHING']);
 
+/** Ate quando o silencio vale (ISO 8601); null e sem prazo. */
+const mutedUntilSchema = z.string().datetime({ offset: true }).nullable().optional();
+
 export const updateGuildSettingsSchema = z.object({
   muted: z.boolean().optional(),
+  mutedUntil: mutedUntilSchema,
   notificationLevel: notificationLevelSchema.optional(),
 });
 
 export const updateChannelSettingsSchema = z.object({
   muted: z.boolean().optional(),
+  mutedUntil: mutedUntilSchema,
   notificationLevel: notificationLevelSchema.nullable().optional(),
 });
 

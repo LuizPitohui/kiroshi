@@ -13,6 +13,8 @@ import { requireAuth, requireFreshAuth } from '../auth/middleware.js';
 import {
   SELF_USER_SELECT,
   USER_SELECT,
+  toChannelSettings,
+  toGuildSettings,
   toPublicUser,
   toSelfUser,
 } from '../lib/serialize.js';
@@ -178,19 +180,14 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       prisma.userChannelSettings.findMany({ where: { userId } }),
     ]);
 
+    /*
+      Duas listas, e nao os canais dentro de cada servidor. Antes cada
+      servidor voltava com os ajustes de TODOS os canais da pessoa (o filtro
+      era `() => true`), e os de DM so apareciam se houvesse algum servidor.
+    */
     return {
-      guilds: guildSettings.map((g) => ({
-        guildId: g.guildId,
-        muted: g.muted,
-        notificationLevel: g.notificationLevel,
-        channelOverrides: channelSettings
-          .filter(() => true)
-          .map((c) => ({
-            channelId: c.channelId,
-            muted: c.muted,
-            notificationLevel: c.notificationLevel,
-          })),
-      })),
+      guilds: guildSettings.map(toGuildSettings),
+      channels: channelSettings.map(toChannelSettings),
     };
   });
 
@@ -205,21 +202,21 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         userId,
         guildId,
         muted: body.muted ?? false,
+        mutedUntil: body.muted && body.mutedUntil ? new Date(body.mutedUntil) : null,
         notificationLevel: body.notificationLevel ?? 'ALL',
       },
       update: {
-        ...(body.muted !== undefined ? { muted: body.muted } : {}),
+        ...(body.muted !== undefined ? { muted: body.muted, mutedUntil: body.muted && body.mutedUntil ? new Date(body.mutedUntil) : null } : {}),
         ...(body.notificationLevel !== undefined
           ? { notificationLevel: body.notificationLevel }
           : {}),
       },
     });
 
-    return {
-      guildId: settings.guildId,
-      muted: settings.muted,
-      notificationLevel: settings.notificationLevel,
-    };
+    // Os outros aparelhos da pessoa passam a obedecer na hora.
+    const serialized = toGuildSettings(settings);
+    emitToUser(userId, 'USER_GUILD_SETTINGS_UPDATE', serialized);
+    return serialized;
   });
 
   app.patch('/users/@me/channels/:channelId/settings', async (request) => {
@@ -233,21 +230,33 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         userId,
         channelId,
         muted: body.muted ?? false,
+        mutedUntil: body.muted && body.mutedUntil ? new Date(body.mutedUntil) : null,
         notificationLevel: body.notificationLevel ?? null,
       },
       update: {
-        ...(body.muted !== undefined ? { muted: body.muted } : {}),
+        ...(body.muted !== undefined ? { muted: body.muted, mutedUntil: body.muted && body.mutedUntil ? new Date(body.mutedUntil) : null } : {}),
         ...(body.notificationLevel !== undefined
           ? { notificationLevel: body.notificationLevel }
           : {}),
       },
     });
 
-    return {
-      channelId: settings.channelId,
-      muted: settings.muted,
-      notificationLevel: settings.notificationLevel,
-    };
+    const serialized = toChannelSettings(settings);
+    emitToUser(userId, 'USER_CHANNEL_SETTINGS_UPDATE', serialized);
+    return serialized;
+  });
+
+  /**
+   * O que a tela de seguranca precisa saber e o perfil nao conta: se a conta
+   * tem senha (quem entrou pelo Google pode nao ter). So um sim ou nao — o
+   * hash nunca sai daqui.
+   */
+  app.get('/users/@me/security', async (request) => {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: request.auth!.userId },
+      select: { passwordHash: true, totpEnabled: true },
+    });
+    return { hasPassword: Boolean(user.passwordHash), totpEnabled: user.totpEnabled };
   });
 
   // -------------------------------------------------------------------------

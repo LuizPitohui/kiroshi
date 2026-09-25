@@ -20,6 +20,9 @@ import type {
   Activity,
   Call,
   Channel,
+  ChannelSettings,
+  GuildSettings,
+  NotificationSettings,
   Emoji,
   Guild,
   GuildMember,
@@ -204,7 +207,9 @@ export type GatewayEventName =
   | 'SPEAKING_UPDATE'
   | 'CALL_CREATE'
   | 'CALL_UPDATE'
-  | 'CALL_DELETE';
+  | 'CALL_DELETE'
+  | 'USER_GUILD_SETTINGS_UPDATE'
+  | 'USER_CHANNEL_SETTINGS_UPDATE';
 
 export interface ReadyEvent {
   gatewayVersion: number;
@@ -226,6 +231,8 @@ export interface ReadyEvent {
   privateVoiceStates?: VoiceState[];
   /** Chamadas no ar nas DMs e grupos, com quem esta sendo chamado agora. */
   calls?: Call[];
+  /** Os ajustes de notificacao da pessoa. Servidores antigos nao mandam. */
+  notificationSettings?: NotificationSettings;
 }
 
 export interface ResumedEvent {
@@ -404,6 +411,8 @@ export interface GatewayEventMap {
   CALL_CREATE: Call;
   CALL_UPDATE: Call;
   CALL_DELETE: CallDeleteEvent;
+  USER_GUILD_SETTINGS_UPDATE: GuildSettings;
+  USER_CHANNEL_SETTINGS_UPDATE: ChannelSettings;
 }
 
 // ---------------------------------------------------------------------------

@@ -16,7 +16,9 @@ import {
   SELF_USER_SELECT,
   USER_SELECT,
   toChannel,
+  toChannelSettings,
   toEmoji,
+  toGuildSettings,
   toGuild,
   toMember,
   toPublicUser,
@@ -56,7 +58,7 @@ export async function buildReadyPayload(
 
   const guilds = await Promise.all(guildIds.map((id) => buildGuildState(id, userId)));
 
-  const [privateChannelRows, relationshipRows, readStateRows, privateVoiceRows] = await Promise.all([
+  const [privateChannelRows, relationshipRows, readStateRows, privateVoiceRows, guildSettingsRows, channelSettingsRows] = await Promise.all([
     prisma.channel.findMany({
       where: {
         type: { in: ['DM', 'GROUP_DM'] },
@@ -79,6 +81,8 @@ export async function buildReadyPayload(
     prisma.voiceState.findMany({
       where: { guildId: null, channel: { recipients: { some: { userId } } } },
     }),
+    prisma.userGuildSettings.findMany({ where: { userId } }),
+    prisma.userChannelSettings.findMany({ where: { userId } }),
   ]);
 
   const relationships: Relationship[] = relationshipRows.map((row) => {
@@ -139,6 +143,10 @@ export async function buildReadyPayload(
     users,
     privateVoiceStates: privateVoiceRows.map(toVoiceState),
     calls: chamadasEm(new Set(privateChannelRows.map((c) => c.id))),
+    notificationSettings: {
+      guilds: guildSettingsRows.map(toGuildSettings),
+      channels: channelSettingsRows.map(toChannelSettings),
+    },
   };
 }
 

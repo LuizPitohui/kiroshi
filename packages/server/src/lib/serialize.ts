@@ -1,6 +1,8 @@
 import type {
   Attachment as ApiAttachment,
   Channel as ApiChannel,
+  ChannelSettings,
+  GuildSettings,
   Emoji as ApiEmoji,
   Embed,
   Guild as ApiGuild,
@@ -325,6 +327,36 @@ function asStringArray(value: unknown): string[] {
 
 function asEmbeds(value: unknown): Embed[] {
   return Array.isArray(value) ? (value as Embed[]) : [];
+}
+
+/** Ajustes de notificacao de um servidor, como o app os le. */
+export function toGuildSettings(row: {
+  guildId: string;
+  muted: boolean;
+  mutedUntil: Date | null;
+  notificationLevel: string;
+}): GuildSettings {
+  return {
+    guildId: row.guildId,
+    muted: row.muted,
+    mutedUntil: iso(row.mutedUntil),
+    notificationLevel: row.notificationLevel as GuildSettings['notificationLevel'],
+  };
+}
+
+/** Ajustes de notificacao de um canal ou DM. */
+export function toChannelSettings(row: {
+  channelId: string;
+  muted: boolean;
+  mutedUntil: Date | null;
+  notificationLevel: string | null;
+}): ChannelSettings {
+  return {
+    channelId: row.channelId,
+    muted: row.muted,
+    mutedUntil: iso(row.mutedUntil),
+    notificationLevel: row.notificationLevel as ChannelSettings['notificationLevel'],
+  };
 }
 
 /** O registro da chamada gravado na mensagem, conferido campo a campo. */
