@@ -25,6 +25,8 @@ export default defineConfig({
       (JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string })
         .version,
     ),
+    // No navegador, `?nova` na URL tambem abre a interface nova (so em dev).
+    __INTERFACE_NOVA__: JSON.stringify(process.env.VITE_INTERFACE === 'nova'),
   },
   plugins: [react()],
   server: {

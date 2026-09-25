@@ -1,0 +1,141 @@
+/*
+  Tokens do Kiroshi — a unica fonte de cor, tipo, medida e movimento.
+
+  Superficies e texto sao os MESMOS valores do Arasaka Nexus: a familia se
+  reconhece pelo preto em camadas e pelo zinco do texto. A identidade e o
+  vermelho Arasaka (#dc2626), escolhido pelo dono em 2026-09-24.
+
+  Com uma cor so fazendo identidade, selecao, ao vivo e perigo, quem separa os
+  estados e a FORMA, nunca a cor sozinha: selecao = barra + colchetes; ao vivo
+  = selo solido com pulso; mudo = icone cortado; erro = [!] + texto. Ver
+  docs/conhecimento/10-front-end-novo.md, secao 2.1.
+
+  Tudo aqui e variavel de CSS em tempo de execucao — o Tailwind le por
+  referencia (base.css, `@theme inline`) — para o tema claro trocar sem
+  recompilar nada.
+*/
+
+:root {
+  color-scheme: dark;
+
+  /* ---- superficies: camadas de preto, nunca mais claro que --k-elevado ---- */
+  --k-void: #000000;
+  --k-deck: #0a0a0a;
+  --k-terminal: #0f0f12;
+  --k-elevado: #16161a;
+  --k-realce: rgba(255, 255, 255, 0.035);
+  --k-realce-forte: rgba(255, 255, 255, 0.06);
+
+  /* ---- texto ---- */
+  --k-texto: #f4f4f5;
+  --k-texto-2: #a1a1aa;   /* rotulo: 8,4:1 sobre o deck */
+  --k-texto-3: #71717a;   /* secundario */
+  --k-texto-mudo: #52525b; /* dica — nunca em texto de leitura */
+
+  /* ---- bordas ---- */
+  --k-borda: #27272a;
+  --k-borda-2: #3f3f46;
+
+  /* ---- identidade: vermelho Arasaka ---- */
+  --k-acento: #dc2626;
+  --k-acento-2: #ef4444;          /* hover, e texto vermelho sobre o escuro */
+  --k-acento-fundo: #991b1b;      /* preenchimento sem destaque */
+  --k-acento-tenue: rgba(220, 38, 38, 0.1);
+  --k-acento-brilho: rgba(220, 38, 38, 0.35);
+  --k-sobre-acento: #ffffff;       /* 4,83:1 sobre #dc2626 */
+
+  /* ---- estados (fixos: informacao, nao decoracao) ---- */
+  --k-fala: #22c55e;              /* quem esta falando: anel */
+  --k-fala-brilho: rgba(34, 197, 94, 0.55);
+  --k-ok: #22c55e;
+  --k-aviso: #facc15;
+  --k-mencao: #facc15;
+  --k-mencao-tenue: rgba(250, 204, 21, 0.07);
+  --k-info: #22d3ee;
+  --k-perigo: #ef4444;            /* texto de erro */
+  --k-vivo: #dc2626;              /* selo AO VIVO, sempre solido */
+  --k-magenta: #e11d74;
+
+  /* ---- tipografia: tres vozes ---- */
+  /* LIDO = Inter; LOCALIZADO = mono; VISTO = Rajdhani. */
+  --k-fonte-texto: 'Inter', system-ui, -apple-system, sans-serif;
+  --k-fonte-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --k-fonte-display: 'Rajdhani', system-ui, sans-serif;
+  --k-tracking-rotulo: 0.2em;
+  --k-tracking-rotulo-largo: 0.28em;
+  --k-tracking-display: 0.04em;
+
+  /* ---- forma ---- */
+  --k-raio-chip: 2px;
+  --k-raio-max: 4px;
+  --k-chanfro: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  --k-chanfro-sm: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+
+  /* ---- luz: brilho no lugar de sombra ---- */
+  --k-brilho: 0 0 24px rgba(220, 38, 38, 0.25), 0 0 4px rgba(220, 38, 38, 0.5);
+  --k-brilho-forte: 0 0 48px rgba(220, 38, 38, 0.45), 0 0 8px rgba(239, 68, 68, 0.7);
+  --k-sombra-camada: 0 16px 32px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+  /* ---- movimento ---- */
+  --k-rapido: 80ms;
+  --k-agil: 120ms;
+  --k-medio: 200ms;
+  --k-lento: 500ms;
+  --k-saida: cubic-bezier(0.16, 1, 0.3, 1);
+  --k-padrao: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- medidas da casca ---- */
+  --k-altura-titulo: 32px;
+  --k-altura-estado: 22px;
+  --k-altura-cabecalho: 48px;
+  --k-largura-trilho: 72px;
+  --k-largura-nav: 256px;
+  --k-largura-painel: 300px;
+
+  /* ---- camadas ---- */
+  --k-z-palco-flutuante: 30;
+  --k-z-menu: 40;
+  --k-z-dialogo: 50;
+  --k-z-toast: 60;
+  --k-z-boot: 90;
+}
+
+/*
+  Tema claro, "Corporativo": a Arasaka de dia. Os acentos escurecem para
+  manter o contraste sobre o claro; o vermelho da marca continua o mesmo.
+*/
+:root[data-tema='claro'] {
+  color-scheme: light;
+
+  --k-void: #e4e4e7;
+  --k-deck: #f4f4f5;
+  --k-terminal: #fafafa;
+  --k-elevado: #ffffff;
+  --k-realce: rgba(0, 0, 0, 0.04);
+  --k-realce-forte: rgba(0, 0, 0, 0.07);
+
+  --k-texto: #09090b;
+  --k-texto-2: #3f3f46;
+  --k-texto-3: #52525b;
+  --k-texto-mudo: #71717a;
+
+  --k-borda: #d4d4d8;
+  --k-borda-2: #a1a1aa;
+
+  --k-acento-2: #b91c1c;
+  --k-acento-tenue: rgba(220, 38, 38, 0.08);
+  --k-acento-brilho: rgba(220, 38, 38, 0.2);
+
+  --k-fala: #16a34a;
+  --k-fala-brilho: rgba(22, 163, 74, 0.4);
+  --k-ok: #15803d;
+  --k-aviso: #a16207;
+  --k-mencao: #ca8a04;
+  --k-mencao-tenue: rgba(202, 138, 4, 0.08);
+  --k-info: #0e7490;
+  --k-perigo: #b91c1c;
+
+  --k-brilho: 0 0 0 1px rgba(220, 38, 38, 0.35);
+  --k-brilho-forte: 0 0 0 2px rgba(220, 38, 38, 0.5);
+  --k-sombra-camada: 0 12px 28px rgba(0, 0, 0, 0.12), inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}

@@ -1,11 +1,4 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { App } from './App.js';
 import { installBridge } from './lib/bridge.js';
-import { aplicarMovimento } from './lib/movimento.js';
-import { aplicarDensidade } from './lib/leitura.js';
-import './styles/global.css';
-import './styles/componentes.css';
 import type { KiroshiApi } from '../electron/preload.js';
 
 declare global {
@@ -16,16 +9,24 @@ declare global {
 
 // Precisa vir antes do primeiro render: componentes chamam window.kiroshi no efeito.
 installBridge();
-aplicarMovimento.instalar();
-// Tambem antes do primeiro render: a densidade muda a altura de cada mensagem,
-// e aplicar depois faria a conversa inteira saltar assim que a tela aparece.
-aplicarDensidade.instalar();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('elemento #root nao encontrado');
 
-createRoot(container).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+/*
+  Duas interfaces convivem ate a nova cobrir o uso diario
+  (docs/conhecimento/10-front-end-novo.md, secao 7).
+
+  O instalador de todo mundo carrega a atual. O Kiroshi Beta, compilado com
+  VITE_INTERFACE=nova, carrega a nova. Em desenvolvimento, `?nova` no endereco
+  tambem abre a nova. A condicao vira constante na compilacao, entao o ramo
+  que nao vale some do pacote.
+*/
+const interfaceNova =
+  __INTERFACE_NOVA__ || (import.meta.env.DEV && new URLSearchParams(location.search).has('nova'));
+
+if (interfaceNova) {
+  void import('./app/iniciar.js').then((m) => m.iniciar(container));
+} else {
+  void import('./legado.js').then((m) => m.iniciar(container));
+}

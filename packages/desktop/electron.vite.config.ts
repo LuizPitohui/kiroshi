@@ -36,7 +36,11 @@ export default defineConfig({
         '@kiroshi/shared': resolve(__dirname, '../shared/src/index.ts'),
       },
     },
-    define: { __VERSAO__: JSON.stringify(version) },
+    define: {
+      __VERSAO__: JSON.stringify(version),
+      // Ver src/vite-env.d.ts: qual das duas interfaces entra neste build.
+      __INTERFACE_NOVA__: JSON.stringify(process.env.VITE_INTERFACE === 'nova'),
+    },
     plugins: [react()],
     build: {
       rollupOptions: { input: { index: resolve(__dirname, 'src/index.html') } },
