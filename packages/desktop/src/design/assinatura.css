@@ -14,106 +14,195 @@
   so perde o pulso.
 */
 
-/* ---- colchetes de canto: foco e item ativo ---- */
-.k-colchetes {
-  position: relative;
-}
-.k-colchetes::before,
-.k-colchetes::after {
-  content: '';
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--k-acento);
-  pointer-events: none;
-  filter: drop-shadow(0 0 4px var(--k-acento-brilho));
-}
-.k-colchetes::before {
-  top: -6px;
-  left: -6px;
-  border-right: 0;
-  border-bottom: 0;
-}
-.k-colchetes::after {
-  bottom: -6px;
-  right: -6px;
-  border-left: 0;
-  border-top: 0;
-}
-/* Os outros dois cantos, quando o elemento pede os quatro. */
-.k-colchetes > .k-colchetes-extra::before,
-.k-colchetes > .k-colchetes-extra::after {
-  content: '';
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--k-acento);
-  pointer-events: none;
-}
-.k-colchetes > .k-colchetes-extra::before {
-  top: -6px;
-  right: -6px;
-  border-left: 0;
-  border-bottom: 0;
-}
-.k-colchetes > .k-colchetes-extra::after {
-  bottom: -6px;
-  left: -6px;
-  border-right: 0;
-  border-top: 0;
+/*
+  Tudo aqui mora na camada `components`: os utilitarios do Tailwind (camada
+  `utilities`) sempre vencem. Fora de camada, `.k-colchetes { position: relative }`
+  anulava o `fixed` do dialogo, que ia parar no fim da pagina.
+*/
+@layer components {
+  /* ---- colchetes de canto: foco e item ativo ---- */
+  .k-colchetes {
+    position: relative;
+  }
+  .k-colchetes::before,
+  .k-colchetes::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--k-acento);
+    pointer-events: none;
+    filter: drop-shadow(0 0 4px var(--k-acento-brilho));
+  }
+  .k-colchetes::before {
+    top: -6px;
+    left: -6px;
+    border-right: 0;
+    border-bottom: 0;
+  }
+  .k-colchetes::after {
+    bottom: -6px;
+    right: -6px;
+    border-left: 0;
+    border-top: 0;
+  }
+  /* Os outros dois cantos, quando o elemento pede os quatro. */
+  .k-colchetes > .k-colchetes-extra::before,
+  .k-colchetes > .k-colchetes-extra::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--k-acento);
+    pointer-events: none;
+  }
+  .k-colchetes > .k-colchetes-extra::before {
+    top: -6px;
+    right: -6px;
+    border-left: 0;
+    border-bottom: 0;
+  }
+  .k-colchetes > .k-colchetes-extra::after {
+    bottom: -6px;
+    left: -6px;
+    border-right: 0;
+    border-top: 0;
+  }
+
+  /* ---- chanfro: botao principal, icone de servidor, quadros do palco ---- */
+  .k-chanfro {
+    clip-path: var(--k-chanfro);
+  }
+  .k-chanfro-sm {
+    clip-path: var(--k-chanfro-sm);
+  }
+
+  /* ---- rotulo de secao: // TEXTO ---- */
+  .k-rotulo {
+    font-family: var(--k-fonte-mono);
+    font-size: 10px;
+    letter-spacing: var(--k-tracking-rotulo-largo);
+    text-transform: uppercase;
+    color: var(--k-texto-mudo);
+  }
+  .k-rotulo::before {
+    content: '// ';
+  }
+
+  /* ---- grade de fundo (entrada, estados vazios) ---- */
+  .k-grade {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  :root[data-tema='claro'] .k-grade {
+    background-image:
+      linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  }
+
+  /* ---- linhas de varredura (boot, chamada recebida) ---- */
+  .k-varredura {
+    position: relative;
+  }
+  .k-varredura::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px);
+  }
+
+  /* ---- as animacoes, sempre atras da regra de movimento ---- */
+
+  @media (prefers-reduced-motion: no-preference) {
+    :root:not([data-mov='reduzido']) .k-anima.k-pulso {
+      animation: k-pulso 1.8s ease-in-out infinite;
+    }
+    :root:not([data-mov='reduzido']) .k-anima.k-onda {
+      animation: k-onda 1.6s var(--k-saida) infinite;
+    }
+    :root:not([data-mov='reduzido']) .k-anima.k-glitch {
+      animation: k-glitch 6s infinite;
+    }
+    :root:not([data-mov='reduzido']) .k-anima.k-esqueleto {
+      animation: k-esqueleto 1.4s linear infinite;
+    }
+    :root:not([data-mov='reduzido']) .k-anima.k-cursor {
+      animation: k-cursor 1s steps(1) infinite;
+    }
+  }
+  :root[data-mov='completo'] .k-anima.k-pulso {
+    animation: k-pulso 1.8s ease-in-out infinite;
+  }
+  :root[data-mov='completo'] .k-anima.k-onda {
+    animation: k-onda 1.6s var(--k-saida) infinite;
+  }
+  :root[data-mov='completo'] .k-anima.k-glitch {
+    animation: k-glitch 6s infinite;
+  }
+  :root[data-mov='completo'] .k-anima.k-esqueleto {
+    animation: k-esqueleto 1.4s linear infinite;
+  }
+  :root[data-mov='completo'] .k-anima.k-cursor {
+    animation: k-cursor 1s steps(1) infinite;
+  }
+
+  /* ---- esqueleto de carregamento ---- */
+  .k-esqueleto {
+    background: linear-gradient(90deg, var(--k-terminal) 0, var(--k-elevado) 50%, var(--k-terminal) 100%);
+    background-size: 400px 100%;
+  }
+
+  /* ---- selo AO VIVO: o ponto pulsa; parado, continua vermelho e legivel ---- */
+  .k-vivo {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 6px 1px 5px;
+    background: var(--k-vivo);
+    color: #ffffff;
+    font-family: var(--k-fonte-mono);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .k-vivo::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ffffff;
+  }
+
+  /* ---- barra de rolagem fina, sem arredondar ---- */
+  .k-rolagem {
+    scrollbar-width: thin;
+    scrollbar-color: var(--k-borda-2) transparent;
+  }
+  .k-rolagem::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .k-rolagem::-webkit-scrollbar-thumb {
+    background: var(--k-borda-2);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .k-rolagem::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
-/* ---- chanfro: botao principal, icone de servidor, quadros do palco ---- */
-.k-chanfro {
-  clip-path: var(--k-chanfro);
-}
-.k-chanfro-sm {
-  clip-path: var(--k-chanfro-sm);
-}
-
-/* ---- rotulo de secao: // TEXTO ---- */
-.k-rotulo {
-  font-family: var(--k-fonte-mono);
-  font-size: 10px;
-  letter-spacing: var(--k-tracking-rotulo-largo);
-  text-transform: uppercase;
-  color: var(--k-texto-mudo);
-}
-.k-rotulo::before {
-  content: '// ';
-}
-
-/* ---- grade de fundo (entrada, estados vazios) ---- */
-.k-grade {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-:root[data-tema='claro'] .k-grade {
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
-}
-
-/* ---- linhas de varredura (boot, chamada recebida) ---- */
-.k-varredura {
-  position: relative;
-}
-.k-varredura::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px);
-}
-
-/* ---- as animacoes, sempre atras da regra de movimento ---- */
 @keyframes k-pulso {
   50% {
     opacity: 0.35;
   }
 }
+
 @keyframes k-onda {
   from {
     transform: scale(0.9);
@@ -124,6 +213,7 @@
     opacity: 0;
   }
 }
+
 @keyframes k-glitch {
   0%,
   85%,
@@ -143,6 +233,7 @@
     transform: none;
   }
 }
+
 @keyframes k-esqueleto {
   from {
     background-position: -200px 0;
@@ -151,88 +242,9 @@
     background-position: 200px 0;
   }
 }
+
 @keyframes k-cursor {
   50% {
     opacity: 0;
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  :root:not([data-mov='reduzido']) .k-anima.k-pulso {
-    animation: k-pulso 1.8s ease-in-out infinite;
-  }
-  :root:not([data-mov='reduzido']) .k-anima.k-onda {
-    animation: k-onda 1.6s var(--k-saida) infinite;
-  }
-  :root:not([data-mov='reduzido']) .k-anima.k-glitch {
-    animation: k-glitch 6s infinite;
-  }
-  :root:not([data-mov='reduzido']) .k-anima.k-esqueleto {
-    animation: k-esqueleto 1.4s linear infinite;
-  }
-  :root:not([data-mov='reduzido']) .k-anima.k-cursor {
-    animation: k-cursor 1s steps(1) infinite;
-  }
-}
-:root[data-mov='completo'] .k-anima.k-pulso {
-  animation: k-pulso 1.8s ease-in-out infinite;
-}
-:root[data-mov='completo'] .k-anima.k-onda {
-  animation: k-onda 1.6s var(--k-saida) infinite;
-}
-:root[data-mov='completo'] .k-anima.k-glitch {
-  animation: k-glitch 6s infinite;
-}
-:root[data-mov='completo'] .k-anima.k-esqueleto {
-  animation: k-esqueleto 1.4s linear infinite;
-}
-:root[data-mov='completo'] .k-anima.k-cursor {
-  animation: k-cursor 1s steps(1) infinite;
-}
-
-/* ---- esqueleto de carregamento ---- */
-.k-esqueleto {
-  background: linear-gradient(90deg, var(--k-terminal) 0, var(--k-elevado) 50%, var(--k-terminal) 100%);
-  background-size: 400px 100%;
-}
-
-/* ---- selo AO VIVO: o ponto pulsa; parado, continua vermelho e legivel ---- */
-.k-vivo {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 1px 6px 1px 5px;
-  background: var(--k-vivo);
-  color: #ffffff;
-  font-family: var(--k-fonte-mono);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.k-vivo::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #ffffff;
-}
-
-/* ---- barra de rolagem fina, sem arredondar ---- */
-.k-rolagem {
-  scrollbar-width: thin;
-  scrollbar-color: var(--k-borda-2) transparent;
-}
-.k-rolagem::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.k-rolagem::-webkit-scrollbar-thumb {
-  background: var(--k-borda-2);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.k-rolagem::-webkit-scrollbar-track {
-  background: transparent;
 }

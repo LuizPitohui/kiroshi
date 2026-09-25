@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 /**
  * Configuracao para abrir a interface em um navegador comum.
@@ -28,7 +29,7 @@ export default defineConfig({
     // No navegador, `?nova` na URL tambem abre a interface nova (so em dev).
     __INTERFACE_NOVA__: JSON.stringify(process.env.VITE_INTERFACE === 'nova'),
   },
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5273,
     strictPort: true,

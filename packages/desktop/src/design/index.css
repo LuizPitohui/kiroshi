@@ -1,0 +1,151 @@
+/*
+  Folha da interface nova. Uma entrada so, na ordem certa:
+
+    Tailwind (reset + utilitarios)  ->  fontes  ->  tokens  ->  assinatura
+
+  `source(none)` + `@source`: o Tailwind so procura classes nas pastas da
+  interface nova. Sem isso ele varreria tambem os componentes 1.x e geraria
+  utilitarios para nomes como `hidden` e `grid` que la sao classes proprias.
+*/
+@import 'tailwindcss' source(none);
+@source '../app';
+@source '../design';
+@source '../features';
+
+@import './fontes.css';
+@import './tokens.css';
+@import './assinatura.css';
+
+/*
+  Os tokens viram utilitarios POR REFERENCIA (`inline`): `bg-deck` gera
+  `background: var(--k-deck)`, entao o tema claro troca so as variaveis e tudo
+  acompanha, sem recompilar.
+
+  A paleta padrao do Tailwind sai inteira (`--color-*: initial`): so existem as
+  cores do sistema. Um `bg-blue-500` perdido nao compila em nada.
+*/
+@theme inline {
+  --color-*: initial;
+  --color-transparente: transparent;
+  --color-branco: #ffffff;
+  --color-preto: #000000;
+
+  --color-void: var(--k-void);
+  --color-deck: var(--k-deck);
+  --color-terminal: var(--k-terminal);
+  --color-elevado: var(--k-elevado);
+  --color-realce: var(--k-realce);
+  --color-realce-forte: var(--k-realce-forte);
+
+  --color-texto: var(--k-texto);
+  --color-texto-2: var(--k-texto-2);
+  --color-texto-3: var(--k-texto-3);
+  --color-mudo: var(--k-texto-mudo);
+
+  --color-borda: var(--k-borda);
+  --color-borda-2: var(--k-borda-2);
+
+  --color-acento: var(--k-acento);
+  --color-acento-2: var(--k-acento-2);
+  --color-acento-fundo: var(--k-acento-fundo);
+  --color-acento-tenue: var(--k-acento-tenue);
+  --color-sobre-acento: var(--k-sobre-acento);
+
+  --color-fala: var(--k-fala);
+  --color-ok: var(--k-ok);
+  --color-aviso: var(--k-aviso);
+  --color-mencao: var(--k-mencao);
+  --color-mencao-tenue: var(--k-mencao-tenue);
+  --color-info: var(--k-info);
+  --color-perigo: var(--k-perigo);
+  --color-vivo: var(--k-vivo);
+
+  --font-*: initial;
+  --font-texto: var(--k-fonte-texto);
+  --font-mono: var(--k-fonte-mono);
+  --font-display: var(--k-fonte-display);
+
+  /* Escala em px com nome numerico: `text-13` e 13 px, sem adivinhar o que e "sm". */
+  --text-*: initial;
+  --text-9: 9px;
+  --text-10: 10px;
+  --text-11: 11px;
+  --text-12: 12px;
+  --text-13: 13px;
+  --text-14: 14px;
+  --text-15: 15px;
+  --text-16: 16px;
+  --text-20: 20px;
+  --text-28: 28px;
+  --text-36: 36px;
+  --text-48: 48px;
+
+  --radius-*: initial;
+  --radius-chip: var(--k-raio-chip);
+  --radius-max: var(--k-raio-max);
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-brilho: var(--k-brilho);
+  --shadow-brilho-forte: var(--k-brilho-forte);
+  --shadow-camada: var(--k-sombra-camada);
+
+  --ease-saida: var(--k-saida);
+  --ease-padrao: var(--k-padrao);
+
+  --tracking-rotulo: var(--k-tracking-rotulo);
+  --tracking-rotulo-largo: var(--k-tracking-rotulo-largo);
+  --tracking-display: var(--k-tracking-display);
+}
+
+/*
+  `animado:` — a mesma regra de movimento da assinatura, como variante:
+  anima se o Windows permitir (sem data-mov), sempre com "completo", nunca com
+  "reduzido". Ex.: `animado:transition-colors`.
+*/
+@custom-variant animado {
+  @media (prefers-reduced-motion: no-preference) {
+    &:where(html:not([data-mov='reduzido']) *) {
+      @slot;
+    }
+  }
+  &:where(html[data-mov='completo'] *) {
+    @slot;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--k-void);
+    color: var(--k-texto);
+    font-family: var(--k-fonte-texto);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  ::selection {
+    background: var(--k-acento-tenue);
+    color: var(--k-texto);
+  }
+  /* Foco sempre visivel, nunca o do navegador: 2 px no acento, afastado 2 px. */
+  :focus-visible {
+    outline: 2px solid var(--k-acento);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}

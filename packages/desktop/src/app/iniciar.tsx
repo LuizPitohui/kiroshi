@@ -1,5 +1,5 @@
 /**
- * Entrada da interface nova (fatia 1 em construcao).
+ * Entrada da interface nova.
  *
  * Tema, movimento e densidade sao aplicados ANTES do primeiro render: aplicar
  * num efeito faria a janela piscar no tema errado ou a conversa saltar.
@@ -9,28 +9,8 @@ import { createRoot } from 'react-dom/client';
 import { aplicarMovimento } from '../lib/movimento.js';
 import { aplicarDensidade } from '../lib/leitura.js';
 import { aplicarTema } from './tema.js';
-import '../design/tokens.css';
-import '../design/assinatura.css';
-
-function EmConstrucao(): React.JSX.Element {
-  return (
-    <main
-      className="k-grade"
-      style={{
-        height: '100vh',
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--k-void)',
-        color: 'var(--k-texto)',
-        fontFamily: 'var(--k-fonte-mono)',
-      }}
-    >
-      <p>
-        <span className="k-rotulo">Kiroshi</span> interface nova em construcao
-      </p>
-    </main>
-  );
-}
+import { Raiz } from './Raiz.js';
+import '../design/index.css';
 
 export function iniciar(container: HTMLElement): void {
   aplicarTema.instalar();
@@ -39,7 +19,7 @@ export function iniciar(container: HTMLElement): void {
 
   createRoot(container).render(
     <React.StrictMode>
-      <EmConstrucao />
+      <Raiz />
     </React.StrictMode>,
   );
 }

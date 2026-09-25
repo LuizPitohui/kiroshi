@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 // A versao vem de um lugar so. Escrita a mao no codigo, ela desencontra do
 // instalador na primeira vez que alguem esquece de atualizar as duas — e ai os
@@ -41,7 +42,7 @@ export default defineConfig({
       // Ver src/vite-env.d.ts: qual das duas interfaces entra neste build.
       __INTERFACE_NOVA__: JSON.stringify(process.env.VITE_INTERFACE === 'nova'),
     },
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     build: {
       rollupOptions: { input: { index: resolve(__dirname, 'src/index.html') } },
       /*

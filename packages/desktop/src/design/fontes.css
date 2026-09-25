@@ -1,0 +1,16 @@
+/*
+  As tres vozes, empacotadas com o app (nada de CDN: o app roda sem depender
+  de servidor de terceiros). Os arquivos sao os mesmos da interface 1.x.
+
+  `font-display: swap`: texto aparece na fonte do sistema enquanto a nossa
+  carrega, em vez de ficar invisivel — o prototipo mostrou texto sumindo em
+  captura feita durante o carregamento.
+*/
+@font-face { font-family: 'Inter'; font-weight: 400; font-display: swap; src: url('../styles/fontes/inter-400.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-weight: 500; font-display: swap; src: url('../styles/fontes/inter-500.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-weight: 600; font-display: swap; src: url('../styles/fontes/inter-600.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-weight: 700; font-display: swap; src: url('../styles/fontes/inter-700.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-weight: 400; font-display: swap; src: url('../styles/fontes/jetbrains-400.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-weight: 500; font-display: swap; src: url('../styles/fontes/jetbrains-500.woff2') format('woff2'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 600; font-display: swap; src: url('../styles/fontes/rajdhani-600.woff2') format('woff2'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 700; font-display: swap; src: url('../styles/fontes/rajdhani-700.woff2') format('woff2'); }
