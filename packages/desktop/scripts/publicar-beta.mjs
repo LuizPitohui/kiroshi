@@ -19,16 +19,19 @@ const SAIDA = 'release-beta';
 
 const ssh = (comando) => execSync(`ssh -o BatchMode=yes -o ConnectTimeout=15 ${HOST} "${comando}"`).toString().trim();
 
-const versaoDe = (nome) => /Kiroshi-Beta-Setup-(d+).(d+).(d+).exe$/.exec(nome)?.slice(1).map(Number);
-const instaladores = readdirSync(SAIDA)
+const versaoDe = (nome) => /^Kiroshi-Beta-Setup-(\d+)\.(\d+)\.(\d+)\.exe$/.exec(nome)?.slice(1).map(Number);
+
+/** Mais nova primeiro. */
+function porVersao(a, b) {
+  const va = versaoDe(a);
+  const vb = versaoDe(b);
+  for (let i = 0; i < 3; i++) if (va[i] !== vb[i]) return vb[i] - va[i];
+  return 0;
+}
+
+const exe = readdirSync(SAIDA)
   .filter((n) => versaoDe(n))
-  .sort((a, b) => {
-    const va = versaoDe(a);
-    const vb = versaoDe(b);
-    for (let i = 0; i < 3; i++) if (va[i] !== vb[i]) return vb[i] - va[i];
-    return 0;
-  });
-const exe = instaladores[0];
+  .sort(porVersao)[0];
 if (!exe) throw new Error('Nenhum instalador do Beta em release-beta/. Rode npm run dist:beta antes.');
 const versao = versaoDe(exe).join('.');
 
@@ -45,7 +48,7 @@ execSync(`scp -q "${join(SAIDA, exe)}" "${join(SAIDA, exe)}.blockmap" ${HOST}:${
 execSync(`scp -q "${join(SAIDA, 'latest.yml')}" ${HOST}:${PASTA}/latest.yml`, { stdio: 'inherit' });
 
 // 1 e 2: o mesmo arquivo nos dois lados.
-const remoto = ssh(`sha512sum ~/${PASTA}/${exe}`).split(/s+/)[0];
+const remoto = ssh(`sha512sum ~/${PASTA}/${exe}`).split(/\s+/)[0];
 if (remoto !== sha512) throw new Error('O instalador no servidor nao bate com o daqui.');
 // 3: o latest.yml que ficou la.
 if (!ssh(`cat ~/${PASTA}/latest.yml`).includes(`version: ${versao}`)) throw new Error('latest.yml no servidor nao e o novo.');
@@ -59,16 +62,8 @@ if (!cabeca.ok || Number(cabeca.headers.get('content-length')) !== statSync(join
 }
 
 // Ficam as duas versoes mais novas (o blockmap da anterior serve ao diferencial).
-const noServidor = ssh(`ls ~/${PASTA}`).split(/s+/).filter((n) => versaoDe(n));
-const velhos = noServidor
-  .filter((n) => n !== exe)
-  .sort((a, b) => {
-    const va = versaoDe(a);
-    const vb = versaoDe(b);
-    for (let i = 0; i < 3; i++) if (va[i] !== vb[i]) return vb[i] - va[i];
-    return 0;
-  })
-  .slice(1);
+const noServidor = ssh(`ls ~/${PASTA}`).split(/\s+/).filter((n) => versaoDe(n));
+const velhos = noServidor.filter((n) => n !== exe).sort(porVersao).slice(1);
 for (const velho of velhos) ssh(`rm -f ~/${PASTA}/${velho} ~/${PASTA}/${velho}.blockmap`);
 
 console.log(`Kiroshi Beta ${versao} publicado em ${PUBLICO}${velhos.length ? ` (removidos: ${velhos.join(', ')})` : ''}`);
