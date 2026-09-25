@@ -28,3 +28,7 @@ coverage/
 # So o manifesto (origem + hash) vai para o git. Ver docs/SUPRESSAO-DE-RUIDO.md.
 packages/desktop/resources/modelos/**
 !packages/desktop/resources/modelos/manifesto.json
+
+# Notas operacionais com detalhe sensivel (enderecos, outros servicos do host,
+# falhas de seguranca ainda abertas). O repositorio e publico.
+docs/conhecimento/privado/
