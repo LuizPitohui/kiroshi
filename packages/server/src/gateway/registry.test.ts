@@ -80,3 +80,24 @@ describe('dispatchToSession', () => {
     expect(recebidos(b.socket)).toEqual(['USER_UPDATE']);
   });
 });
+
+describe('sessao que caiu e ainda pode ser retomada', () => {
+  it('continua recebendo no buffer, sem envio, e avanca o seq', () => {
+    // Pular a sessao sem socket aberto era o que fazia o RESUME perder tudo
+    // o que acontecia durante a queda.
+    const caida = sessao('s6', 'u4');
+    caida.socket.readyState = 3;
+    caida.sessao.socketFechou(caida.sessao.socket);
+
+    expect(dispatchToUser('u4', 'USER_UPDATE', {} as never)).toBe(1);
+    expect(caida.sessao.seq).toBe(1);
+    expect(recebidos(caida.socket)).toEqual([]);
+  });
+
+  it('sessao encerrada, fora do registro, nao recebe mais nada', () => {
+    const encerrada = sessao('s7', 'u5');
+    sessions.remove(encerrada.sessao);
+    expect(dispatchToUser('u5', 'USER_UPDATE', {} as never)).toBe(0);
+    expect(encerrada.sessao.seq).toBe(0);
+  });
+});

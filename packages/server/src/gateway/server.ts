@@ -277,6 +277,10 @@ async function handleMessage(
   // nem pelo que chegar antes de o socket terminar de fechar.
   if (state.session && sessions.get(state.session.id) !== state.session) return;
 
+  // Socket antigo de uma sessao que uma retomada levou para outro socket: o
+  // que ainda chegar por aqui nao fala mais por ela.
+  if (state.session && state.session.socket !== socket) return;
+
   switch (envelope.op) {
     case GatewayOpcode.HEARTBEAT: {
       if (state.session) state.session.lastHeartbeat = Date.now();
@@ -598,7 +602,9 @@ function handleClose(state: PendingConnection): void {
   const session = state.session;
   if (!session) return;
 
-  session.markDisconnected();
+  // Se uma retomada ja levou a sessao para outro socket, o fechamento deste
+  // nao e queda dela — ver `socketFechou`.
+  session.socketFechou(state.socket);
   logger.debug({ sessionId: session.id, userId: session.userId }, 'socket caiu');
 
   // Nao anunciamos offline na hora: a sessao pode voltar em segundos. Quem

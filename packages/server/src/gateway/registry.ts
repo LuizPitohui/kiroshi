@@ -194,7 +194,14 @@ export function allPresences(): Presence[] {
 
 /**
  * Entrega um evento a todas as sessoes de um usuario neste processo.
- * Devolve quantas receberam, para o chamador saber se precisa do barramento.
+ *
+ * "Todas" inclui a sessao cujo socket caiu e que ainda pode ser retomada:
+ * todo despacho abaixo passa por `session.dispatch`, que guarda o evento no
+ * buffer e so envia se o socket estiver aberto. O registro so tem sessao
+ * aberta ou dentro da janela de retomada; a que expira ou e encerrada sai dele.
+ * Pular a sessao caida aqui era o que fazia o RESUME perder o intervalo todo.
+ *
+ * Devolve quantas sessoes registraram o evento.
  */
 export function dispatchToUser<E extends GatewayEventName>(
   userId: string,
@@ -203,7 +210,6 @@ export function dispatchToUser<E extends GatewayEventName>(
 ): number {
   let delivered = 0;
   for (const session of sessions.sessionsOfUser(userId)) {
-    if (!session.isOpen) continue;
     try {
       session.dispatch(name, payload);
       delivered += 1;
@@ -229,7 +235,7 @@ export function dispatchToSession<E extends GatewayEventName>(
   const session = sessions.get(sessionId);
   // A conferencia do dono evita entregar a sessao de outra conta por um id
   // trocado.
-  if (!session || session.userId !== userId || !session.isOpen) return 0;
+  if (!session || session.userId !== userId) return 0;
   try {
     session.dispatch(name, payload);
     return 1;
@@ -247,7 +253,6 @@ export function dispatchToGuild<E extends GatewayEventName>(
 ): number {
   let delivered = 0;
   for (const session of sessions.sessionsOfGuild(guildId)) {
-    if (!session.isOpen) continue;
     if (options.exceptUserId && session.userId === options.exceptUserId) continue;
     if (options.onlyUserIds && !options.onlyUserIds.has(session.userId)) continue;
     try {
@@ -268,7 +273,6 @@ export function dispatchToChannel<E extends GatewayEventName>(
 ): number {
   let delivered = 0;
   for (const session of sessions.sessionsOfChannel(channelId)) {
-    if (!session.isOpen) continue;
     if (options.exceptUserId && session.userId === options.exceptUserId) continue;
     try {
       session.dispatch(name, payload);
