@@ -1,0 +1,3 @@
+# Scripts de shell rodam no bash (Git Bash e o servidor Linux): CRLF quebraria
+# a primeira linha e cada comando com ": command not found".
+*.sh text eol=lf
