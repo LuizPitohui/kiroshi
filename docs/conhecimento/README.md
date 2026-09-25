@@ -29,21 +29,21 @@ abertas.
 
 | Area | Estado |
 |---|---|
-| Versao publicada | 1.15.0 (2026-09-23) |
+| Versao publicada | **2.0.0** (2026-09-25): a interface nova para todos, pela atualizacao automatica. Beta 1.16.x segue como canal de teste |
 | Testes | 741 unitarios passando (shared 79, servidor 153, desktop 509); e2e 136/136; typecheck limpo |
-| Conversa (texto) | 1.x: funciona, sem autocompletar e com acoes so no hover. Beta: autocompletar, acoes por teclado, densidade real |
-| Voz | funciona; ajustes de audio em boa parte sem efeito; PTT global quebrado. Beta: silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada |
-| Transmissao de tela | 1.x: **trava** — espectador recebe 360p15 ao lado do chat, sem metricas. Beta: nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Rede de quem usa relay: a medir |
-| Supressao de ruido | DFN3 roda, soa mal; vai ser refeita |
-| Chamada em DM | Beta: ligar e atender com toque, recusar, registro na conversa, desliga quem fica 3 min sozinho |
-| Cargos | 1.x: criar e editar (agora qualquer um com Gerenciar cargos cria). Beta: ajustes do servidor completos, dar cargo pelo perfil, pelo clique direito e nos ajustes; permissoes por canal em tres estados; 3 bits sem efeito ficam fora da tela |
-| Convites | link `order.arasaka.fun/convite/<codigo>` com pagina no navegador; Beta: `kiroshi://`, janela com validade e usos, envio pela DM, lista e revogacao |
-| Notificacoes | 1.x: so DM e mencoes, sem ajustes. Beta: nivel por servidor e canal, silenciar por tempo, Nao perturbe, clique abre a conversa, contador no icone |
-| Iniciar com o Windows | 1.x: quebrado. Beta: consertado, abre escondido na bandeja |
-| Atualizacao automatica | funciona, mas baixa 93 MiB inteiros por versao |
+| Conversa (texto) | autocompletar de mencao, canal e emoji; acoes por teclado; densidade confortavel e compacta |
+| Voz | silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada (5 s no maximo); atalhos globais de verdade (falar segurando, mutar, ensurdecer) |
+| Transmissao de tela | nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Telemetria enviada ao servidor e rede de quem usa relay: a fazer (F2) |
+| Supressao de ruido | DFN3 roda, soa mal; vai ser refeita (F3, o proximo) |
+| Chamada em DM | ligar e atender com toque, recusar, registro na conversa, desliga quem fica 3 min sozinho |
+| Cargos | ajustes do servidor completos; dar cargo pelo perfil, pelo clique direito e nos ajustes; permissoes por canal em tres estados; 3 bits sem efeito ficam fora da tela |
+| Convites | link `order.arasaka.fun/convite/<codigo>` com pagina no navegador, `kiroshi://` (registrado pelo instalador do Kiroshi), janela com validade e usos, envio pela DM, lista e revogacao |
+| Notificacoes | nivel por servidor e canal, silenciar por tempo, Nao perturbe, clique abre a conversa, contador no icone |
+| Iniciar com o Windows | consertado, liga na primeira abertura da 2.0.0 e abre escondido na bandeja |
+| Atualizacao automatica | funciona, mas baixa 93 MiB inteiros por versao (F11) |
 | Cadastro | aberto (decisao do dono, 2026-09-25): email e senha ou Google, sem convite; com o link de convite a conta ja nasce no servidor. Recuperacao so pelo Google vinculado. Protecoes: teto por IP e global, nomes reservados, teto de pedidos de amizade, DM so com vinculo |
 | Seguranca | servidor: 13 falhas corrigidas e publicadas (API `6f493df`); abertas: casca Electron e host (ver `privado/`) |
-| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca), 2 (conversa), 3 (chamada e palco), 4 (inicio, amigos e DM), 5 (ajustes do usuario), 6 (ajustes do servidor, cargos, convites por link) e 7 (entrada e conta) no Kiroshi Beta — as sete do desenho |
+| Front-end novo | as sete fatias do desenho prontas e publicadas para todos na 2.0.0; a 1.x fica no codigo como reserva de emergencia por algumas semanas |
 
 ## Como manter
 

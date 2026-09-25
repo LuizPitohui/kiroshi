@@ -1,4 +1,5 @@
-# Kiroshi Beta: a interface nova, instalada AO LADO do Kiroshi normal.
+# Kiroshi Beta: o canal de teste, instalado AO LADO do Kiroshi normal. Desde a
+# 2.0.0 a interface e a mesma do normal; o Beta recebe cada mudanca antes.
 #
 # Outro app para o Windows — outro appId, outro nome, outra pasta de dados
 # (%APPDATA%\Kiroshi Beta) e outra trava de instancia unica —, entao os dois
@@ -10,8 +11,7 @@
 #
 #   npm run dist:beta -w @kiroshi/desktop
 #
-# O build tem que sair com VITE_INTERFACE=nova (o script ja faz), senao o Beta
-# carregaria a interface antiga.
+# O script poe KIROSHI_CANAL=beta (a identidade de Beta) e a versao 1.16.<commits>.
 
 appId: fun.arasaka.kiroshi.beta
 productName: Kiroshi Beta
@@ -58,8 +58,9 @@ nsis:
   uninstallerIcon: build/icon.ico
   artifactName: Kiroshi-Beta-Setup-${version}.${ext}
   language: '1046'
-  # O protocolo kiroshi:// dos convites: o instalador registra, o desinstalador tira.
-  include: instalador/protocolo-kiroshi.nsh
+  # Sem o protocolo kiroshi:// desde a 2.0.0: quem abre os links de convite e o
+  # Kiroshi normal (electron-builder.yml). Se o Beta tambem registrasse, cada
+  # atualizacao dele tomaria os links do normal.
 # Canal proprio: o Beta nunca pega a atualizacao do normal, nem o contrario.
 publish:
   provider: generic

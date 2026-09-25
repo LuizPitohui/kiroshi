@@ -138,9 +138,42 @@ uma versao (foi lido como "1.32").
 MB cada). O `Kiroshi-Setup-1.14.0.exe` em `release/` nao e o publicado (a mesma
 versao foi reconstruida com conteudo diferente).
 
+## A interface nova no Kiroshi de todo mundo (2.0.0, 2026-09-25)
+
+O dono aprovou a troca depois das sete fatias no Beta. O Kiroshi normal
+(`fun.arasaka.kiroshi`, canal `/baixar`) saiu na **2.0.0 com a interface
+nova**; quem tem a 1.x recebe pela atualizacao automatica, como qualquer
+versao, e instala ao fechar o app (`autoInstallOnAppQuit`).
+
+- **Duas escolhas separadas no build** (`electron.vite.config.ts`): QUAL APP
+  (`KIROSHI_CANAL=beta` compila o Beta; sem nada, o normal — define o
+  `__APP_ID__`) e QUAL INTERFACE (a nova sempre; `VITE_INTERFACE=antiga` so
+  para uma versao de emergencia com a 1.x, enquanto o codigo dela existir; em
+  desenvolvimento, `?antiga` no endereco). Antes "interface nova" queria dizer
+  "Beta", e o normal nao tinha como sair com ela.
+- **Empacotar e publicar:** normal `npm run dist:win` (`scripts/dist.mjs`,
+  versao do package.json) e `npm run publicar`; Beta `npm run dist:beta` e
+  `npm run publicar:beta`. Um script so publica os dois
+  (`scripts/publicar.mjs normal|beta`), com as mesmas cinco conferencias; na
+  pasta do normal, a limpeza so toca nos instaladores do normal (a do Beta fica
+  dentro dela).
+- **A sessao atravessa a atualizacao:** mesma pasta de dados (`%APPDATA%\Kiroshi`,
+  do productName), mesma origem `file://` e as mesmas chaves (`kiroshi.session`,
+  `kiroshi.baseUrl`) nas duas interfaces. Testado abrindo a 1.15.0 e depois a
+  2.0.0 na mesma pasta. Atencao ao testar: fechar o app a forca (`taskkill /F`)
+  logo depois de gravar perde o que o Chromium ainda nao passou para o disco —
+  pareceu que a sessao sumia; fechando pelo "sair", ela fica.
+- **Iniciar com o Windows** liga na primeira abertura da 2.0.0 (decisao do
+  dono, F7). Build de teste com `--user-data-dir` nao liga: a entrada "Kiroshi"
+  do registro e a mesma do app instalado.
+- **Voltar atras** nao e pela atualizacao (o electron-updater nao desce de
+  versao): seria uma 2.0.1 compilada com `VITE_INTERFACE=antiga`. O servidor
+  guarda o instalador 1.15.0 ao lado do novo.
+
 ## Canal do Beta (2026-09-25)
 
-O Kiroshi Beta se atualiza sozinho pelo canal proprio, `/baixar/beta`
+Desde a 2.0.0 o Beta e o **canal de teste**: a mesma interface, recebendo cada
+mudanca antes de todo mundo. O Kiroshi Beta se atualiza sozinho pelo canal proprio, `/baixar/beta`
 (`packages/server/src/routes/download.ts`, pasta `downloads/beta` do servidor).
 Antes o canal nao existia e todo Beta saia como 1.15.0: nenhum instalado via
 versao nova.
@@ -149,10 +182,10 @@ versao nova.
   cresce sozinha a cada commit. Nao conflita com o normal: outro app, outro
   canal.
 - Publicar: `npm run dist:beta` e `npm run publicar:beta` (de
-  `packages/desktop`). O script sobe pela rede local, manda o `latest.yml` por
-  ultimo, confere em cinco lugares (hash local e no servidor, `latest.yml` no
-  servidor e servido, o instalador publico com o tamanho certo) e deixa so as
-  duas versoes mais novas.
+  `packages/desktop`; o script e o mesmo do normal, `scripts/publicar.mjs`). Ele
+  sobe pela rede local, manda o `latest.yml` por ultimo, confere em cinco
+  lugares (hash local e no servidor, `latest.yml` no servidor e servido, o
+  instalador publico com o tamanho certo) e deixa so as duas versoes mais novas.
 - `https://order.arasaka.fun/baixar/beta` entrega sempre o Beta mais novo, para
   quem vai instalar pela primeira vez.
 
@@ -179,11 +212,12 @@ interface pedir (`links.pendente()`), porque um evento na abertura chegaria
 antes de o React montar quem escuta. Testado com o Beta empacotado nos dois
 caminhos.
 
-So o Beta registra, por enquanto: o Kiroshi 1.x nao trata o protocolo. Quem tem
-o 1.x usa o codigo que a pagina mostra (o 1.x ja aceita o link inteiro colado
-em "Entrar em um servidor"). Quando a interface nova virar a normal, o mesmo
-include entra no `electron-builder.yml` — e ai quem instalar por ultimo fica
-com os links.
+Desde a 2.0.0 quem registra e o **Kiroshi normal** (o include esta no
+`electron-builder.yml`); o Beta deixou de registrar, para uma atualizacao dele
+nao tomar os links do normal. Quem ainda tem o Beta 1.16.47 ou anterior (que
+registrava) passa os links para o normal quando a 2.0.0 instala. Quem tem um
+app antigo sem o protocolo usa o codigo que a pagina mostra (o 1.x aceita o link
+inteiro colado em "Entrar em um servidor").
 
 ## Atualizacao, como e hoje
 

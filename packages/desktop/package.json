@@ -1,6 +1,6 @@
 {
   "name": "@kiroshi/desktop",
-  "version": "1.15.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Kiroshi — cliente desktop",
   "author": "Kiroshi",
@@ -10,13 +10,14 @@
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "preview": "electron-vite preview",
-    "dist:win": "node scripts/baixar-modelos.mjs --verificar && electron-vite build && electron-builder --win --publish never",
-    "dist:dir": "node scripts/baixar-modelos.mjs --verificar && electron-vite build && electron-builder --dir --publish never",
+    "dist:win": "node scripts/dist.mjs",
+    "dist:dir": "node scripts/dist.mjs --dir",
     "modelos": "node scripts/baixar-modelos.mjs",
     "test": "vitest run --passWithNoTests",
     "dist:beta": "node scripts/dist-beta.mjs",
     "dist:beta:dir": "node scripts/dist-beta.mjs --dir",
-    "publicar:beta": "node scripts/publicar-beta.mjs"
+    "publicar": "node scripts/publicar.mjs normal",
+    "publicar:beta": "node scripts/publicar.mjs beta"
   },
   "dependencies": {
     "@sapphi-red/web-noise-suppressor": "^0.4.1",

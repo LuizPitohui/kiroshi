@@ -477,6 +477,11 @@ minutos, entao a interface nova **nao substitui a atual pela metade**:
 As partes de servidor de cada fatia (chamada em DM, cargos, convites,
 notificacoes) andam junto com a interface.
 
+**Feito (2026-09-25):** as sete fatias entraram no Beta ao longo do dia, e o dono
+aprovou a troca: a interface nova saiu para todos na **2.0.0** do Kiroshi, pela
+atualizacao automatica. O Beta continua como canal de teste
+([07](07-desktop-e-entrega.md)).
+
 ---
 
 ## 8. Decisoes que tomei (vete o que nao quiser)

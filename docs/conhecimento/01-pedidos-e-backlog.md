@@ -227,9 +227,13 @@ aberto e recuperacao so pelo Google.
 - **2FA**: desliga com um codigo de recuperacao (quem perdeu o celular ficava
   preso com o 2FA ligado).
 
-Com isso as sete fatias do desenho estao no Beta. Proximo: decidir com o dono a
-troca do Beta para todo mundo (o plano da secao 7 do desenho) e seguir para o
-F3 (supressao de ruido do zero).
+Com isso as sete fatias do desenho estao no Beta.
+
+**A troca (2026-09-25, aprovada pelo dono):** a interface nova virou a do
+Kiroshi de todo mundo na **2.0.0**, pela atualizacao automatica
+([07](07-desktop-e-entrega.md)). O Beta segue como canal de teste. A 1.x fica
+no codigo como reserva de emergencia e sai depois de algumas semanas sem
+problema. Proximo: F3 (supressao de ruido do zero).
 
 ## F2 — Estabilidade das transmissoes
 

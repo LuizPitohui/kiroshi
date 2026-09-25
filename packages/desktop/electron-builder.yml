@@ -68,6 +68,10 @@ nsis:
   artifactName: Kiroshi-Setup-${version}.${ext}
   # O instalador fala portugues, como o resto do app.
   language: '1046'
+  # O protocolo kiroshi:// dos convites (docs/conhecimento/07): o instalador
+  # registra, o desinstalador tira. Desde a 2.0.0 e o Kiroshi normal que abre
+  # os links; o Beta deixou de registrar para nao roubar deles.
+  include: instalador/protocolo-kiroshi.nsh
 
 # De onde o aplicativo busca atualizacao.
 #

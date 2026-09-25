@@ -774,8 +774,14 @@ app.whenReady().then(() => {
     bandeja: marca-se uma vez, na primeira abertura, e a pessoa desliga se
     quiser. So no Kiroshi normal — o Beta abrindo sozinho ao lado dele seria
     dois apps na bandeja de quem testa.
+
+    Nem com a pasta de dados trocada (`--user-data-dir`): assim e o build de
+    teste, aberto de uma pasta qualquer, e a entrada "Kiroshi" do registro e
+    a mesma do Kiroshi instalado — o teste trocaria o que abre quando a pessoa
+    liga o computador. Instalacao de verdade nunca passa esse argumento.
   */
-  if (!isDev && !__APP_ID__.endsWith('.beta') && primeiraExecucao()) definirInicioComOWindows(true);
+  const buildDeTeste = app.commandLine.hasSwitch('user-data-dir');
+  if (!isDev && !buildDeTeste && !__APP_ID__.endsWith('.beta') && primeiraExecucao()) definirInicioComOWindows(true);
 
   void configurarAtalhos(lerPreferencias().atalhos, enviarAtalho);
 

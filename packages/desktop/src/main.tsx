@@ -14,16 +14,16 @@ const container = document.getElementById('root');
 if (!container) throw new Error('elemento #root nao encontrado');
 
 /*
-  Duas interfaces convivem ate a nova cobrir o uso diario
-  (docs/conhecimento/10-front-end-novo.md, secao 7).
+  A interface nova e a de todo mundo desde a 2.0.0
+  (docs/conhecimento/10-front-end-novo.md, secao 7): no Kiroshi e no Beta.
 
-  O instalador de todo mundo carrega a atual. O Kiroshi Beta, compilado com
-  VITE_INTERFACE=nova, carrega a nova. Em desenvolvimento, `?nova` no endereco
-  tambem abre a nova. A condicao vira constante na compilacao, entao o ramo
-  que nao vale some do pacote.
+  A 1.x continua no codigo como reserva — um build com VITE_INTERFACE=antiga
+  a carrega, para uma versao de emergencia; em desenvolvimento, `?antiga` no
+  endereco tambem. A condicao vira constante na compilacao, entao o ramo que
+  nao vale some do pacote.
 */
 const interfaceNova =
-  __INTERFACE_NOVA__ || (import.meta.env.DEV && new URLSearchParams(location.search).has('nova'));
+  __INTERFACE_NOVA__ && !(import.meta.env.DEV && new URLSearchParams(location.search).has('antiga'));
 
 if (interfaceNova) {
   void import('./app/iniciar.js').then((m) => m.iniciar(container));

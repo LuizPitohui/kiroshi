@@ -1,4 +1,6 @@
-// Empacota o Kiroshi Beta: a interface nova, como app separado.
+// Empacota o Kiroshi Beta: o canal de teste, como app separado (outra
+// identidade no Windows, outro canal de atualizacao). Desde a 2.0.0 a interface
+// e a mesma do normal: o Beta recebe cada mudanca antes de todo mundo.
 //
 //   npm run dist:beta      instalador em release-beta/
 //   npm run dist:beta:dir  so a pasta win-unpacked (mais rapido, para testar)
@@ -20,7 +22,9 @@ import { execSync } from 'node:child_process';
 const commits = execSync('git rev-list --count HEAD').toString().trim();
 const versao = `1.16.${commits}`;
 
-const env = { ...process.env, VITE_INTERFACE: 'nova', KIROSHI_VERSAO: versao };
+// KIROSHI_CANAL=beta: a identidade de Beta (appId, bandeja, notificacoes). A
+// interface e a nova, a mesma do Kiroshi normal desde a 2.0.0.
+const env = { ...process.env, VITE_INTERFACE: 'nova', KIROSHI_CANAL: 'beta', KIROSHI_VERSAO: versao };
 const rodar = (comando) => execSync(comando, { stdio: 'inherit', env });
 
 console.log(`Kiroshi Beta ${versao}`);

@@ -11,13 +11,28 @@ const pacote = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8
 // O Beta sai com versao propria (scripts/dist-beta.mjs); o normal, a do package.json.
 const version = process.env.KIROSHI_VERSAO ?? pacote.version;
 
+/*
+  Duas escolhas separadas (desde a 2.0.0, quando a interface nova virou a de
+  todo mundo):
+
+  - QUAL APP: `KIROSHI_CANAL=beta` compila o Kiroshi Beta (outra identidade no
+    Windows, outro canal de atualizacao); sem nada, o Kiroshi normal.
+  - QUAL INTERFACE: a nova, sempre; `VITE_INTERFACE=antiga` so para uma versao
+    de emergencia com a 1.x, enquanto o codigo dela ainda existir.
+
+  Antes as duas eram uma so ("interface nova" queria dizer "Beta"), e nao dava
+  para o Kiroshi normal sair com a interface nova.
+*/
+const canalBeta = process.env.KIROSHI_CANAL === 'beta';
+const interfaceNova = process.env.VITE_INTERFACE !== 'antiga';
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    // O Beta (interface nova) e outro app para o Windows: outra identidade nas
-    // notificacoes e na bandeja, para nao se misturar com o Kiroshi normal.
+    // O Beta e outro app para o Windows: outra identidade nas notificacoes e
+    // na bandeja, para nao se misturar com o Kiroshi normal.
     define: {
-      __APP_ID__: JSON.stringify(process.env.VITE_INTERFACE === 'nova' ? 'fun.arasaka.kiroshi.beta' : 'fun.arasaka.kiroshi'),
+      __APP_ID__: JSON.stringify(canalBeta ? 'fun.arasaka.kiroshi.beta' : 'fun.arasaka.kiroshi'),
     },
     build: {
       rollupOptions: { input: { index: resolve(__dirname, 'electron/main.ts') } },
@@ -45,7 +60,7 @@ export default defineConfig({
     define: {
       __VERSAO__: JSON.stringify(version),
       // Ver src/vite-env.d.ts: qual das duas interfaces entra neste build.
-      __INTERFACE_NOVA__: JSON.stringify(process.env.VITE_INTERFACE === 'nova'),
+      __INTERFACE_NOVA__: JSON.stringify(interfaceNova),
     },
     plugins: [react(), tailwindcss()],
     build: {
