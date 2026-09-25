@@ -138,6 +138,24 @@ uma versao (foi lido como "1.32").
 MB cada). O `Kiroshi-Setup-1.14.0.exe` em `release/` nao e o publicado (a mesma
 versao foi reconstruida com conteudo diferente).
 
+## Canal do Beta (2026-09-25)
+
+O Kiroshi Beta se atualiza sozinho pelo canal proprio, `/baixar/beta`
+(`packages/server/src/routes/download.ts`, pasta `downloads/beta` do servidor).
+Antes o canal nao existia e todo Beta saia como 1.15.0: nenhum instalado via
+versao nova.
+
+- Versao do Beta: `1.16.<numero de commits>` (`scripts/dist-beta.mjs`), que
+  cresce sozinha a cada commit. Nao conflita com o normal: outro app, outro
+  canal.
+- Publicar: `npm run dist:beta` e `npm run publicar:beta` (de
+  `packages/desktop`). O script sobe pela rede local, manda o `latest.yml` por
+  ultimo, confere em cinco lugares (hash local e no servidor, `latest.yml` no
+  servidor e servido, o instalador publico com o tamanho certo) e deixa so as
+  duas versoes mais novas.
+- `https://order.arasaka.fun/baixar/beta` entrega sempre o Beta mais novo, para
+  quem vai instalar pela primeira vez.
+
 ## Atualizacao, como e hoje
 
 1. `dist:win` gera `.exe`, `.exe.blockmap`, `latest.yml`.

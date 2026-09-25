@@ -17,13 +17,40 @@ import { logger } from '../logger.js';
  * O servidor ja e publico pelo tunel; servir o arquivo dali custa uma rota e
  * resolve de vez. O endereco nao muda entre versoes, entao o mesmo link vale
  * para sempre: basta colocar o arquivo novo na pasta.
+ *
+ * Dois canais, cada um com a sua pasta: o Kiroshi de todos em `/baixar` e o
+ * Kiroshi Beta (a interface nova) em `/baixar/beta`. Um nunca pega a
+ * atualizacao do outro — sao apps diferentes para o Windows.
  */
 
 /** Onde os instaladores ficam, relativo ao diretorio de trabalho do servidor. */
 const PASTA = process.env.KIROSHI_DOWNLOAD_DIR ?? './downloads';
 
+interface Canal {
+  /** O endereco base: `/baixar` ou `/baixar/beta`. */
+  prefixo: string;
+  pasta: string;
+  /** O instalador do canal, com a versao no primeiro grupo. */
+  instalador: RegExp;
+  /** O que a atualizacao automatica pode pedir pelo nome. */
+  permitidos: RegExp[];
+}
+
 /** So instalador do Windows por enquanto; o projeto ainda nao empacota outros. */
-const PADRAO = /^Kiroshi-Setup-(\d+\.\d+\.\d+)\.exe$/;
+const CANAIS: Canal[] = [
+  {
+    prefixo: '/baixar',
+    pasta: PASTA,
+    instalador: /^Kiroshi-Setup-(\d+\.\d+\.\d+)\.exe$/,
+    permitidos: [/^latest\.yml$/, /^Kiroshi-Setup-\d+\.\d+\.\d+\.exe$/, /^Kiroshi-Setup-\d+\.\d+\.\d+\.exe\.blockmap$/],
+  },
+  {
+    prefixo: '/baixar/beta',
+    pasta: path.join(PASTA, 'beta'),
+    instalador: /^Kiroshi-Beta-Setup-(\d+\.\d+\.\d+)\.exe$/,
+    permitidos: [/^latest\.yml$/, /^Kiroshi-Beta-Setup-\d+\.\d+\.\d+\.exe$/, /^Kiroshi-Beta-Setup-\d+\.\d+\.\d+\.exe\.blockmap$/],
+  },
+];
 
 interface Instalador {
   arquivo: string;
@@ -44,26 +71,26 @@ function maior(a: string, b: string): number {
 }
 
 /**
- * O instalador mais novo que existir na pasta.
+ * O instalador mais novo que existir na pasta do canal.
  *
  * Le o diretorio a cada pedido em vez de guardar em memoria: baixar o app e
  * raro, e assim colocar uma versao nova passa a valer na hora, sem reiniciar
  * nada.
  */
-async function maisNovo(): Promise<Instalador | null> {
+async function maisNovo(canal: Canal): Promise<Instalador | null> {
   let nomes: string[];
   try {
-    nomes = await readdir(PASTA);
+    nomes = await readdir(canal.pasta);
   } catch {
     return null;
   }
 
   const candidatos: Instalador[] = [];
   for (const arquivo of nomes) {
-    const casou = PADRAO.exec(arquivo);
+    const casou = canal.instalador.exec(arquivo);
     if (!casou) continue;
 
-    const caminho = path.join(PASTA, arquivo);
+    const caminho = path.join(canal.pasta, arquivo);
     try {
       const info = await stat(caminho);
       if (info.isFile()) {
@@ -79,10 +106,10 @@ async function maisNovo(): Promise<Instalador | null> {
   return candidatos[0]!;
 }
 
-export async function downloadRoutes(app: FastifyInstance): Promise<void> {
+function servirCanal(app: FastifyInstance, canal: Canal): void {
   /** Qual versao esta publicada, sem baixar os 82 MB para descobrir. */
-  app.get('/baixar/versao', async () => {
-    const alvo = await maisNovo();
+  app.get(`${canal.prefixo}/versao`, async () => {
+    const alvo = await maisNovo(canal);
     if (!alvo) throw notFound('Instalador');
     return {
       versao: alvo.versao,
@@ -98,11 +125,11 @@ export async function downloadRoutes(app: FastifyInstance): Promise<void> {
    * Fluxo em vez de ler tudo na memoria: 82 MB por pessoa que baixa ao mesmo
    * tempo derrubaria um servidor que tambem esta rodando o resto.
    */
-  app.get('/baixar', async (request, reply) => {
-    const alvo = await maisNovo();
+  app.get(canal.prefixo, async (request, reply) => {
+    const alvo = await maisNovo(canal);
     if (!alvo) throw notFound('Instalador');
 
-    logger.info({ versao: alvo.versao, ip: ipDaRequisicao(request) }, 'instalador baixado');
+    logger.info({ versao: alvo.versao, canal: canal.prefixo, ip: ipDaRequisicao(request) }, 'instalador baixado');
 
     return (
       reply
@@ -129,7 +156,7 @@ export async function downloadRoutes(app: FastifyInstance): Promise<void> {
    * Isto fica separado da rota sem caminho acima, que sempre entrega a versao
    * mais nova para quem esta instalando pela primeira vez.
    */
-  app.get('/baixar/:arquivo', async (request, reply) => {
+  app.get(`${canal.prefixo}/:arquivo`, async (request, reply) => {
     const { arquivo } = request.params as { arquivo: string };
 
     /*
@@ -140,14 +167,9 @@ export async function downloadRoutes(app: FastifyInstance): Promise<void> {
       resolve sem depender de normalizar caminho, que e onde esse tipo de falha
       costuma passar.
     */
-    const PERMITIDOS = [
-      /^latest\.yml$/,
-      /^Kiroshi-Setup-\d+\.\d+\.\d+\.exe$/,
-      /^Kiroshi-Setup-\d+\.\d+\.\d+\.exe\.blockmap$/,
-    ];
-    if (!PERMITIDOS.some((padrao) => padrao.test(arquivo))) throw notFound('Arquivo');
+    if (!canal.permitidos.some((padrao) => padrao.test(arquivo))) throw notFound('Arquivo');
 
-    const caminho = path.join(PASTA, arquivo);
+    const caminho = path.join(canal.pasta, arquivo);
     let bytes: number;
     try {
       const info = await stat(caminho);
@@ -173,4 +195,8 @@ export async function downloadRoutes(app: FastifyInstance): Promise<void> {
         .send(createReadStream(caminho))
     );
   });
+}
+
+export async function downloadRoutes(app: FastifyInstance): Promise<void> {
+  for (const canal of CANAIS) servirCanal(app, canal);
 }

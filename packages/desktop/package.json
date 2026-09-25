@@ -15,7 +15,8 @@
     "modelos": "node scripts/baixar-modelos.mjs",
     "test": "vitest run --passWithNoTests",
     "dist:beta": "node scripts/dist-beta.mjs",
-    "dist:beta:dir": "node scripts/dist-beta.mjs --dir"
+    "dist:beta:dir": "node scripts/dist-beta.mjs --dir",
+    "publicar:beta": "node scripts/publicar-beta.mjs"
   },
   "dependencies": {
     "@sapphi-red/web-noise-suppressor": "^0.4.1",

@@ -7,9 +7,9 @@ import tailwindcss from '@tailwindcss/vite';
 // A versao vem de um lugar so. Escrita a mao no codigo, ela desencontra do
 // instalador na primeira vez que alguem esquece de atualizar as duas — e ai os
 // registros do servidor passam a mentir sobre qual build cada pessoa usa.
-const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as {
-  version: string;
-};
+const pacote = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string };
+// O Beta sai com versao propria (scripts/dist-beta.mjs); o normal, a do package.json.
+const version = process.env.KIROSHI_VERSAO ?? pacote.version;
 
 export default defineConfig({
   main: {
