@@ -77,8 +77,9 @@ Prefixo `/api/v1`. "auth" = so JWT, sem banco (`S/auth/middleware.ts:26-32`);
 **Ja existe no servidor e a interface nao usa:** transferir posse, bans
 (listar/desbanir), reordenar cargos, listar/revogar convites, auditoria, CRUD
 e reordenacao de canais, sobrescritas por canal, apelidos, atribuir cargo,
-mover membro entre canais de voz, ensurdecer, tocar soundboard, ajustes de
-notificacao por guild/canal, bloquear, grupos de DM, revogar sessoes.
+ajustes de notificacao por guild/canal, bloquear, grupos de DM, revogar sessoes.
+(Mover, silenciar, ensurdecer e tocar soundboard a interface nova usa desde a
+fatia 3.)
 
 ## Gateway (`S/gateway/`)
 
@@ -244,11 +245,11 @@ estritamente abaixo; nao se concede bit que nao se tem.
 | 20 | STREAM | funciona (camera e tela) |
 | 21 | USE_VAD | **nao implementado** |
 | 22 | PRIORITY_SPEAKER | **nao implementado** |
-| 23 | MUTE_MEMBERS | parcial: muta as faixas atuais no SFU; reentrar escapa |
-| 24 | DEAFEN_MEMBERS | so banco + evento; nada no SFU e o cliente nao obedece |
-| 25 | MOVE_MEMBERS | parcial: a UI so desconecta; mover so pela API |
+| 23 | MUTE_MEMBERS | funciona: tira o microfone das permissoes no SFU na hora; o token de entrada ja sai sem ele |
+| 24 | DEAFEN_MEMBERS | funciona: tira o microfone no SFU e o app corta o som |
+| 25 | MOVE_MEMBERS | funciona: token da sala nova antes de sair da antiga; destino sem CONNECT e recusado |
 | 26 | MANAGE_EMOJIS | funciona para emoji; figurinha nao chega a ninguem |
-| 27 | USE_SOUNDBOARD | so no servidor (o cliente nao chama a rota de tocar) |
+| 27 | USE_SOUNDBOARD | funciona (barra da chamada, Beta); silenciado ou ensurdecido nao toca |
 | 28 | MANAGE_SOUNDBOARD | funciona |
 | 29 | VIEW_AUDIT_LOG | so no servidor |
 | 30 | MANAGE_WEBHOOKS | **nao implementado** (nao ha modelo nem rota) |
@@ -304,10 +305,19 @@ nenhum tipo. Hoje toda notificacao e decidida no cliente.
 
 ## Voz no servidor
 
-- Token (`services/voice.ts:64-127`): sala `channel_<id>` (vale para guild, DM e
-  grupo), identidade = `userId` (uma conexao por conta), TTL 6 h; microfone com
-  SPEAK, camera/tela com STREAM, `roomAdmin` com MUTE ou MOVE. `serverMuted` e
-  `bitrate` nao entram no token.
+- Token (`createVoiceToken`, `services/voice.ts`): sala `channel_<id>` (vale
+  para guild, DM e grupo), identidade = `userId` (uma conexao por conta), TTL
+  6 h. Fontes por `lib/direitos-de-voz.ts` (testado): microfone com SPEAK e sem
+  moderacao, camera e tela com STREAM. `canUpdateOwnMetadata` para a lista de
+  quem assiste (atributo `assistindo`). Sem `roomAdmin` desde `62dda74`. O
+  aviso do token (`/voice/join`, `/voice/refresh`, `VOICE_SERVER_UPDATE`) leva
+  `serverMute`/`serverDeaf`, para o app nao tentar abrir o microfone de quem
+  esta moderado. `bitrate` nao entra no token.
+- Moderacao (`setServerMute`, `setServerDeafen`): troca as permissoes do
+  participante no SFU na hora (`updateParticipant`, que substitui o conjunto
+  inteiro) e o SFU derruba o microfone; o app obedece pelo estado de voz.
+  Antes, silenciar so mutava as faixas no ar (sair e entrar escapava) e
+  ensurdecer so gravava no banco.
 - Dois caminhos: REST `/voice/join` (so token, sem VoiceState, ignora
   `userLimit`) e opcode 4 (cria VoiceState, checa CONNECT e limite, emite
   VOICE_STATE_UPDATE e VOICE_SERVER_UPDATE). **Erro no opcode 4 fecha o
@@ -320,8 +330,12 @@ nenhum tipo. Hoje toda notificacao e decidida no cliente.
 - **Chamada em DM existe no servidor.** Falta: toque/convite, mensagem CALL,
   estado de voz das DMs no READY (`ready.ts:170`), tirar da chamada quem sai do
   grupo ou e bloqueado. E a interface inteira.
-- Mover (`voice.ts:484-508`) atualiza o banco antes do token; se o alvo nao tem
-  CONNECT no destino, fica "no canal" sem conexao.
+- Mover (`moveMember`): o token da sala nova vem antes de tudo (e ele confere o
+  CONNECT do alvo; sem ele, 403 e nada muda) e e entregue antes de a pessoa sair
+  da sala antiga. O app troca de sala sozinho; 5 s depois o servidor tira da
+  antiga quem nao obedeceu, se nao voltou para ela. Antes a remocao vinha
+  primeiro, o app sem sala recusava o token, e a pessoa ficava desconectada
+  aparecendo no canal novo.
 - TURN (`services/turn.ts`): `TURN_SERVERS` tem prioridade; sem ele, usa o TURN
   gerenciado da Cloudflare (`CLOUDFLARE_TURN_KEY_ID` / `_API_TOKEN`), com cache.
 
@@ -387,8 +401,8 @@ soundboard, busca, voz.
 4. Atribuir cargo: sem UI e sem rota incremental.
 5. Figurinhas nunca chegam.
 6. Erro no opcode de voz fecha o socket.
-7. Mover fantasma; join REST ignora limite e nao cria estado.
-8. Deafen sem efeito; mute nao persiste no SFU.
+7. ~~Mover fantasma~~ — corrigido na fatia 3; join REST ignora limite e nao cria estado.
+8. ~~Deafen sem efeito; mute nao persiste no SFU~~ — corrigido na fatia 3.
 9. Busca: `has` ignorado.
 10. DM: MESSAGE_CREATE chega duplicado (`messages.ts:266-272`), sem voz no READY,
     sem fixar.

@@ -280,6 +280,14 @@ export interface VoiceServerUpdateEvent {
   roomName: string;
   iceServers: { urls: string[]; username?: string; credential?: string }[];
   forceRelay: boolean;
+  /**
+   * A moderacao que valia quando o token saiu, e que o proprio token ja
+   * respeita: silenciado, ele nao deixa publicar microfone. Vem junto para o
+   * app saber antes de abrir o microfone e para o estado nao se perder na
+   * troca de sala. Servidores antigos nao mandam.
+   */
+  serverMute?: boolean;
+  serverDeaf?: boolean;
 }
 
 export interface SpeakingUpdateEvent {

@@ -54,8 +54,10 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
     let token: string;
     let roomName: string;
     let url: string;
+    let serverMute: boolean;
+    let serverDeaf: boolean;
     try {
-      ({ token, roomName, url } = await createVoiceToken(userId, body.channelId));
+      ({ token, roomName, url, serverMute, serverDeaf } = await createVoiceToken(userId, body.channelId));
     } catch (erro) {
       // Sem isto a recusa volta ao cliente e some: quem investiga nunca fica
       // sabendo que houve pedido, muito menos por que foi negado.
@@ -94,6 +96,8 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
       guildId: channel.guildId,
       iceServers,
       forceRelay: config.voice.forceRelay,
+      serverMute,
+      serverDeaf,
     };
   });
 
@@ -109,7 +113,7 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
     const state = await prisma.voiceState.findUnique({ where: { userId } });
     if (!state) throw new ApiError('BAD_REQUEST', 'Voce nao esta em um canal de voz.');
 
-    const { token, roomName, url } = await createVoiceToken(userId, state.channelId);
+    const { token, roomName, url, serverMute, serverDeaf } = await createVoiceToken(userId, state.channelId);
     return {
       url,
       token,
@@ -118,6 +122,8 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
       guildId: state.guildId,
       iceServers: await montarIceServers(),
       forceRelay: config.voice.forceRelay,
+      serverMute,
+      serverDeaf,
     };
   });
 
@@ -152,6 +158,10 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
     const state = await prisma.voiceState.findUnique({ where: { userId } });
     if (!state || state.channelId !== channelId) {
       throw new ApiError('BAD_REQUEST', 'Entre no canal de voz antes de tocar um som.');
+    }
+    // Silenciado pela moderacao nao fala por outro caminho (como no Discord).
+    if (state.serverMute || state.serverDeaf) {
+      throw forbidden('A moderacao silenciou voce neste canal.');
     }
 
     const sound = await prisma.soundboardSound.findUnique({ where: { id: body.soundId } });

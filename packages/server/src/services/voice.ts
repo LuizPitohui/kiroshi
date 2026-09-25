@@ -16,6 +16,7 @@ import { toVoiceState } from '../lib/serialize.js';
 import { emitirParaQuemVe } from './entrega.js';
 import { resolveChannelPermissions, resolveMember } from './permissions.js';
 import { bloqueioNaDm } from './relacoes.js';
+import { fontesPermitidas, type Moderacao } from '../lib/direitos-de-voz.js';
 
 /**
  * Voz, video e compartilhamento de tela via LiveKit (SFU).
@@ -59,6 +60,42 @@ export function isVoiceEnabled(): boolean {
   return config.voice.enabled;
 }
 
+/** Silenciado ou ensurdecido pela moderacao: so existe em servidor (DM nao tem moderador). */
+async function moderacaoDe(userId: string, guildId: string | null): Promise<Moderacao> {
+  if (!guildId) return { silenciado: false, ensurdecido: false };
+  const membro = await prisma.guildMember.findUnique({
+    where: { guildId_userId: { guildId, userId } },
+    select: { serverMuted: true, serverDeafened: true },
+  });
+  return { silenciado: membro?.serverMuted ?? false, ensurdecido: membro?.serverDeafened ?? false };
+}
+
+/**
+ * Leva a moderacao ao SFU na hora, sem esperar a pessoa reentrar: as
+ * permissoes do participante sao trocadas (o LiveKit troca o conjunto inteiro,
+ * entao vai tudo). Se a pessoa nao esta na sala, nao ha o que fazer.
+ */
+async function atualizarDireitosNoSfu(userId: string, channelId: string, guildId: string | null): Promise<void> {
+  if (!config.voice.enabled) return;
+  try {
+    const [{ permissions }, moderacao] = await Promise.all([resolveChannelPermissions(channelId, userId), moderacaoDe(userId, guildId)]);
+    const fontes = fontesPermitidas(permissions, moderacao);
+    await getRoomService().updateParticipant(roomNameFor(channelId), userId, {
+      permission: {
+        canSubscribe: true,
+        canPublish: fontes.length > 0,
+        canPublishData: true,
+        canPublishSources: fontes,
+        canUpdateMetadata: true,
+        hidden: false,
+        recorder: false,
+      },
+    });
+  } catch (error) {
+    if (!naoEncontradoNoSfu(error)) logger.warn({ error, userId }, 'nao consegui atualizar as permissoes no SFU');
+  }
+}
+
 /**
  * Monta o token de acesso do LiveKit com o que o membro pode fazer naquele
  * canal. O token vale 6 horas e e reemitido a cada entrada.
@@ -66,7 +103,7 @@ export function isVoiceEnabled(): boolean {
 export async function createVoiceToken(
   userId: string,
   channelId: string,
-): Promise<{ token: string; roomName: string; url: string }> {
+): Promise<{ token: string; roomName: string; url: string; serverMute: boolean; serverDeaf: boolean }> {
   if (!config.voice.enabled) {
     throw new ApiError('VOICE_UNAVAILABLE', 'A voz nao esta configurada neste servidor.');
   }
@@ -98,24 +135,25 @@ export async function createVoiceToken(
     throw forbidden('Nao foi possivel entrar nesta chamada.');
   }
 
-  const canSpeak = has(permissions, Permission.SPEAK);
-  const canStream = has(permissions, Permission.STREAM);
-
-  const sources: TrackSource[] = [];
-  if (canSpeak) sources.push(TrackSource.MICROPHONE);
-  if (canStream) {
-    sources.push(TrackSource.CAMERA, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO);
-  }
+  // Sem SPEAK a pessoa entra so para ouvir; silenciada pela moderacao, tambem.
+  const moderacao = await moderacaoDe(userId, guildId);
+  const sources = fontesPermitidas(permissions, moderacao);
 
   const grant: VideoGrant = {
     room: roomNameFor(channelId),
     roomJoin: true,
-    // Sem SPEAK a pessoa entra so para ouvir.
-    canPublish: canSpeak || canStream,
+    canPublish: sources.length > 0,
     canPublishSources: sources.length ? sources : undefined,
     canSubscribe: true,
     // Usado pelo soundboard e pelos indicadores de fala.
     canPublishData: true,
+    /*
+      Os atributos do proprio participante: por eles cada cliente conta de
+      quem assiste a transmissao, e o quadro de quem transmite mostra quantos
+      espectadores tem. Nome e metadados que o cliente mudar nao valem nada: a
+      interface usa os do servidor.
+    */
+    canUpdateOwnMetadata: true,
     /*
       Sem `roomAdmin`, para ninguem.
 
@@ -136,7 +174,13 @@ export async function createVoiceToken(
   });
   accessToken.addGrant(grant);
 
-  return { token: await accessToken.toJwt(), roomName: grant.room!, url: config.voice.url };
+  return {
+    token: await accessToken.toJwt(),
+    roomName: grant.room!,
+    url: config.voice.url,
+    serverMute: moderacao.silenciado,
+    serverDeaf: moderacao.ensurdecido,
+  };
 }
 
 /**
@@ -292,7 +336,7 @@ export async function handleVoiceStateUpdate(
 
   // O token e emitido ao entrar e ao reconectar, nao a cada mute.
   if (needsToken && config.voice.enabled) {
-    const { token, roomName, url } = await createVoiceToken(userId, channel.id);
+    const { token, roomName, url, serverMute, serverDeaf } = await createVoiceToken(userId, channel.id);
     const iceServers = await montarIceServers();
     // So para a sessao que pediu: ver `emitToSession`.
     emitToSession(userId, sessionId, 'VOICE_SERVER_UPDATE', {
@@ -303,6 +347,8 @@ export async function handleVoiceStateUpdate(
       roomName,
       iceServers,
       forceRelay: config.voice.forceRelay,
+      serverMute,
+      serverDeaf,
     });
     // Sem o token o cliente nao tem o que fazer, entao esta linha separa
     // "o servidor nao deixou" de "o servidor deixou e a rede falhou".
@@ -506,6 +552,8 @@ export async function setServerMute(
   });
 
   // Silenciar de verdade acontece no SFU: sem isso o cliente poderia ignorar.
+  // As permissoes impedem publicar de novo; o mute cala a faixa que ja esta no ar.
+  await atualizarDireitosNoSfu(targetId, state.channelId, guildId);
   if (config.voice.enabled) {
     try {
       const room = roomNameFor(state.channelId);
@@ -549,6 +597,13 @@ export async function setServerDeafen(
   await emitirParaQuemVe(guildId, updated.channelId, 'VOICE_STATE_UPDATE', toVoiceState(updated), {
     incluir: [targetId],
   });
+
+  /*
+    O som deixa de chegar pelo proprio app (ele obedece ao estado de voz), e o
+    microfone sai das permissoes no SFU: ensurdecido tambem nao fala. Antes
+    ensurdecer so gravava no banco — nada acontecia em lugar nenhum.
+  */
+  await atualizarDireitosNoSfu(targetId, state.channelId, guildId);
 }
 
 /** Move alguem para outro canal de voz, ou desconecta quando destino e null. */
@@ -586,12 +641,29 @@ export async function moveMember(
 
   const previousChannelId = state.channelId;
 
+  /*
+    O token vem ANTES de mexer no banco, porque e ele que confere se a pessoa
+    pode entrar no destino (CONNECT). Com o banco primeiro, quem nao podia
+    entrar aparecia no canal novo para todos, sem conexao nenhuma.
+  */
+  let acesso: Awaited<ReturnType<typeof createVoiceToken>> | null = null;
+  if (config.voice.enabled) {
+    try {
+      acesso = await createVoiceToken(targetId, destinationChannelId);
+    } catch (error) {
+      // A recusa do token fala com quem entra ("voce nao pode"); aqui quem le
+      // e o moderador.
+      if (error instanceof ApiError && error.code === 'FORBIDDEN') {
+        throw forbidden('Essa pessoa nao pode entrar nesse canal.');
+      }
+      throw error;
+    }
+  }
+
   const updated = await prisma.voiceState.update({
     where: { userId: targetId },
     data: { channelId: destinationChannelId, joinedAt: new Date() },
   });
-
-  await removeFromRoom(previousChannelId, targetId);
 
   /*
     Dois avisos, porque os dois canais podem ter plateias diferentes: quem via
@@ -607,24 +679,60 @@ export async function moveMember(
     incluir: [targetId],
   });
 
-  // A pessoa movida precisa de um token novo para a sala de destino — no
-  // aparelho que esta na chamada, e so nele: a sessao dona do estado de voz.
-  if (config.voice.enabled) {
+  /*
+    A pessoa movida precisa de um token novo para a sala de destino — no
+    aparelho que esta na chamada, e so nele: a sessao dona do estado de voz.
+
+    O token sai ANTES de a pessoa ser tirada da sala antiga. Na ordem inversa
+    o app via a sala cair sem ter pedido nada e largava a chamada; o token que
+    chegava em seguida era recusado pela guarda de entrada, que so atende quem
+    esta numa sala ou entrando numa. Para todos a pessoa aparecia no canal
+    novo, e de fato estava desconectada.
+  */
+  if (acesso) {
     try {
-      const { token, roomName, url } = await createVoiceToken(targetId, destinationChannelId);
       emitToSession(targetId, state.sessionId, 'VOICE_SERVER_UPDATE', {
         channelId: destinationChannelId,
         guildId,
-        url,
-        token,
-        roomName,
+        url: acesso.url,
+        token: acesso.token,
+        roomName: acesso.roomName,
         iceServers: await montarIceServers(),
         forceRelay: config.voice.forceRelay,
+        serverMute: acesso.serverMute,
+        serverDeaf: acesso.serverDeaf,
       });
     } catch (error) {
       logger.warn({ error, targetId }, 'nao consegui emitir token apos mover');
     }
   }
+
+  agendarSaidaDaSalaAntiga(previousChannelId, targetId);
+}
+
+/** Quanto o app tem para trocar de sala sozinho antes de o servidor agir. */
+const PRAZO_PARA_TROCAR_DE_SALA_MS = 5_000;
+
+/**
+ * Rede de seguranca do mover: tira a pessoa da sala antiga, alguns segundos
+ * depois.
+ *
+ * O app sai da sala antiga sozinho ao receber o token da nova. Isto e para
+ * quem nao recebeu o aviso (sessao caida, versao antiga do app): moderador que
+ * tira alguem de um canal precisa que a voz dessa pessoa pare de chegar la.
+ * Se nesse meio tempo ela voltou para o mesmo canal, fica.
+ */
+function agendarSaidaDaSalaAntiga(channelId: string, userId: string): void {
+  if (!config.voice.enabled) return;
+  setTimeout(() => {
+    void (async () => {
+      const agora = await prisma.voiceState
+        .findUnique({ where: { userId }, select: { channelId: true } })
+        .catch(() => undefined);
+      if (agora === undefined || agora?.channelId === channelId) return;
+      await removeFromRoom(channelId, userId);
+    })();
+  }, PRAZO_PARA_TROCAR_DE_SALA_MS).unref();
 }
 
 /** Limpa estados de voz orfaos na subida, depois de uma queda do processo. */
