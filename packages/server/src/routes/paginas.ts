@@ -50,8 +50,9 @@ const VERIFICACAO_DO_GOOGLE =
   a ignorar a data — e a data e o unico jeito de alguem saber se precisa ler de
   novo.
 */
-const PRIVACIDADE_EM = '21 de setembro de 2026';
-const TERMOS_EM = '22 de setembro de 2026';
+// Com o cadastro aberto (25/09) mudou o texto de quem pode usar; fechado, vale o de antes.
+const PRIVACIDADE_EM = config.allowOpenRegistration ? '25 de setembro de 2026' : '21 de setembro de 2026';
+const TERMOS_EM = config.allowOpenRegistration ? '25 de setembro de 2026' : '22 de setembro de 2026';
 
 const ESTILO = `
   :root {
@@ -179,9 +180,16 @@ const INICIO = moldura(
   <h2>Quem pode entrar</h2>
   <div class="cartao">
     <p style="margin:0">
-      <strong>Este servidor é fechado.</strong> Criar conta exige um código de
+      ${
+        config.allowOpenRegistration
+          ? `<strong>Qualquer pessoa pode criar uma conta</strong>, no aplicativo, com
+      e-mail e senha ou com o Google. A conta nasce vazia: para conversar com
+      alguém, é preciso um convite para um servidor ou um pedido de amizade
+      aceito.`
+          : `<strong>Este servidor é fechado.</strong> Criar conta exige um código de
       convite de quem já está dentro. Entrar com o Google confirma quem você é,
-      mas não substitui o convite.
+      mas não substitui o convite.`
+      }
     </p>
   </div>
 
@@ -201,8 +209,9 @@ const PRIVACIDADE = moldura(
   <p class="data">Atualizada em ${PRIVACIDADE_EM}.</p>
 
   <p>
-    O Kiroshi é um serviço privado, operado por uma pessoa física, para um grupo
-    fechado de conhecidos. Não é um produto comercial: não há anúncios, não há
+    O Kiroshi é um serviço privado, operado por uma pessoa física${
+      config.allowOpenRegistration ? '' : ', para um grupo fechado de conhecidos'
+    }. Não é um produto comercial: não há anúncios, não há
     cobrança, e nada do que é coletado é vendido, alugado ou compartilhado para
     fins de publicidade ou de análise de comportamento.
   </p>
@@ -314,13 +323,18 @@ const TERMOS = moldura(
 
   <p>
     O Kiroshi é um serviço privado, mantido por uma pessoa física, sem cobrança
-    e sem fim comercial, para um grupo fechado de conhecidos. Usar o serviço
+    e sem fim comercial${config.allowOpenRegistration ? '' : ', para um grupo fechado de conhecidos'}. Usar o serviço
     significa concordar com o que está escrito aqui.
   </p>
 
   <h2>Quem pode usar</h2>
   <p>
-    O acesso é por convite de quem já participa. Não há cadastro aberto. Quem
+    ${
+      config.allowOpenRegistration
+        ? `Qualquer pessoa pode criar uma conta. Os servidores continuam fechados:
+    só se entra num servidor por convite de quem já está nele.`
+        : `O acesso é por convite de quem já participa. Não há cadastro aberto.`
+    } Quem
     administra o servidor pode encerrar o acesso de qualquer conta, a qualquer
     momento, sem precisar justificar — é um espaço privado, não um serviço
     contratado.

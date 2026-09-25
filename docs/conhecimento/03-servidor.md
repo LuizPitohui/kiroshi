@@ -55,7 +55,7 @@ no start do container (`prisma migrate deploy`).
 multipart ate 100 MB, CORS `CORS_ORIGINS ?? true`, erro central no formato
 `{error:{code,message,details?}}` (`S/errors.ts:78-86`), limite global por IP.
 
-## Rotas REST (114 + WebSocket)
+## Rotas REST (115 + WebSocket)
 
 Prefixo `/api/v1`. "auth" = so JWT, sem banco (`S/auth/middleware.ts:26-32`);
 "fresh" = JWT + sessao existente no banco + conta ativa (`:39-58`).
@@ -64,7 +64,7 @@ Prefixo `/api/v1`. "auth" = so JWT, sem banco (`S/auth/middleware.ts:26-32`);
 |---|---|
 | Raiz | `GET /health`, `GET /api/info` (nome, versao do gateway, voz, cadastro aberto, limites), paginas `/`, `/privacidade`, `/termos`, `/convite/:codigo` (o link do convite, fatia 6), `POST /uploads`, `GET /attachments/*` (a URL e a capacidade), `GET /baixar`, `/baixar/versao`, `/baixar/:arquivo`, WS `/gateway` |
 | Auth `S/routes/auth.ts` | register, login, login/mfa, refresh, logout, logout/all, sessions (listar/revogar), password, totp setup/enable/disable/backup-codes |
-| Google `S/routes/auth-google.ts` | `GET /auth/google`, `/disponivel`, `POST /start`, `GET /callback`, `POST /concluir`, `/registrar`, `/senha`, `DELETE /auth/google` |
+| Google `S/routes/auth-google.ts` | `GET /auth/google`, `/disponivel`, `POST /start`, `GET /callback`, `POST /concluir`, `/registrar`, `/senha`, `/recuperar` (esqueci a senha, fatia 7), `DELETE /auth/google` |
 | Usuarios `S/routes/users.ts` | `@me` (ler/editar/username/presenca/apagar), `/:id`, `by-username`, ajustes de notificacao por guild e por canal |
 | Social `S/routes/relationships.ts` | amizades (pedir/aceitar/remover/bloquear), DMs e grupos (criar, renomear, adicionar/remover, fechar) |
 | Servidores `S/routes/guilds.ts` | CRUD, sair, transferir posse, membros (listar/editar/expulsar), **dar e tirar um cargo** (`PUT`/`DELETE /guilds/:g/members/:m/roles/:r`), bans, cargos (CRUD + reordenar), convites, auditoria (filtro `actorId` e `action`) |
@@ -144,23 +144,40 @@ julho de 2031).
 
 ## Conta e autenticacao
 
-- **Cadastro** (`auth.ts:71-129`): com `ALLOW_OPEN_REGISTRATION=false` (producao
-  hoje) exige convite, e a conta **entra sozinha no servidor do convite**. Com
-  cadastro aberto, o convite e ignorado e a conta nasce sem servidor. Argon2id
-  64 MiB, t=3, p=4. **Email nao e verificado.**
+- **Cadastro** (`auth.ts`): com `ALLOW_OPEN_REGISTRATION=false` exige convite, e
+  a conta **entra sozinha no servidor do convite**. Aberto (producao desde a
+  fatia 7, 2026-09-25, decisao do dono), a conta nasce sem servidor — e, se o
+  pedido traz um convite valido (quem chegou pelo link), ja nasce dentro dele; a
+  resposta diz o `guildId`. Convite vencido no cadastro aberto nao impede a
+  conta. Vale igual para o cadastro pelo Google. Argon2id 64 MiB, t=3, p=4.
+  **Email nao e verificado** (o servidor nao manda email).
+- **Protecoes do cadastro aberto** (fatia 7): 4 contas por hora por IP (ja
+  existia) e **30 por hora no servidor inteiro** (`RATE_LIMITS.registerGlobal`,
+  gasto so por pedido que ia mesmo criar conta, para pedido invalido nao
+  esgotar o cadastro de todos); **nomes reservados** (`RESERVED_USERNAMES`:
+  everyone, here, admin, kiroshi, suporte... e variacoes com ponto e
+  sublinhado) no cadastro, no Google e na troca de usuario — quem ja se chama
+  assim fica; **10 pedidos de amizade a cada 10 min por conta**; e a regra da DM
+  (secao Social). Sem CAPTCHA nem verificacao de email.
 - **Login** por email ou username; tempo igualado para usuario inexistente. Com
   2FA: 401 `MFA_REQUIRED` + `mfaToken` (5 min) e termina em `/auth/login/mfa`.
 - **Tokens:** access JWT 15 min `{sub, sid}`; refresh opaco 60 dias, sha256,
   rotacionado a cada uso (sem deteccao de reuso). Sessoes vencidas nunca sao
   apagadas do banco.
-- **2FA:** TOTP +-1 passo; 10 codigos de recuperacao em argon2. Desligar o 2FA
-  exige TOTP — quem perdeu o celular entra com codigo de recuperacao mas **nao
-  consegue desligar**, e o CLI nao tem reset.
+- **2FA:** TOTP +-1 passo; 10 codigos de recuperacao em argon2. Desligar aceita
+  o codigo do app **ou um de recuperacao** (fatia 7) — antes so o do app, e quem
+  perdia o celular ficava preso com o 2FA ligado. O CLI continua sem reset.
 - **Trocar senha** (`auth.ts:306-327`): exige a atual se houver; conta so-Google
   define a primeira sem ela; derruba as outras sessoes.
-- **Esqueci a senha:** nao ha email (o servidor nao envia email nenhum).
-  `/auth/google/senha` redefine sem a antiga, mas so logado e com o Google ja
-  vinculado. **Sem Google vinculado, nao ha recuperacao.**
+- **Esqueci a senha** (fatia 7, so pelo Google — decisao do dono): a intencao
+  publica `recuperar` do `/auth/google/start` confere o Google e, se ele esta
+  vinculado a uma conta, devolve uma prova de proposito `recuperacao` (5 min,
+  separada da de `senha` e da de `registro`) com o usuario da conta, para a
+  pessoa conferir. `POST /auth/google/recuperar` troca a senha, derruba todas as
+  sessoes (inclusive do gateway) e ja abre uma sessao nova — ou, com 2FA, pede o
+  codigo do app. Nao abre nada que o login pelo Google ja nao abrisse.
+  `/auth/google/senha` (logado) continua. **Sem Google vinculado, so quem
+  administra ajuda.**
 - **Google** (`S/auth/google.ts`, `S/routes/auth-google.ts`): loopback
   `127.0.0.1`/`[::1]` em lista branca, `state` JWT de 5 min,
   `prompt=select_account`, troca de codigo so no servidor, id_token conferido no
@@ -168,10 +185,10 @@ julho de 2031).
   nunca casando email. **Criar conta com Google ja existe** (`/registrar`): conta
   sem senha, email do Google se verificado, respeita convite se o cadastro e
   fechado. Desvincular e recusado se a conta nao tem senha.
-  Defeitos: username criado pelo Google aceita `-` (`:120`), que o resto do
-  sistema recusa (nao da para mandar amizade a essa pessoa); senha pelo Google
-  aceita 200 caracteres, login so 128; vincular troca em silencio um Google ja
-  vinculado.
+  Consertados na fatia 7: o username criado pelo Google seguia aceitando `-`
+  (agora e o mesmo schema do cadastro); a senha pelo Google aceitava 200
+  caracteres (agora 128, como o login); vincular trocava em silencio um Google
+  ja vinculado (agora pede para desvincular antes).
 - **Excluir conta** (`users.ts:253-287`): na pratica **desativa** — nome vira
   "Conta apagada", email trocado, perfil e 2FA limpos. Ficam: username
   (reservado para sempre), hash da senha, **vinculo com o Google** (a conta
@@ -181,8 +198,12 @@ julho de 2031).
 
 ## Social
 
-Amizade por username (pedido cruzado vira amizade na hora). DM 1:1 unica por
-par; grupos ate 10. Nao exige amizade para abrir DM. "Fechar" so em DM 1:1.
+Amizade por username (pedido cruzado vira amizade na hora), no maximo 10
+pedidos a cada 10 min. DM 1:1 unica por par; grupos ate 10. **Quem pode abrir
+DM** (fatia 7, por causa do cadastro aberto): amigos, gente com servidor em
+comum, ou quem ja tinha conversa (so reabre); grupo, e pessoa nova num grupo, so
+com amigos de quem cria ou adiciona — como o Discord. Antes bastava saber o id,
+que qualquer conta acha pelo nome de usuario. "Fechar" so em DM 1:1.
 `mentionCount` sobe com mencao direta, cargo, @everyone/@here e **toda
 mensagem de DM**. O "nao lido" e calculado no cliente.
 
@@ -445,13 +466,16 @@ soundboard, busca, voz.
 - Unidade (vitest): 123 no servidor + shared — permissoes (27), markdown (22),
   snowflake (18), tokens (10), senha (9), Google loopback (13), provas do Google
   (11), TURN (13). **Sem teste:** rotas, servicos com banco, gateway, SSRF.
-- `test/e2e.mjs` (124 checagens em 2026-09-25, API local com seed): login,
+- `test/e2e.mjs` (136 checagens em 2026-09-25, API local com seed): login,
   READY, mensagem em tempo real, nonce, historico, edicao, reacao, permissoes,
   convite, token de voz, chamada em DM, notificacoes, canal privado pelo gateway
   e, desde a fatia 6, cargos (criar sem ser dono, dar e tirar um, canal que o
   cargo abre), heranca da categoria, sincronizar, convite de 1 uso concorrido,
-  a pagina do convite, filtros da auditoria e a posse. **Nao cobre 2FA** (o
-  README diz que cobre), upload, busca, pins, RESUME. Fixo na 4000; para a API
+  a pagina do convite, filtros da auditoria e a posse; na fatia 7, conta nova
+  sem convite (e vazia), com convite (ja dentro), nome reservado, DM recusada
+  entre estranhos e liberada depois da amizade, e o 2FA ligado e desligado com
+  codigo de recuperacao. Nao cobre o Google (precisa de conta real), upload,
+  busca, pins, RESUME. Fixo na 4000; para a API
   de teste na 4001, rodar uma copia com a porta trocada.
 - `lib/cargos.test.ts` (11): a regra de reordenar cargos, sem banco.
 - `test/producao.mjs` (~21, publico pelo tunel) e `test/fumaca-producao.mjs`
@@ -474,8 +498,8 @@ soundboard, busca, voz.
 11. Ajustes de notificacao sem efeito.
 12. ~~Transferir posse da 500~~ — corrigido na fatia 6.
 13. Exclusao de conta incompleta; Google preso a conta morta; `/privacidade` promete o que nao faz.
-14. 2FA sem recuperacao completa.
-15. Username com `-` e senha de 129–200 caracteres pelo Google.
+14. ~~2FA sem recuperacao completa~~ — corrigido na fatia 7 (desliga com codigo de recuperacao; esqueci a senha pelo Google).
+15. ~~Username com `-` e senha de 129–200 caracteres pelo Google~~ — corrigido na fatia 7.
 16. ~~Categoria dentro de categoria; `parentId` de outra guild; reordenar `everyone`~~ — corrigido na fatia 6.
 17. Presenca: invisivel, varios aparelhos, `activity`.
 18. Arquivos orfaos no disco; sessoes vencidas nunca apagadas.
@@ -493,4 +517,4 @@ soundboard, busca, voz.
 - `/privacidade`: exclusao apaga tudo (nao); registra "quem estava conectado e
   por quanto tempo" (nao ha historico de chamadas); nao diz que a auditoria some
   em 90 dias.
-- Pagina `/`: "servidor fechado" fixo no HTML.
+- ~~Pagina `/`: "servidor fechado" fixo no HTML~~ — desde a fatia 7 a pagina inicial, os termos e a privacidade seguem o `ALLOW_OPEN_REGISTRATION`.

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   LIMITS,
   USERNAME_PATTERN,
+  usernameReservado,
   updateChannelSettingsSchema,
   updateGuildSettingsSchema,
   updatePresenceSchema,
@@ -103,6 +104,11 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const normalized = username?.trim().toLowerCase() ?? '';
     if (!USERNAME_PATTERN.test(normalized)) {
       throw badRequest('Use 2 a 32 caracteres: letras minusculas, numeros, ponto ou _.');
+    }
+    // Os mesmos reservados do cadastro; quem ja se chama assim pode ficar.
+    const { username: atual } = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { username: true } });
+    if (normalized !== atual && usernameReservado(normalized)) {
+      throw badRequest('Este nome de usuario e reservado.');
     }
 
     const taken = await prisma.user.findUnique({

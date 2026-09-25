@@ -66,6 +66,26 @@ describe('uma prova nao serve para outro proposito', () => {
     const token = await assinarProva({ proposito: 'senha', userId: 'abc123' });
     await expect(conferirProva(token, 'registro')).rejects.toThrow();
   });
+
+  /*
+    A de recuperacao (fatia 7) nasce SEM sessao, de quem esqueceu a senha. Se
+    ela abrisse a troca de senha "logada" ou a criacao de conta, ou fosse
+    aberta por elas, o caminho publico viraria atalho para os outros.
+  */
+  it('prova de RECUPERACAO so serve para recuperar', async () => {
+    const token = await assinarProva({ proposito: 'recuperacao', userId: 'abc123' });
+    const prova = await conferirProva(token, 'recuperacao');
+    expect(prova.userId).toBe('abc123');
+    await expect(conferirProva(token, 'senha')).rejects.toThrow();
+    await expect(conferirProva(token, 'registro')).rejects.toThrow();
+  });
+
+  it('nem a de senha nem a de registro abrem a recuperacao', async () => {
+    const senha = await assinarProva({ proposito: 'senha', userId: 'abc123' });
+    const registro = await assinarProva({ proposito: 'registro', google: IDENTIDADE });
+    await expect(conferirProva(senha, 'recuperacao')).rejects.toThrow();
+    await expect(conferirProva(registro, 'recuperacao')).rejects.toThrow();
+  });
 });
 
 describe('provas forjadas ou de outra origem', () => {
@@ -121,6 +141,13 @@ describe('provas forjadas ou de outra origem', () => {
 });
 
 describe('estado do OAuth', () => {
+  it('a intencao de recuperar volta sem usuario (quem pede nao tem sessao)', async () => {
+    const token = await assinarEstado({ intencao: 'recuperar', retorno: 'http://127.0.0.1:53114/pronto' });
+    const estado = await conferirEstado(token);
+    expect(estado.intencao).toBe('recuperar');
+    expect(estado.userId).toBeUndefined();
+  });
+
   it('ida e volta preserva intencao, retorno e usuario', async () => {
     const token = await assinarEstado({
       intencao: 'vincular',

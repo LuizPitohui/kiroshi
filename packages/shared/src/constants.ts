@@ -72,6 +72,39 @@ export const BITRATE = {
 /** Nome de usuario: letras minusculas, numeros, ponto e underscore. */
 export const USERNAME_PATTERN = /^[a-z0-9._]{2,32}$/;
 
+/**
+ * Nomes que conta nova nao pega (fatia 7, cadastro aberto): os que se passam
+ * pelo sistema ou pela administracao, e os que viram mencao de todo mundo —
+ * "@everyone" escrito por uma pessoa chamada everyone confundiria qualquer um.
+ * Contas que ja existem com um desses nomes continuam como estao.
+ */
+export const RESERVED_USERNAMES: readonly string[] = [
+  'everyone',
+  'here',
+  'admin',
+  'administrador',
+  'administrator',
+  'adm',
+  'root',
+  'sistema',
+  'system',
+  'suporte',
+  'support',
+  'moderador',
+  'moderator',
+  'staff',
+  'oficial',
+  'official',
+  'kiroshi',
+  'arasaka',
+];
+
+/** O nome e reservado? Tambem pega variacoes com ponto e sublinhado (`admin_`, `.kiroshi`). */
+export function usernameReservado(username: string): boolean {
+  const nucleo = username.toLowerCase().replace(/[._]/g, '');
+  return RESERVED_USERNAMES.includes(nucleo);
+}
+
 /** Codigo de convite. */
 export const INVITE_CODE_PATTERN = /^[A-Za-z0-9]{6,12}$/;
 
@@ -83,6 +116,13 @@ export const RATE_LIMITS = {
   /** Por IP. */
   login: { points: 8, windowMs: 300_000 },
   register: { points: 4, windowMs: 3_600_000 },
+  /**
+   * Contas novas no servidor inteiro, somando todos os IPs. Com o cadastro
+   * aberto (fatia 7), o limite por IP sozinho nao segura quem troca de IP.
+   */
+  registerGlobal: { points: 30, windowMs: 3_600_000 },
+  /** Por usuario: pedidos de amizade, o unico jeito de uma conta nova chamar alguem de fora. */
+  friendRequest: { points: 10, windowMs: 600_000 },
   /** Por usuario, global. */
   createGuild: { points: 5, windowMs: 3_600_000 },
   uploadFile: { points: 30, windowMs: 60_000 },

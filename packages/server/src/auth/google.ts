@@ -101,7 +101,9 @@ export function retornoPermitido(retorno: string): boolean {
 }
 
 /** Para onde o aplicativo quer ir depois de provar quem e no Google. */
-export type IntencaoDoGoogle = 'entrar' | 'vincular' | 'senha';
+export type IntencaoDoGoogle = 'entrar' | 'vincular' | 'senha' | 'recuperar';
+
+const INTENCOES: readonly IntencaoDoGoogle[] = ['entrar', 'vincular', 'senha', 'recuperar'];
 
 export interface EstadoDoGoogle {
   intencao: IntencaoDoGoogle;
@@ -141,7 +143,7 @@ export async function conferirEstado(token: string): Promise<EstadoDoGoogle> {
     const intencao = payload.intencao;
     const retorno = payload.retorno;
     if (
-      (intencao !== 'entrar' && intencao !== 'vincular' && intencao !== 'senha') ||
+      !INTENCOES.includes(intencao as IntencaoDoGoogle) ||
       typeof retorno !== 'string'
     ) {
       throw new ApiError('GOOGLE_STATE_INVALID', 'Pedido do Google malformado.');
@@ -159,7 +161,7 @@ export async function conferirEstado(token: string): Promise<EstadoDoGoogle> {
     }
 
     return {
-      intencao,
+      intencao: intencao as IntencaoDoGoogle,
       retorno,
       userId: typeof payload.userId === 'string' ? payload.userId : undefined,
     };
@@ -257,7 +259,7 @@ export async function identidadePeloCodigo(codigo: string): Promise<IdentidadeDo
  * senha de alguem".
  */
 
-export type PropositoDaProva = 'registro' | 'senha';
+export type PropositoDaProva = 'registro' | 'senha' | 'recuperacao';
 
 interface ProvaDeRegistro {
   proposito: 'registro';
@@ -269,7 +271,17 @@ interface ProvaDeSenha {
   userId: string;
 }
 
-export type Prova = ProvaDeRegistro | ProvaDeSenha;
+/**
+ * Esqueci a senha (fatia 7): quem nao tem sessao prova pelo Google vinculado
+ * e escolhe uma senha nova. Separada da de senha de proposito: aquela nasce
+ * de alguem ja logado, esta de alguem de fora.
+ */
+interface ProvaDeRecuperacao {
+  proposito: 'recuperacao';
+  userId: string;
+}
+
+export type Prova = ProvaDeRegistro | ProvaDeSenha | ProvaDeRecuperacao;
 
 const PLATEIA_DA_PROVA = 'kiroshi-google-prova';
 

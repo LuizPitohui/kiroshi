@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
   LIMITS,
+  RATE_LIMITS,
   createDmSchema,
   friendRequestSchema,
   generateId,
@@ -20,7 +21,8 @@ import {
   subscribeUserToChannel,
   unsubscribeUserFromChannel,
 } from '../gateway/events.js';
-import { bloqueioEntre, dmEntre } from '../services/relacoes.js';
+import { bloqueioEntre, dmEntre, podeAbrirDm, saoAmigos } from '../services/relacoes.js';
+import { consume } from '../lib/ratelimit.js';
 import { resolveImageInput } from '../services/storage.js';
 import { tirarDaVoz } from '../services/voice.js';
 
@@ -88,6 +90,9 @@ export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
   // -------------------------------------------------------------------------
   app.post('/relationships', async (request, reply) => {
     const userId = request.auth!.userId;
+    // Com o cadastro aberto, pedido de amizade e o unico jeito de uma conta
+    // nova chamar alguem de fora: sem teto, virava um canal de spam.
+    consume(`amizade:${userId}`, RATE_LIMITS.friendRequest);
     const body = friendRequestSchema.parse(request.body);
 
     const target = await prisma.user.findUnique({
@@ -332,6 +337,24 @@ export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
 
     const isGroup = recipientIds.length > 1;
 
+    /*
+      Quem pode chamar quem (fatia 7, cadastro aberto): conversa 1:1 com
+      amigo, com quem divide um servidor ou com quem ja tinha conversa; grupo
+      so com amigos de quem cria, como no Discord. Antes bastava saber o id —
+      e uma conta recem-criada acha qualquer id pelo nome de usuario.
+    */
+    for (const recipient of recipients) {
+      const pode = isGroup ? await saoAmigos(userId, recipient.id) : await podeAbrirDm(userId, recipient.id);
+      if (!pode) {
+        throw new ApiError(
+          'FORBIDDEN',
+          isGroup
+            ? 'So da para criar grupo com amigos.'
+            : 'Para conversar com esta pessoa, mande um pedido de amizade ou entrem num servidor em comum.',
+        );
+      }
+    }
+
     // DM 1 a 1 e unica: se ja existe, reabre em vez de criar outra.
     if (!isGroup) {
       const otherId = recipientIds[0]!;
@@ -439,6 +462,10 @@ export async function relationshipRoutes(app: FastifyInstance): Promise<void> {
     }
     if (await bloqueioEntre(userId, targetId)) {
       throw new ApiError('FORBIDDEN', 'Nao foi possivel adicionar esta pessoa.');
+    }
+    // Como na criacao: so se poe num grupo quem e amigo de quem poe.
+    if (!(await saoAmigos(userId, targetId))) {
+      throw new ApiError('FORBIDDEN', 'So da para adicionar amigos ao grupo.');
     }
 
     await prisma.channelRecipient.create({ data: { channelId, userId: targetId } });

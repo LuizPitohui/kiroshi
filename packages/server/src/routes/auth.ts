@@ -43,6 +43,7 @@ import { emitToUser } from '../gateway/events.js';
 import { ipDaRequisicao } from '../lib/ip-do-cliente.js';
 import { consume } from '../lib/ratelimit.js';
 import { SELF_USER_SELECT, toSelfUser } from '../lib/serialize.js';
+import { conviteDoCadastro, entrarPeloCadastro } from '../services/invites.js';
 
 /**
  * Confirma a identidade com a senha atual — quando existe uma.
@@ -86,26 +87,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     const body = registerSchema.parse(request.body);
 
-    // Cadastro fechado exige um convite valido, que tambem ja coloca a pessoa
-    // no servidor correspondente.
-    let inviteGuildId: string | null = null;
-    if (!config.allowOpenRegistration) {
-      if (!body.inviteCode) {
-        throw new ApiError(
-          'REGISTRATION_CLOSED',
-          'Este servidor exige um codigo de convite para criar conta.',
-        );
-      }
-      const invite = await prisma.invite.findUnique({ where: { code: body.inviteCode } });
-      if (
-        !invite ||
-        (invite.expiresAt && invite.expiresAt < new Date()) ||
-        (invite.maxUses > 0 && invite.uses >= invite.maxUses)
-      ) {
-        throw new ApiError('INVITE_INVALID', 'Convite invalido ou expirado.');
-      }
-      inviteGuildId = invite.guildId;
-    }
+    // Fechado, o convite e o passe; aberto, so poe a conta nova no servidor dele.
+    const convite = await conviteDoCadastro(body.inviteCode, config.allowOpenRegistration);
 
     const [emailTaken, usernameTaken] = await Promise.all([
       prisma.user.findUnique({ where: { email: body.email }, select: { id: true } }),
@@ -113,6 +96,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     ]);
     if (emailTaken) throw new ApiError('EMAIL_TAKEN', 'Este email ja esta em uso.');
     if (usernameTaken) throw new ApiError('USERNAME_TAKEN', 'Este nome de usuario ja existe.');
+
+    // O teto do servidor inteiro (cadastro aberto): so gasta com pedido que ia
+    // mesmo criar conta, para pedido invalido nao esgotar o cadastro de todos.
+    consume('register:global', RATE_LIMITS.registerGlobal);
 
     const user = await prisma.user.create({
       data: {
@@ -130,15 +117,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const session = await createSession(user.id, request.headers['user-agent'], ipDaRequisicao(request));
 
     // O convite so e consumido depois da conta existir, para nao gastar um uso
-    // se algo falhar no meio.
-    if (inviteGuildId && body.inviteCode) {
-      const { acceptInvite } = await import('../services/invites.js');
-      await acceptInvite(body.inviteCode, user.id).catch((error: unknown) => {
-        logger.warn({ error, userId: user.id }, 'falha ao entrar no servidor do convite');
-      });
-    }
+    // se algo falhar no meio. O servidor em que entrou volta para o app abrir nele.
+    const guildId = await entrarPeloCadastro(convite, user.id);
 
-    return reply.status(201).send({ user: toSelfUser(user), ...session });
+    return reply.status(201).send({ user: toSelfUser(user), ...session, guildId });
   });
 
   // -------------------------------------------------------------------------
@@ -342,6 +324,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       where: { userId: auth.userId, id: { not: auth.sessionId } },
     });
     encerrarSessoesDeGateway(auth.userId, { excetoSessaoDeLogin: auth.sessionId });
+    // Quem definiu a primeira senha (conta do Google) some com o aviso "defina uma
+    // senha" nos aparelhos que ficaram: eles releem a seguranca da conta.
+    await avisarContaMudou(auth.userId);
 
     return { ok: true };
   });
@@ -405,12 +390,19 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: auth.userId },
-      select: { passwordHash: true, totpSecret: true, totpEnabled: true },
+      select: { passwordHash: true, totpSecret: true, totpEnabled: true, backupCodes: true },
     });
     if (!user.totpEnabled || !user.totpSecret) throw badRequest('O 2FA nao esta ativo.');
     await confirmarComSenha(user.passwordHash, body.password);
-    if (!verifyTotp(user.totpSecret, body.code)) {
-      throw new ApiError('INVALID_MFA_CODE', 'Codigo incorreto.');
+    // O codigo do app ou um de recuperacao: quem perdeu o celular precisa
+    // conseguir desligar para cadastrar o novo.
+    const confere = await verifySecondFactor(
+      { id: auth.userId, totpSecret: user.totpSecret, backupCodes: user.backupCodes },
+      body.code,
+      body.backupCode,
+    );
+    if (!confere) {
+      throw new ApiError('INVALID_MFA_CODE', body.backupCode ? 'Codigo de recuperacao incorreto ou ja usado.' : 'Codigo incorreto.');
     }
 
     await prisma.user.update({

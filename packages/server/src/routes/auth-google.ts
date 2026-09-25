@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { RATE_LIMITS, generateId } from '@kiroshi/shared';
+import { INVITE_CODE_PATTERN, LIMITS, RATE_LIMITS, generateId, novoUsernameSchema } from '@kiroshi/shared';
+import { conviteDoCadastro, entrarPeloCadastro } from '../services/invites.js';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
@@ -57,6 +58,8 @@ type Desfecho =
   | { tipo: 'sem-conta'; prova: string; email: string | null; nome: string | null }
   | { tipo: 'vinculado'; email: string | null }
   | { tipo: 'prova-de-senha'; prova: string }
+  /** Esqueci a senha: a conta que o Google vinculado abre, para a pessoa conferir. */
+  | { tipo: 'prova-de-recuperacao'; prova: string; username: string; displayName: string }
   | { tipo: 'erro'; codigo: string; mensagem: string };
 
 interface Bilhete {
@@ -109,24 +112,23 @@ function limparBilhetesVencidos(): void {
 // ---------------------------------------------------------------------------
 
 const inicioSchema = z.object({
-  intencao: z.enum(['entrar', 'vincular', 'senha']),
+  intencao: z.enum(['entrar', 'vincular', 'senha', 'recuperar']),
   retorno: z.string().min(1).max(200),
 });
 
 const registroSchema = z.object({
   prova: z.string().min(1),
-  username: z
-    .string()
-    .min(2)
-    .max(32)
-    .regex(/^[a-z0-9._-]+$/, 'Use letras minusculas, numeros, ponto, hifen ou sublinhado.'),
-  displayName: z.string().min(1).max(32).optional(),
-  inviteCode: z.string().min(1).max(64).optional(),
+  // O mesmo formato do cadastro por senha. Antes aceitava hifen, que o resto
+  // do sistema recusa: nao dava para mandar amizade a quem entrou assim.
+  username: novoUsernameSchema,
+  displayName: z.string().trim().min(LIMITS.displayName.min).max(LIMITS.displayName.max).optional(),
+  inviteCode: z.string().regex(INVITE_CODE_PATTERN).optional(),
 });
 
+// Ate 128, como o login: antes aceitava 200, e a senha nao servia para entrar.
 const senhaSchema = z.object({
   prova: z.string().min(1),
-  newPassword: z.string().min(8).max(200),
+  newPassword: z.string().min(LIMITS.password.min).max(LIMITS.password.max),
 });
 
 /** Manda o navegador de volta para o aplicativo, com bilhete ou com erro. */
@@ -183,11 +185,12 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
       Vincular e trocar senha exigem ja estar logado.
 
       Sao acoes SOBRE uma conta existente, e a conta e identificada pela
-      sessao, nunca pelo email que o Google devolver. Entrar, ao contrario, e
-      publico: quem entra ainda nao tem sessao.
+      sessao, nunca pelo email que o Google devolver. Entrar e recuperar, ao
+      contrario, sao publicos: quem chega aqui ainda nao tem sessao, e a conta
+      sai do vinculo com o Google.
     */
     let userId: string | undefined;
-    if (body.intencao !== 'entrar') {
+    if (body.intencao === 'vincular' || body.intencao === 'senha') {
       await requireAuth(request, reply);
       userId = request.auth?.userId;
       if (!userId) throw new ApiError('UNAUTHORIZED', 'Entre na conta antes.');
@@ -289,7 +292,8 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
    *
    * Continua respeitando o cadastro fechado: se o servidor exige convite, a
    * conta do Google nao dispensa o codigo. Entrar por Google e uma forma de
-   * provar quem voce e, nao um passe para dentro.
+   * provar quem voce e, nao um passe para dentro. Com o cadastro aberto, o
+   * convite (se veio) so poe a conta nova no servidor dele.
    */
   app.post('/auth/google/registrar', async (request, reply) => {
     consume(`register:${ipDaRequisicao(request)}`, RATE_LIMITS.register);
@@ -297,24 +301,7 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
     const body = registroSchema.parse(request.body);
     const { google } = await conferirProva(body.prova, 'registro');
 
-    let inviteGuildId: string | null = null;
-    if (!config.allowOpenRegistration) {
-      if (!body.inviteCode) {
-        throw new ApiError(
-          'REGISTRATION_CLOSED',
-          'Este servidor exige um codigo de convite para criar conta.',
-        );
-      }
-      const convite = await prisma.invite.findUnique({ where: { code: body.inviteCode } });
-      if (
-        !convite ||
-        (convite.expiresAt && convite.expiresAt < new Date()) ||
-        (convite.maxUses > 0 && convite.uses >= convite.maxUses)
-      ) {
-        throw new ApiError('INVITE_INVALID', 'Convite invalido ou expirado.');
-      }
-      inviteGuildId = convite.guildId;
-    }
+    const convite = await conviteDoCadastro(body.inviteCode, config.allowOpenRegistration);
 
     // Entre a prova e aqui alguem pode ter vinculado esta mesma conta.
     const jaVinculada = await prisma.linkedAccount.findUnique({
@@ -348,6 +335,10 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
     }
     if (usernameEmUso) throw new ApiError('USERNAME_TAKEN', 'Este nome de usuario ja existe.');
 
+    // O teto do servidor inteiro so gasta com um pedido que ia mesmo criar conta:
+    // pedido invalido nao pode esgotar o cadastro de todo mundo.
+    consume('register:global', RATE_LIMITS.registerGlobal);
+
     const usuario = await prisma.$transaction(async (tx) => {
       const criado = await tx.user.create({
         data: {
@@ -377,15 +368,50 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
     logger.info({ userId: usuario.id, username: usuario.username }, 'conta criada pelo Google');
 
     const sessao = await createSession(usuario.id, request.headers['user-agent'], ipDaRequisicao(request));
+    const guildId = await entrarPeloCadastro(convite, usuario.id);
 
-    if (inviteGuildId && body.inviteCode) {
-      const { acceptInvite } = await import('../services/invites.js');
-      await acceptInvite(body.inviteCode, usuario.id).catch((erro: unknown) => {
-        logger.warn({ erro, userId: usuario.id }, 'falha ao entrar no servidor do convite');
-      });
+    return reply.status(201).send({ user: toSelfUser(usuario), ...sessao, guildId });
+  });
+
+  // -------------------------------------------------------------------------
+  /**
+   * Esqueci a senha (fatia 7): uma senha nova provando pelo Google vinculado,
+   * sem estar logado. A recuperacao do Kiroshi e so esta — decisao do dono:
+   * o servidor nao manda email.
+   *
+   * Nao abre nada que o Google ja nao abrisse: entrar pelo Google vinculado ja
+   * da a conta inteira. O que muda e que a pessoa sai daqui com uma senha que
+   * funciona. E o 2FA continua valendo: com ele ligado, a resposta pede o
+   * codigo do app, como o login pelo Google pede.
+   */
+  app.post('/auth/google/recuperar', async (request) => {
+    consume(`senha-google:${ipDaRequisicao(request)}`, RATE_LIMITS.login);
+
+    const body = senhaSchema.parse(request.body);
+    const { userId } = await conferirProva(body.prova, 'recuperacao');
+
+    const usuario = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, disabledAt: true, totpEnabled: true },
+    });
+    if (!usuario || usuario.disabledAt) throw new ApiError('FORBIDDEN', 'Esta conta esta desativada.');
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await hashPassword(body.newPassword) },
+    });
+    // Senha trocada por recuperacao derruba todas as sessoes: se alguem tinha
+    // tomado a conta, cai junto — inclusive do gateway.
+    await prisma.session.deleteMany({ where: { userId } });
+    encerrarSessoesDeGateway(userId);
+    logger.info({ userId }, 'senha recuperada pelo Google');
+
+    if (usuario.totpEnabled) {
+      return { tipo: 'mfa' as const, mfaToken: await signMfaChallenge(userId) };
     }
-
-    return reply.status(201).send({ user: toSelfUser(usuario), ...sessao });
+    const sessao = await createSession(userId, request.headers['user-agent'], ipDaRequisicao(request));
+    const eu = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: SELF_USER_SELECT });
+    return { tipo: 'sessao' as const, user: toSelfUser(eu), ...sessao };
   });
 
   // -------------------------------------------------------------------------
@@ -478,6 +504,21 @@ async function decidirDesfecho(
       };
     }
 
+    // Outro Google ja ligado a esta conta: antes era trocado em silencio, e o
+    // Google antigo perdia o acesso sem a pessoa saber. Agora pede para
+    // desvincular primeiro.
+    const atual = await prisma.linkedAccount.findUnique({
+      where: { userId_provider: { userId: userIdDoPedido, provider: 'GOOGLE' } },
+      select: { providerId: true, email: true },
+    });
+    if (atual && atual.providerId !== google.id) {
+      return {
+        tipo: 'erro',
+        codigo: 'outro_vinculado',
+        mensagem: `Esta conta ja esta ligada a outro Google${atual.email ? ` (${atual.email})` : ''}. Desvincule aquele antes.`,
+      };
+    }
+
     await prisma.linkedAccount.upsert({
       where: { userId_provider: { userId: userIdDoPedido, provider: 'GOOGLE' } },
       create: {
@@ -508,6 +549,31 @@ async function decidirDesfecho(
     return {
       tipo: 'prova-de-senha',
       prova: await assinarProva({ proposito: 'senha', userId: userIdDoPedido }),
+    };
+  }
+
+  if (intencao === 'recuperar') {
+    // Sem sessao: a conta sai do vinculo com o Google, nunca do email.
+    if (!vinculo) {
+      return {
+        tipo: 'erro',
+        codigo: 'nao_vinculada',
+        mensagem:
+          'Nenhuma conta do Kiroshi usa este Google. A recuperacao e so pelo Google vinculado: sem ele, fale com quem administra o servidor.',
+      };
+    }
+    const conta = await prisma.user.findUnique({
+      where: { id: vinculo.userId },
+      select: { id: true, username: true, displayName: true, disabledAt: true },
+    });
+    if (!conta || conta.disabledAt) {
+      return { tipo: 'erro', codigo: 'desativada', mensagem: 'Esta conta esta desativada.' };
+    }
+    return {
+      tipo: 'prova-de-recuperacao',
+      prova: await assinarProva({ proposito: 'recuperacao', userId: conta.id }),
+      username: conta.username,
+      displayName: conta.displayName,
     };
   }
 

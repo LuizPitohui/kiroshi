@@ -405,6 +405,69 @@ async function main() {
     check('passar a posse para quem nao e membro da erro claro, nao 500', posse.status === 400, `status ${posse.status}`);
   }
 
+  console.log('\n--- CONTA NOVA COM CADASTRO ABERTO (fatia 7) ---');
+  {
+    const info7 = await fetch(`${API}/api/info`).then((r) => r.json());
+    if (!info7.openRegistration) {
+      console.log('  (cadastro fechado nesta API: nada a conferir aqui)');
+    } else {
+      const sufixo = Date.now().toString(36).slice(-6);
+      const reservado = await api('POST', '/api/v1/auth/register', {
+        body: { email: `admin${sufixo}@teste.local`, username: 'admin', password: 'senha-da-conta-nova' },
+      });
+      check('nome reservado nao vira conta', reservado.status === 400, `status ${reservado.status}`);
+
+      const nova = await api('POST', '/api/v1/auth/register', {
+        body: { email: `nova${sufixo}@teste.local`, username: `nova_${sufixo}`, password: 'senha-da-conta-nova' },
+      });
+      check('cria conta sem convite', nova.status === 201 && typeof nova.body?.accessToken === 'string', `status ${nova.status} ${JSON.stringify(nova.body).slice(0, 120)}`);
+      const tokenNova = nova.body?.accessToken;
+      const idNova = nova.body?.user?.id;
+      const vazia = await connectGateway(tokenNova, 'conta-nova');
+      check('a conta nova nasce sem servidor nenhum', vazia.ready?.guilds?.length === 0);
+      vazia.close();
+
+      // Estranhos nao se chamam na DM: primeiro amizade ou servidor em comum.
+      const estranho = await api('POST', '/api/v1/users/@me/channels', { token: tokenNova, body: { recipientIds: [me.body.id] } });
+      check('conta nova nao abre DM com estranho', estranho.status === 403, `status ${estranho.status}`);
+      const pedido = await api('POST', '/api/v1/relationships', { token: tokenNova, body: { username: 'pitohui' } });
+      check('conta nova manda pedido de amizade', pedido.status === 200 || pedido.status === 201, `status ${pedido.status}`);
+      const recebido = (await api('GET', '/api/v1/relationships', { token })).body?.find((r) => r.user?.id === idNova && r.type === 'PENDING_INCOMING');
+      const aceito = await api('PUT', `/api/v1/relationships/${recebido?.id}`, { token });
+      check('o outro lado aceita', aceito.status === 200, `status ${aceito.status}`);
+      const agora = await api('POST', '/api/v1/users/@me/channels', { token: tokenNova, body: { recipientIds: [me.body.id] } });
+      check('amigos abrem a DM', agora.status === 200 || agora.status === 201, `status ${agora.status}`);
+
+      // Convite no cadastro aberto: a conta ja nasce dentro do servidor.
+      const convite = await api('POST', `/api/v1/guilds/${newGuild.body.id}/invites`, { token, body: { maxAgeSecs: 600, maxUses: 1 } });
+      const comConvite = await api('POST', '/api/v1/auth/register', {
+        body: { email: `convidada${sufixo}@teste.local`, username: `convidada_${sufixo}`, password: 'senha-da-conta-nova', inviteCode: convite.body?.code },
+      });
+      check('cadastro com convite ja entra no servidor', comConvite.status === 201 && comConvite.body?.guildId === newGuild.body.id, JSON.stringify(comConvite.body).slice(0, 160));
+      const deDentro = await api('GET', `/api/v1/guilds/${newGuild.body.id}`, { token: comConvite.body?.accessToken });
+      check('e ve o servidor de dentro', deDentro.status === 200);
+
+      // Perdeu o celular: o 2FA desliga com um codigo de recuperacao.
+      const { authenticator } = await import('otplib');
+      const setup = await api('POST', '/api/v1/auth/totp/setup', { token: tokenNova });
+      const liga = await api('POST', '/api/v1/auth/totp/enable', {
+        token: tokenNova,
+        body: { code: authenticator.generate(setup.body?.secret), password: 'senha-da-conta-nova' },
+      });
+      check('liga o 2FA e recebe codigos de recuperacao', liga.status === 200 && liga.body?.backupCodes?.length > 0, `status ${liga.status}`);
+      const desliga = await api('POST', '/api/v1/auth/totp/disable', {
+        token: tokenNova,
+        body: { backupCode: liga.body?.backupCodes?.[0], password: 'senha-da-conta-nova' },
+      });
+      check('desliga o 2FA com um codigo de recuperacao', desliga.status === 200, `status ${desliga.status} ${JSON.stringify(desliga.body).slice(0, 120)}`);
+      const ninguem = await api('POST', '/api/v1/auth/totp/disable', {
+        token: tokenNova,
+        body: { code: '000000', password: 'senha-da-conta-nova' },
+      });
+      check('e o 2FA ficou desligado mesmo', ninguem.status === 400, `status ${ninguem.status}`);
+    }
+  }
+
   console.log('\n--- VOZ ---');
 
   const info = await fetch(`${API}/api/info`).then((r) => r.json());

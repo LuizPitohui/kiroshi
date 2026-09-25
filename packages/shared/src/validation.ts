@@ -2,7 +2,7 @@
  *  o formulario antes de enviar. Uma definicao so, duas pontas. */
 
 import { z } from 'zod';
-import { LIMITS, USERNAME_PATTERN, INVITE_CODE_PATTERN, BITRATE } from './constants.js';
+import { LIMITS, USERNAME_PATTERN, INVITE_CODE_PATTERN, BITRATE, usernameReservado } from './constants.js';
 import { ALL_PERMISSION_NAMES } from './permissions.js';
 
 const snowflake = z.string().regex(/^\d{1,20}$/, 'id invalido');
@@ -18,13 +18,17 @@ const hexColor = z
 // Autenticacao
 // ---------------------------------------------------------------------------
 
+/** Nome de usuario de conta nova: o formato de sempre e fora da lista de reservados. */
+export const novoUsernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(USERNAME_PATTERN, 'use 2 a 32 caracteres: letras minusculas, numeros, ponto ou _')
+  .refine((u) => !usernameReservado(u), 'este nome de usuario e reservado');
+
 export const registerSchema = z.object({
   email: z.string().email('email invalido').max(254).toLowerCase().trim(),
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(USERNAME_PATTERN, 'use 2 a 32 caracteres: letras minusculas, numeros, ponto ou _'),
+  username: novoUsernameSchema,
   displayName: z
     .string()
     .trim()
@@ -68,10 +72,22 @@ export const enableTotpSchema = z.object({
   password: z.string().min(1).optional(),
 });
 
-export const disableTotpSchema = z.object({
-  password: z.string().min(1).optional(),
-  code: z.string().regex(/^\d{6}$/),
-});
+/*
+  Desligar o 2FA aceita o codigo do app OU um codigo de recuperacao.
+
+  Antes so o do app: quem perdeu o celular entrava com um codigo de
+  recuperacao e ficava preso com o 2FA ligado, sem ter como desligar nem
+  cadastrar o celular novo.
+*/
+export const disableTotpSchema = z
+  .object({
+    password: z.string().min(1).optional(),
+    code: z.string().regex(/^\d{6}$/).optional(),
+    backupCode: z.string().regex(/^[a-z0-9]{4}-[a-z0-9]{4}$/i).optional(),
+  })
+  .refine((v) => Boolean(v.code) !== Boolean(v.backupCode), {
+    message: 'informe o codigo do app ou um codigo de recuperacao',
+  });
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).optional(),

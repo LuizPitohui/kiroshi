@@ -40,6 +40,44 @@ export async function bloqueioNaDm(channelId: string, userId: string): Promise<b
   return bloqueioEntre(userId, outro.userId);
 }
 
+/** Amizade aceita entre as duas. */
+export async function saoAmigos(a: string, b: string): Promise<boolean> {
+  const amizade = await prisma.relationship.findFirst({
+    where: {
+      status: 'ACCEPTED',
+      OR: [
+        { requesterId: a, addresseeId: b },
+        { requesterId: b, addresseeId: a },
+      ],
+    },
+    select: { id: true },
+  });
+  return amizade !== null;
+}
+
+/** Estao juntas em pelo menos um servidor. */
+export async function servidorEmComum(a: string, b: string): Promise<boolean> {
+  const comum = await prisma.guildMember.findFirst({
+    where: { userId: a, guild: { members: { some: { userId: b } } } },
+    select: { guildId: true },
+  });
+  return comum !== null;
+}
+
+/**
+ * Pode abrir uma conversa direta com essa pessoa?
+ *
+ * Com o cadastro aberto (fatia 7), qualquer um cria conta e acha o id de
+ * alguem pelo nome de usuario. Sem esta regra, uma conta recem-criada mandava
+ * mensagem para quem quisesse. Como no Discord: amigos, gente com servidor em
+ * comum, ou quem ja tinha conversa aberta (ela so reabre).
+ */
+export async function podeAbrirDm(de: string, para: string): Promise<boolean> {
+  if (await saoAmigos(de, para)) return true;
+  if (await servidorEmComum(de, para)) return true;
+  return (await dmEntre(de, para)) !== null;
+}
+
 /** A DM 1:1 entre duas pessoas, quando existe. */
 export async function dmEntre(a: string, b: string): Promise<{ id: string } | null> {
   return prisma.channel.findFirst({

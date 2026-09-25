@@ -178,6 +178,41 @@ export async function acceptInvite(
   return { ...resposta, joined: true };
 }
 
+/**
+ * O convite no cadastro (senha ou Google).
+ *
+ * Cadastro fechado: o convite e o passe — obrigatorio e valido. Aberto (fatia
+ * 7): opcional; se veio, a conta ja nasce dentro do servidor dele (quem chegou
+ * pelo link nao precisa aceitar de novo). Um convite vencido no cadastro aberto
+ * nao impede a conta: ela so nasce sem servidor.
+ *
+ * Devolve o codigo a aceitar depois que a conta existir, ou null.
+ */
+export async function conviteDoCadastro(codigo: string | undefined, aberto: boolean): Promise<string | null> {
+  if (!codigo) {
+    if (aberto) return null;
+    throw new ApiError('REGISTRATION_CLOSED', 'Este servidor exige um codigo de convite para criar conta.');
+  }
+  const invite = await prisma.invite.findUnique({ where: { code: codigo } });
+  if (!invite || isExpired(invite)) {
+    if (aberto) return null;
+    throw new ApiError('INVITE_INVALID', 'Convite invalido ou expirado.');
+  }
+  return codigo;
+}
+
+/** Aceita o convite do cadastro; falha vira log, a conta ja existe. Devolve o servidor, se entrou. */
+export async function entrarPeloCadastro(codigo: string | null, userId: string): Promise<string | null> {
+  if (!codigo) return null;
+  try {
+    const { guildId } = await acceptInvite(codigo, userId);
+    return guildId;
+  } catch (error) {
+    logger.warn({ error, userId }, 'falha ao entrar no servidor do convite do cadastro');
+    return null;
+  }
+}
+
 async function devolverUso(code: string): Promise<void> {
   await prisma.invite
     .updateMany({ where: { code, uses: { gt: 0 } }, data: { uses: { decrement: 1 } } })
