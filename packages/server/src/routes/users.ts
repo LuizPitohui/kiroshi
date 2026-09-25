@@ -17,6 +17,7 @@ import {
   toSelfUser,
 } from '../lib/serialize.js';
 import { emitToGuild, emitToUser } from '../gateway/events.js';
+import { encerrarSessoesDeGateway } from '../gateway/server.js';
 import { resolveImageInput } from '../services/storage.js';
 
 export async function userRoutes(app: FastifyInstance): Promise<void> {
@@ -282,6 +283,9 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         },
       });
     });
+
+    // A conta desativada sai de todas as conexoes abertas, em todo aparelho.
+    encerrarSessoesDeGateway(userId);
 
     return { ok: true };
   });

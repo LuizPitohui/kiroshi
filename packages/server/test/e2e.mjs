@@ -118,6 +118,47 @@ async function naoChega(conexao, nome, filtro = () => true, ms = 2000) {
   }
 }
 
+/** O codigo com que o socket fecha, ou null se nao fechar a tempo. */
+function codigoDeFechamento(ws, ms = 5000) {
+  return new Promise((resolve) => {
+    const prazo = setTimeout(() => resolve(null), ms);
+    ws.once('close', (codigo) => {
+      clearTimeout(prazo);
+      resolve(codigo);
+    });
+  });
+}
+
+/**
+ * Tenta um IDENTIFY e diz como terminou: 'READY', o codigo de fechamento, ou
+ * 'timeout'. Para conferir que um token e recusado pelo gateway.
+ */
+function resultadoDoIdentify(token) {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(GW);
+    const prazo = setTimeout(() => {
+      ws.close();
+      resolve('timeout');
+    }, 10000);
+    ws.on('message', (raw) => {
+      const msg = JSON.parse(raw.toString());
+      if (msg.op === 10) {
+        ws.send(JSON.stringify({ op: 2, d: { token, properties: { os: 'test', client: 'e2e', version: '1' } } }));
+      }
+      if (msg.op === 0 && msg.t === 'READY') {
+        clearTimeout(prazo);
+        ws.close();
+        resolve('READY');
+      }
+    });
+    ws.on('close', (codigo) => {
+      clearTimeout(prazo);
+      resolve(codigo);
+    });
+    ws.on('error', () => undefined);
+  });
+}
+
 async function main() {
   console.log('\n--- AUTENTICACAO ---');
 
@@ -439,15 +480,58 @@ async function main() {
   check('apaga o canal privado', apagouPrivado.status === 200, `status ${apagouPrivado.status}`);
   check('quem nao via o canal nao e avisado de que ele sumiu', await semAvisoDeExclusao);
 
+  console.log('\n--- SESSAO ENCERRADA DERRUBA O GATEWAY ---');
+
+  // Uma segunda sessao de login da mesma conta, como um segundo aparelho.
+  const segundoLogin = await api('POST', '/api/v1/auth/login', {
+    body: { login: 'pitohui', password: 'ordem123456' },
+  });
+  check('abre uma segunda sessao de login', segundoLogin.status === 200, `status ${segundoLogin.status}`);
+  const tokenDoAparelho = segundoLogin.body?.accessToken;
+  const aparelho = await connectGateway(tokenDoAparelho, 'aparelho-revogado');
+
+  const listaDeSessoes = await api('GET', '/api/v1/auth/sessions', { token: tokenDoAparelho });
+  const idDoAparelho = Array.isArray(listaDeSessoes.body)
+    ? listaDeSessoes.body.find((s) => s.current)?.id
+    : undefined;
+  check('a sessao nova aparece na lista de aparelhos', Boolean(idDoAparelho));
+
+  // Revogar pelo outro aparelho: o gateway da sessao revogada fecha com 4004,
+  // que o app 1.15 trata renovando o token e, sem sessao, indo para o login.
+  const aparelhoFechou = codigoDeFechamento(aparelho.ws);
+  const revogar = await api('DELETE', `/api/v1/auth/sessions/${idDoAparelho}`, { token });
+  check('revoga a sessao do outro aparelho', revogar.status === 200, `status ${revogar.status}`);
+  const codigoDoAparelho = await aparelhoFechou;
+  check('o gateway da sessao revogada fecha com 4004', codigoDoAparelho === 4004, `codigo ${codigoDoAparelho}`);
+
+  // O access token dela ainda e um JWT valido por alguns minutos. O gateway
+  // precisa recusar mesmo assim, conferindo a sessao no banco.
+  const novaTentativa = await resultadoDoIdentify(tokenDoAparelho);
+  check('token de sessao encerrada nao entra mais no gateway', novaTentativa === 4004, `resultado ${novaTentativa}`);
+
+  // Quem revogou continua conectado: a revogacao e so daquele aparelho.
+  const aliceSegue = esperarNovo(alice, 'MESSAGE_CREATE', (d) => d?.channelId === textChannel.id);
+  const depoisDaRevogacao = await api('POST', `/api/v1/channels/${textChannel.id}/messages`, {
+    token, body: { content: 'ainda conectada' },
+  });
+  check(
+    'a sessao de quem revogou segue recebendo',
+    (await aliceSegue.catch(() => null))?.id === depoisDaRevogacao.body?.id,
+  );
+
   console.log('\n--- CORPO VAZIO COM CONTENT-TYPE JSON (regressao) ---');
 
   // Clientes HTTP mandam content-type json mesmo sem corpo; o Fastify
   // rejeitava isso com 400 antes do parser tolerante.
+  const bobFechou = codigoDeFechamento(bob.ws);
   const emptyBody = await fetch(`${API}/api/v1/auth/logout`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token2}` },
   });
   check('POST sem corpo com content-type json funciona', emptyBody.status === 200, `status ${emptyBody.status}`);
+  // E o logout encerra a conexao em tempo real da propria sessao.
+  const codigoDoBob = await bobFechou;
+  check('logout derruba o gateway da propria sessao', codigoDoBob === 4004, `codigo ${codigoDoBob}`);
 
   console.log('\n--- VALIDACAO E RATE LIMIT ---');
 

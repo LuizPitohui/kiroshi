@@ -1,6 +1,9 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import http from 'node:http';
+import https from 'node:https';
+import { isIP, type LookupFunction } from 'node:net';
 import { extractUrls, type Embed } from '@kiroshi/shared';
+import { enderecoPublico } from '../lib/enderecos.js';
 import { logger } from '../logger.js';
 
 /**
@@ -8,41 +11,34 @@ import { logger } from '../logger.js';
  *
  * Buscar uma URL que o usuario escreveu e um vetor de SSRF: alguem posta
  * http://192.168.100.21:5432 e o servidor sonda a rede interna por ele. Por
- * isso resolvemos o DNS antes e recusamos qualquer endereco privado, de
- * loopback ou de link-local, inclusive apos redirecionamento.
+ * isso cada destino e resolvido e conferido antes (`enderecoPublico`, que le
+ * tambem o IPv4 escondido dentro de um IPv6), inclusive a cada
+ * redirecionamento — e a conexao vai para o endereco conferido, nao para
+ * uma segunda resposta do DNS.
  */
 
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_BYTES = 512 * 1024;
 const MAX_REDIRECTS = 3;
 
-function isPrivateIPv4(ip: string): boolean {
-  const parts = ip.split('.').map(Number);
-  const [a, b] = parts;
-  if (a === undefined || b === undefined) return true;
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 0) return true;
-  if (a === 169 && b === 254) return true; // link-local e metadados de nuvem
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-  if (a >= 224) return true; // multicast e reservado
-  return false;
+interface EnderecoResolvido {
+  address: string;
+  family: number;
 }
 
-function isPrivateIPv6(ip: string): boolean {
-  const normalized = ip.toLowerCase();
-  if (normalized === '::1' || normalized === '::') return true;
-  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // unique local
-  if (normalized.startsWith('fe80')) return true; // link-local
-  // IPv4 mapeado em IPv6 volta para a checagem de IPv4.
-  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped?.[1]) return isPrivateIPv4(mapped[1]);
-  return false;
+interface Destino {
+  url: URL;
+  /** Os enderecos ja conferidos. A conexao so pode ir para um destes. */
+  enderecos: EnderecoResolvido[];
 }
 
-async function isSafeUrl(raw: string): Promise<URL | null> {
+/**
+ * Resolve e confere um destino. Null quando nao pode ser buscado.
+ *
+ * Um endereco interno entre os que o DNS devolveu basta para recusar o nome
+ * inteiro: o sistema poderia escolher justo ele na hora de conectar.
+ */
+async function resolverDestino(raw: string): Promise<Destino | null> {
   let url: URL;
   try {
     url = new URL(raw);
@@ -54,24 +50,76 @@ async function isSafeUrl(raw: string): Promise<URL | null> {
 
   const host = url.hostname.replace(/^\[|\]$/g, '');
 
-  // Endereco literal: checa direto.
   const literal = isIP(host);
-  if (literal === 4) return isPrivateIPv4(host) ? null : url;
-  if (literal === 6) return isPrivateIPv6(host) ? null : url;
+  if (literal) {
+    return enderecoPublico(host) ? { url, enderecos: [{ address: host, family: literal }] } : null;
+  }
 
-  // Nome: resolve e checa todos os enderecos retornados.
   try {
-    const records = await lookup(host, { all: true });
-    if (records.length === 0) return null;
-    for (const record of records) {
-      const blocked =
-        record.family === 4 ? isPrivateIPv4(record.address) : isPrivateIPv6(record.address);
-      if (blocked) return null;
-    }
-    return url;
+    const registros = await lookup(host, { all: true, verbatim: true });
+    if (registros.length === 0) return null;
+    if (registros.some((r) => !enderecoPublico(r.address))) return null;
+    return { url, enderecos: registros };
   } catch {
     return null;
   }
+}
+
+/**
+ * `lookup` que responde com os enderecos ja conferidos, sem perguntar ao DNS.
+ *
+ * E o que fecha a janela entre conferir e conectar. Com o `fetch`, o DNS era
+ * consultado de novo na hora da conexao, e um nome que respondesse um
+ * endereco publico na conferencia e um interno logo depois passava.
+ */
+function lookupFixo(enderecos: EnderecoResolvido[]): LookupFunction {
+  return (_hostname, opcoes, callback) => {
+    if (opcoes?.all) {
+      callback(null, enderecos);
+      return;
+    }
+    const primeiro = enderecos[0]!;
+    callback(null, primeiro.address, primeiro.family);
+  };
+}
+
+/** Abre o GET para um destino ja conferido. */
+function abrir(destino: Destino, sinal: AbortSignal): Promise<http.IncomingMessage> {
+  const modulo = destino.url.protocol === 'https:' ? https : http;
+  return new Promise((resolve, reject) => {
+    const pedido = modulo.request(
+      destino.url,
+      {
+        method: 'GET',
+        headers: {
+          'user-agent': 'KiroshiBot/1.0 (+link preview)',
+          accept: 'text/html,application/xhtml+xml',
+        },
+        lookup: lookupFixo(destino.enderecos),
+        // Conexao nova a cada busca: um socket reaproveitado de outro pedido
+        // nao passou por esta conferencia.
+        agent: false,
+        signal: sinal,
+      },
+      resolve,
+    );
+    pedido.on('error', reject);
+    pedido.end();
+  });
+}
+
+/** Le so o comeco do corpo: as meta tags ficam no head. */
+async function lerInicio(resposta: http.IncomingMessage): Promise<Buffer> {
+  const pedacos: Buffer[] = [];
+  let total = 0;
+  for await (const pedaco of resposta) {
+    const buffer = pedaco as Buffer;
+    pedacos.push(buffer);
+    total += buffer.length;
+    if (total >= MAX_BYTES) break;
+  }
+  resposta.destroy();
+  return Buffer.concat(pedacos);
 }
 
 function decodeEntities(text: string): string {
@@ -114,35 +162,35 @@ async function fetchMetadata(rawUrl: string): Promise<Embed | null> {
   let current = rawUrl;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const url = await isSafeUrl(current);
-    if (!url) return null;
+    const destino = await resolverDestino(current);
+    if (!destino) return null;
+    const { url } = destino;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
     try {
-      const response = await fetch(url, {
-        // Seguimos os redirecionamentos a mao para revalidar cada destino.
-        redirect: 'manual',
-        signal: controller.signal,
-        headers: {
-          'user-agent': 'KiroshiBot/1.0 (+link preview)',
-          accept: 'text/html,application/xhtml+xml',
-        },
-      });
+      const response = await abrir(destino, controller.signal);
+      const status = response.statusCode ?? 0;
 
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
+      // Redirecionamento seguido a mao, para conferir cada destino de novo.
+      if (status >= 300 && status < 400) {
+        response.destroy();
+        const location = response.headers.location;
         if (!location) return null;
         current = new URL(location, url).toString();
         continue;
       }
 
-      if (!response.ok) return null;
+      if (status < 200 || status >= 300) {
+        response.destroy();
+        return null;
+      }
 
-      const contentType = response.headers.get('content-type') ?? '';
+      const contentType = response.headers['content-type'] ?? '';
 
       if (contentType.startsWith('image/')) {
+        response.destroy();
         return {
           type: 'image',
           url: url.toString(),
@@ -158,25 +206,12 @@ async function fetchMetadata(rawUrl: string): Promise<Embed | null> {
         };
       }
 
-      if (!contentType.includes('html')) return null;
-
-      // Le so o inicio do documento: as meta tags ficam no head.
-      const reader = response.body?.getReader();
-      if (!reader) return null;
-
-      const chunks: Uint8Array[] = [];
-      let total = 0;
-      while (total < MAX_BYTES) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          total += value.length;
-        }
+      if (!contentType.includes('html')) {
+        response.destroy();
+        return null;
       }
-      await reader.cancel().catch(() => undefined);
 
-      const html = Buffer.concat(chunks).toString('utf8');
+      const html = (await lerInicio(response)).toString('utf8');
 
       const title = readMeta(html, 'og:title') ?? readMeta(html, 'twitter:title') ?? readTitle(html);
       const description =
@@ -238,4 +273,4 @@ export async function buildEmbeds(content: string): Promise<Embed[]> {
     .map((r) => r.value);
 }
 
-export const __testing = { isSafeUrl, readMeta, readTitle, decodeEntities };
+export const __testing = { resolverDestino, lookupFixo, readMeta, readTitle, decodeEntities };

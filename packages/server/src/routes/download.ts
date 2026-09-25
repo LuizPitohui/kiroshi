@@ -3,6 +3,7 @@ import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { notFound } from '../errors.js';
+import { ipDaRequisicao } from '../lib/ip-do-cliente.js';
 import { logger } from '../logger.js';
 
 /**
@@ -101,7 +102,7 @@ export async function downloadRoutes(app: FastifyInstance): Promise<void> {
     const alvo = await maisNovo();
     if (!alvo) throw notFound('Instalador');
 
-    logger.info({ versao: alvo.versao, ip: request.ip }, 'instalador baixado');
+    logger.info({ versao: alvo.versao, ip: ipDaRequisicao(request) }, 'instalador baixado');
 
     return (
       reply

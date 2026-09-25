@@ -9,6 +9,8 @@ import { generateToken, hashPassword } from '../auth/password.js';
 import { signMfaChallenge } from '../auth/tokens.js';
 import { createSession } from '../auth/sessao.js';
 import { requireAuth, requireFreshAuth } from '../auth/middleware.js';
+import { encerrarSessoesDeGateway } from '../gateway/server.js';
+import { ipDaRequisicao } from '../lib/ip-do-cliente.js';
 import { consume } from '../lib/ratelimit.js';
 import { SELF_USER_SELECT, toSelfUser } from '../lib/serialize.js';
 import {
@@ -165,7 +167,7 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
 
   // -------------------------------------------------------------------------
   app.post('/auth/google/start', async (request, reply) => {
-    consume(`google:${request.ip}`, RATE_LIMITS.login);
+    consume(`google:${ipDaRequisicao(request)}`, RATE_LIMITS.login);
 
     if (!googleConfigurado()) {
       throw new ApiError('GOOGLE_UNAVAILABLE', 'Este servidor nao tem login com Google ativado.');
@@ -268,7 +270,7 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
       const sessao = await createSession(
         desfecho.userId,
         request.headers['user-agent'],
-        request.ip,
+        ipDaRequisicao(request),
       );
       const usuario = await prisma.user.findUniqueOrThrow({
         where: { id: desfecho.userId },
@@ -290,7 +292,7 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
    * provar quem voce e, nao um passe para dentro.
    */
   app.post('/auth/google/registrar', async (request, reply) => {
-    consume(`register:${request.ip}`, RATE_LIMITS.register);
+    consume(`register:${ipDaRequisicao(request)}`, RATE_LIMITS.register);
 
     const body = registroSchema.parse(request.body);
     const { google } = await conferirProva(body.prova, 'registro');
@@ -374,7 +376,7 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
 
     logger.info({ userId: usuario.id, username: usuario.username }, 'conta criada pelo Google');
 
-    const sessao = await createSession(usuario.id, request.headers['user-agent'], request.ip);
+    const sessao = await createSession(usuario.id, request.headers['user-agent'], ipDaRequisicao(request));
 
     if (inviteGuildId && body.inviteCode) {
       const { acceptInvite } = await import('../services/invites.js');
@@ -399,7 +401,7 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
    * codigo do autenticador no proximo login.
    */
   app.post('/auth/google/senha', async (request) => {
-    consume(`senha-google:${request.ip}`, RATE_LIMITS.login);
+    consume(`senha-google:${ipDaRequisicao(request)}`, RATE_LIMITS.login);
 
     const body = senhaSchema.parse(request.body);
     const { userId } = await conferirProva(body.prova, 'senha');
@@ -410,8 +412,10 @@ export async function authGoogleRoutes(app: FastifyInstance): Promise<void> {
     });
 
     // Trocar senha por recuperacao derruba TODAS as sessoes, inclusive a de
-    // quem pediu: se a conta foi tomada, o invasor cai junto.
+    // quem pediu: se a conta foi tomada, o invasor cai junto — agora tambem
+    // do gateway, onde antes seguia conectado.
     await prisma.session.deleteMany({ where: { userId } });
+    encerrarSessoesDeGateway(userId);
 
     logger.info({ userId }, 'senha redefinida pelo Google');
     return { ok: true };

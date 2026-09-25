@@ -1,5 +1,6 @@
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
+import type { ZodType, z } from 'zod';
 import {
   GATEWAY_VERSION,
   GatewayCloseCode,
@@ -12,23 +13,27 @@ import {
   generateId,
   has,
   type GatewayEnvelope,
-  type IdentifyPayload,
-  type PresenceUpdatePayload,
-  type RequestGuildMembersPayload,
-  type ResumePayload,
-  type TypingPayload,
-  type VoiceStateUpdatePayload,
 } from '@kiroshi/shared';
+import { BusChannel, getBus } from '../bus.js';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { verifyAccessToken } from '../auth/tokens.js';
+import { ipDoCliente } from '../lib/ip-do-cliente.js';
 import { MEMBER_INCLUDE, toMember } from '../lib/serialize.js';
 import { emitirParaQuemVe } from '../services/entrega.js';
 import { resolveChannelPermissions } from '../services/permissions.js';
 import { buildReadyPayload } from '../services/ready.js';
 import { bloqueioNaDm } from '../services/relacoes.js';
 import { handleVoiceStateUpdate, disconnectFromVoice } from '../services/voice.js';
-import { emitToGuild, emitToUser } from './events.js';
+import { PROCESS_ID, emitToGuild, emitToUser } from './events.js';
+import {
+  identifySchema,
+  presenceUpdateSchema,
+  requestGuildMembersSchema,
+  resumeSchema,
+  typingSchema,
+  voiceStateUpdateSchema,
+} from './payloads.js';
 import {
   clearPresence,
   getPresence,
@@ -36,6 +41,13 @@ import {
   setPresence,
 } from './registry.js';
 import { GatewaySession } from './session.js';
+
+type IdentifyLido = z.infer<typeof identifySchema>;
+type ResumeLido = z.infer<typeof resumeSchema>;
+type PresencaLida = z.infer<typeof presenceUpdateSchema>;
+type VozLida = z.infer<typeof voiceStateUpdateSchema>;
+type PedidoDeMembrosLido = z.infer<typeof requestGuildMembersSchema>;
+type DigitacaoLida = z.infer<typeof typingSchema>;
 
 /**
  * Servidor do gateway.
@@ -129,8 +141,89 @@ export function attachGateway(httpServer: HttpServer): WebSocketServer {
 
   wss.on('close', () => clearInterval(sweeper));
 
+  // Sessao encerrada a pedido de outro processo (so existe com REDIS_URL).
+  void getBus()
+    .subscribe(BusChannel.todosOsControles, (canal, bruto) => {
+      const envelope = bruto as { origin?: string; encerrar?: FiltroDeSessoes } | null;
+      if (!envelope || envelope.origin === PROCESS_ID || !envelope.encerrar) return;
+      const userId = canal.split(':')[2];
+      if (userId) encerrarAqui(userId, envelope.encerrar);
+    })
+    .catch((error: unknown) => logger.error({ error }, 'nao consegui assinar o canal de controle'));
+
   logger.info('gateway em /gateway');
   return wss;
+}
+
+// ---------------------------------------------------------------------------
+// Sessao de login encerrada
+// ---------------------------------------------------------------------------
+
+export interface FiltroDeSessoes {
+  /** So as conexoes abertas por estas sessoes de login. */
+  sessoesDeLogin?: string[];
+  /** Todas menos as desta sessao de login: trocar a senha mantem quem trocou. */
+  excetoSessaoDeLogin?: string;
+}
+
+function casaComFiltro(session: GatewaySession, filtro: FiltroDeSessoes): boolean {
+  if (filtro.sessoesDeLogin && !filtro.sessoesDeLogin.includes(session.authSessionId)) return false;
+  if (filtro.excetoSessaoDeLogin !== undefined && session.authSessionId === filtro.excetoSessaoDeLogin) {
+    return false;
+  }
+  return true;
+}
+
+function encerrarAqui(userId: string, filtro: FiltroDeSessoes): void {
+  for (const session of sessions.sessionsOfUser(userId)) {
+    if (!casaComFiltro(session, filtro)) continue;
+    // Sai do registro na hora, sem esperar a janela de retomada: a sessao de
+    // login acabou, entao nao ha o que retomar.
+    sessions.remove(session);
+    session.close(GatewayCloseCode.AUTHENTICATION_FAILED, 'sessao encerrada');
+    void finalizeSession(session);
+  }
+}
+
+/**
+ * Derruba as conexoes de gateway de sessoes de login que acabaram de ser
+ * encerradas: logout, revogar um aparelho, trocar a senha, redefinir pelo
+ * Google, excluir a conta.
+ *
+ * Antes nenhuma dessas acoes chegava ao gateway. A linha de Session sumia, mas
+ * a conexao ja aberta continuava recebendo tudo, sem prazo — o aparelho
+ * "desconectado" seguia lendo as conversas.
+ *
+ * O codigo e o 4004, que o app 1.15 ja trata assim: renova o token e, se a
+ * renovacao tambem for recusada (e vai ser, a sessao nao existe mais), volta
+ * para a tela de login. A voz daquela conexao sai junto, em `finalizeSession`.
+ */
+export function encerrarSessoesDeGateway(userId: string, filtro: FiltroDeSessoes = {}): void {
+  encerrarAqui(userId, filtro);
+  void getBus()
+    .publish(BusChannel.controle(userId), { origin: PROCESS_ID, encerrar: filtro })
+    .catch(() => undefined);
+}
+
+/**
+ * A conta dona de uma sessao de login ainda valida, ou null.
+ *
+ * Valida quer dizer: a linha existe, e desta conta, nao venceu, e a conta nao
+ * foi desativada. O JWT sozinho nao sabe de nada disso — ele e assinado e vale
+ * quinze minutos mesmo depois de a sessao ser encerrada.
+ */
+async function contaDaSessao(sessaoDeLogin: string, userId: string) {
+  const sessao = await prisma.session.findUnique({
+    where: { id: sessaoDeLogin },
+    select: {
+      userId: true,
+      expiresAt: true,
+      user: { select: { disabledAt: true, status: true, customStatus: true } },
+    },
+  });
+  if (!sessao || sessao.userId !== userId) return null;
+  if (sessao.expiresAt < new Date() || sessao.user.disabledAt) return null;
+  return sessao.user;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +267,15 @@ async function handleMessage(
     closeSocket(socket, GatewayCloseCode.DECODE_ERROR, 'json invalido');
     return;
   }
+  // `null`, numero solto e lista tambem sao JSON valido, e nao sao envelope.
+  if (typeof envelope !== 'object' || envelope === null || typeof envelope.op !== 'number') {
+    closeSocket(socket, GatewayCloseCode.DECODE_ERROR, 'envelope invalido');
+    return;
+  }
+
+  // Sessao de login encerrada: a conexao ja esta fechando e nao fala mais,
+  // nem pelo que chegar antes de o socket terminar de fechar.
+  if (state.session && sessions.get(state.session.id) !== state.session) return;
 
   switch (envelope.op) {
     case GatewayOpcode.HEARTBEAT: {
@@ -182,38 +284,61 @@ async function handleMessage(
       return;
     }
 
-    case GatewayOpcode.IDENTIFY:
-      await handleIdentify(state, envelope.d as IdentifyPayload, request);
+    case GatewayOpcode.IDENTIFY: {
+      const payload = lerPayload(socket, identifySchema, envelope.d);
+      if (payload) await handleIdentify(state, payload, request);
       return;
+    }
 
-    case GatewayOpcode.RESUME:
-      await handleResume(state, envelope.d as ResumePayload);
+    case GatewayOpcode.RESUME: {
+      const payload = lerPayload(socket, resumeSchema, envelope.d);
+      if (payload) await handleResume(state, payload);
       return;
+    }
 
-    case GatewayOpcode.PRESENCE_UPDATE:
-      await handlePresenceUpdate(state, envelope.d as PresenceUpdatePayload);
+    case GatewayOpcode.PRESENCE_UPDATE: {
+      const payload = lerPayload(socket, presenceUpdateSchema, envelope.d);
+      if (payload) await handlePresenceUpdate(state, payload);
       return;
+    }
 
-    case GatewayOpcode.VOICE_STATE_UPDATE:
-      await handleVoiceOpcode(state, envelope.d as VoiceStateUpdatePayload);
+    case GatewayOpcode.VOICE_STATE_UPDATE: {
+      const payload = lerPayload(socket, voiceStateUpdateSchema, envelope.d);
+      if (payload) await handleVoiceOpcode(state, payload);
       return;
+    }
 
-    case GatewayOpcode.REQUEST_GUILD_MEMBERS:
-      await handleRequestMembers(state, envelope.d as RequestGuildMembersPayload);
+    case GatewayOpcode.REQUEST_GUILD_MEMBERS: {
+      const payload = lerPayload(socket, requestGuildMembersSchema, envelope.d);
+      if (payload) await handleRequestMembers(state, payload);
       return;
+    }
 
-    case GatewayOpcode.TYPING:
-      await handleTyping(state, envelope.d as TypingPayload);
+    case GatewayOpcode.TYPING: {
+      const payload = lerPayload(socket, typingSchema, envelope.d);
+      if (payload) await handleTyping(state, payload);
       return;
+    }
 
     default:
       closeSocket(socket, GatewayCloseCode.UNKNOWN_OPCODE, 'opcode desconhecido');
   }
 }
 
+/**
+ * O payload no formato do opcode, ou null — e nesse caso a conexao ja foi
+ * fechada com o codigo de decodificacao, o mesmo do JSON invalido.
+ */
+function lerPayload<T>(socket: WebSocket, esquema: ZodType<T>, bruto: unknown): T | null {
+  const lido = esquema.safeParse(bruto);
+  if (lido.success) return lido.data;
+  closeSocket(socket, GatewayCloseCode.DECODE_ERROR, 'payload invalido');
+  return null;
+}
+
 async function handleIdentify(
   state: PendingConnection,
-  payload: IdentifyPayload | undefined,
+  payload: IdentifyLido,
   request: IncomingMessage,
 ): Promise<void> {
   const { socket } = state;
@@ -222,31 +347,32 @@ async function handleIdentify(
     closeSocket(socket, GatewayCloseCode.ALREADY_AUTHENTICATED, 'ja identificado');
     return;
   }
-  if (!payload?.token) {
+  if (!payload.token) {
     closeSocket(socket, GatewayCloseCode.AUTHENTICATION_FAILED, 'token ausente');
     return;
   }
 
   let userId: string;
+  let sessaoDeLogin: string;
   try {
     const claims = await verifyAccessToken(payload.token);
     userId = claims.sub;
+    sessaoDeLogin = claims.sid;
   } catch {
     closeSocket(socket, GatewayCloseCode.AUTHENTICATION_FAILED, 'token invalido');
     return;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, disabledAt: true, status: true, customStatus: true },
-  });
-  if (!user || user.disabledAt) {
-    closeSocket(socket, GatewayCloseCode.AUTHENTICATION_FAILED, 'conta indisponivel');
+  // O token pode ser valido e a sessao dele ja ter acabado: logout, aparelho
+  // revogado, senha trocada. Entra so quem ainda tem a sessao de login.
+  const user = await contaDaSessao(sessaoDeLogin, userId);
+  if (!user) {
+    closeSocket(socket, GatewayCloseCode.AUTHENTICATION_FAILED, 'sessao encerrada');
     return;
   }
 
   const sessionId = generateId();
-  const session = new GatewaySession(sessionId, userId, socket);
+  const session = new GatewaySession(sessionId, userId, socket, sessaoDeLogin);
   state.session = session;
 
   // O status pedido no IDENTIFY manda; sem ele, vale o ultimo salvo.
@@ -263,30 +389,41 @@ async function handleIdentify(
   session.dispatch('READY', ready);
 
   logger.info(
-    { userId, sessionId, client: payload.properties?.client, ip: clientIp(request) },
+    {
+      userId,
+      sessionId,
+      client: payload.properties?.client,
+      ip: ipDoCliente(request.headers, request.socket.remoteAddress),
+    },
     'sessao identificada',
   );
 
   await announcePresence(session, requestedStatus, session.customStatus);
 }
 
-async function handleResume(
-  state: PendingConnection,
-  payload: ResumePayload | undefined,
-): Promise<void> {
+async function handleResume(state: PendingConnection, payload: ResumeLido): Promise<void> {
   const { socket } = state;
 
-  if (!payload?.token || !payload.sessionId) {
+  if (!payload.token || !payload.sessionId) {
     send(socket, { op: GatewayOpcode.INVALID_SESSION, d: { resumable: false } });
     return;
   }
 
   let userId: string;
+  let sessaoDeLogin: string;
   try {
     const claims = await verifyAccessToken(payload.token);
     userId = claims.sub;
+    sessaoDeLogin = claims.sid;
   } catch {
     closeSocket(socket, GatewayCloseCode.AUTHENTICATION_FAILED, 'token invalido');
+    return;
+  }
+
+  // Mesma conferencia do IDENTIFY: retomar nao pode ser o caminho de volta de
+  // uma sessao de login que ja acabou.
+  if (!(await contaDaSessao(sessaoDeLogin, userId))) {
+    closeSocket(socket, GatewayCloseCode.AUTHENTICATION_FAILED, 'sessao encerrada');
     return;
   }
 
@@ -302,6 +439,8 @@ async function handleResume(
   }
 
   existing.attachSocket(socket);
+  // A conexao passa a responder pela sessao de login do token que a retomou.
+  existing.authSessionId = sessaoDeLogin;
   state.session = existing;
 
   const replayed = existing.replayFrom(payload.seq);
@@ -318,10 +457,10 @@ async function handleResume(
 
 async function handlePresenceUpdate(
   state: PendingConnection,
-  payload: PresenceUpdatePayload | undefined,
+  payload: PresencaLida,
 ): Promise<void> {
   const session = state.session;
-  if (!session || !payload) return;
+  if (!session) return;
 
   session.status = payload.status;
   session.customStatus = payload.customStatus ?? null;
@@ -339,21 +478,21 @@ async function handlePresenceUpdate(
   await announcePresence(session, payload.status, payload.customStatus ?? null);
 }
 
-async function handleVoiceOpcode(
-  state: PendingConnection,
-  payload: VoiceStateUpdatePayload | undefined,
-): Promise<void> {
+async function handleVoiceOpcode(state: PendingConnection, payload: VozLida): Promise<void> {
   const session = state.session;
-  if (!session || !payload) return;
-  await handleVoiceStateUpdate(session.userId, session.id, payload);
+  if (!session) return;
+  await handleVoiceStateUpdate(session.userId, session.id, {
+    ...payload,
+    guildId: payload.guildId ?? null,
+  });
 }
 
 async function handleRequestMembers(
   state: PendingConnection,
-  payload: RequestGuildMembersPayload | undefined,
+  payload: PedidoDeMembrosLido,
 ): Promise<void> {
   const session = state.session;
-  if (!session || !payload?.guildId) return;
+  if (!session) return;
 
   // So responde para quem e membro do servidor pedido.
   const membership = await prisma.guildMember.findUnique({
@@ -393,12 +532,9 @@ async function handleRequestMembers(
   }
 }
 
-async function handleTyping(
-  state: PendingConnection,
-  payload: TypingPayload | undefined,
-): Promise<void> {
+async function handleTyping(state: PendingConnection, payload: DigitacaoLida): Promise<void> {
   const session = state.session;
-  if (!session || !payload?.channelId) return;
+  if (!session) return;
 
   const key = `${session.userId}:${payload.channelId}`;
   const last = typingThrottle.get(key) ?? 0;
@@ -501,7 +637,7 @@ async function finalizeSession(session: GatewaySession): Promise<void> {
 
 async function announcePresence(
   session: GatewaySession,
-  status: PresenceUpdatePayload['status'],
+  status: PresencaLida['status'],
   customStatus: string | null,
 ): Promise<void> {
   // Invisivel: o proprio usuario ve ONLINE, os outros veem OFFLINE.
@@ -538,10 +674,4 @@ async function broadcastPresence(
 
   // O proprio usuario tambem recebe, para sincronizar entre dispositivos.
   emitToUser(userId, 'PRESENCE_UPDATE', presence);
-}
-
-function clientIp(request: IncomingMessage): string {
-  const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') return forwarded.split(',')[0]?.trim() ?? '';
-  return request.socket.remoteAddress ?? '';
 }

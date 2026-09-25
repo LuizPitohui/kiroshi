@@ -26,7 +26,7 @@ const criadas: InstanceType<typeof GatewaySession>[] = [];
 
 function sessao(id: string, userId: string): { sessao: InstanceType<typeof GatewaySession>; socket: SocketFalso } {
   const socket = socketFalso();
-  const s = new GatewaySession(id, userId, socket as unknown as WebSocket);
+  const s = new GatewaySession(id, userId, socket as unknown as WebSocket, `login-${id}`);
   sessions.add(s);
   criadas.push(s);
   return { sessao: s, socket };

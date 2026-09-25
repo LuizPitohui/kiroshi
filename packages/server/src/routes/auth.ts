@@ -38,6 +38,8 @@ import {
 } from '../auth/totp.js';
 import { requireAuth, requireFreshAuth } from '../auth/middleware.js';
 import { createSession } from '../auth/sessao.js';
+import { encerrarSessoesDeGateway } from '../gateway/server.js';
+import { ipDaRequisicao } from '../lib/ip-do-cliente.js';
 import { consume } from '../lib/ratelimit.js';
 import { SELF_USER_SELECT, toSelfUser } from '../lib/serialize.js';
 
@@ -69,7 +71,7 @@ async function confirmarComSenha(
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // -------------------------------------------------------------------------
   app.post('/auth/register', async (request, reply) => {
-    consume(`register:${request.ip}`, RATE_LIMITS.register);
+    consume(`register:${ipDaRequisicao(request)}`, RATE_LIMITS.register);
 
     const body = registerSchema.parse(request.body);
 
@@ -114,7 +116,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     logger.info({ userId: user.id, username: user.username }, 'conta criada');
 
-    const session = await createSession(user.id, request.headers['user-agent'], request.ip);
+    const session = await createSession(user.id, request.headers['user-agent'], ipDaRequisicao(request));
 
     // O convite so e consumido depois da conta existir, para nao gastar um uso
     // se algo falhar no meio.
@@ -130,7 +132,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // -------------------------------------------------------------------------
   app.post('/auth/login', async (request) => {
-    consume(`login:${request.ip}`, RATE_LIMITS.login);
+    consume(`login:${ipDaRequisicao(request)}`, RATE_LIMITS.login);
 
     const body = loginSchema.parse(request.body);
     const login = body.login.trim().toLowerCase();
@@ -183,7 +185,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const session = await createSession(user.id, request.headers['user-agent'], request.ip);
+    const session = await createSession(user.id, request.headers['user-agent'], ipDaRequisicao(request));
     const full = await prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: SELF_USER_SELECT,
@@ -196,7 +198,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // -------------------------------------------------------------------------
   /** Conclui o login quando o 2FA foi pedido separadamente. */
   app.post('/auth/login/mfa', async (request) => {
-    consume(`mfa:${request.ip}`, RATE_LIMITS.login);
+    consume(`mfa:${ipDaRequisicao(request)}`, RATE_LIMITS.login);
 
     const body = request.body as { mfaToken?: string; totpCode?: string; backupCode?: string };
     if (!body.mfaToken) throw badRequest('mfaToken e obrigatorio.');
@@ -211,7 +213,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const verified = await verifySecondFactor(user, body.totpCode, body.backupCode);
     if (!verified) throw new ApiError('INVALID_MFA_CODE', 'Codigo invalido ou ja usado.');
 
-    const session = await createSession(user.id, request.headers['user-agent'], request.ip);
+    const session = await createSession(user.id, request.headers['user-agent'], ipDaRequisicao(request));
     const full = await prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: SELF_USER_SELECT,
@@ -264,6 +266,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post('/auth/logout', { preHandler: requireAuth }, async (request) => {
     const auth = request.auth!;
     await prisma.session.delete({ where: { id: auth.sessionId } }).catch(() => undefined);
+    // Encerrar a sessao encerra tambem a conexao em tempo real dela.
+    encerrarSessoesDeGateway(auth.userId, { sessoesDeLogin: [auth.sessionId] });
     return { ok: true };
   });
 
@@ -271,6 +275,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post('/auth/logout/all', { preHandler: requireFreshAuth }, async (request) => {
     const auth = request.auth!;
     const { count } = await prisma.session.deleteMany({ where: { userId: auth.userId } });
+    encerrarSessoesDeGateway(auth.userId);
     return { ok: true, closed: count };
   });
 
@@ -299,6 +304,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const auth = request.auth!;
     const { id } = request.params as { id: string };
     await prisma.session.deleteMany({ where: { id, userId: auth.userId } });
+    // O aparelho revogado sai tambem do gateway. So conexoes desta conta: um
+    // id de sessao alheia nao derruba ninguem.
+    encerrarSessoesDeGateway(auth.userId, { sessoesDeLogin: [id] });
     return { ok: true };
   });
 
@@ -322,6 +330,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     await prisma.session.deleteMany({
       where: { userId: auth.userId, id: { not: auth.sessionId } },
     });
+    encerrarSessoesDeGateway(auth.userId, { excetoSessaoDeLogin: auth.sessionId });
 
     return { ok: true };
   });

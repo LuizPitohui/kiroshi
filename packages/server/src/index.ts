@@ -11,6 +11,7 @@ import { closeBus, createBus } from './bus.js';
 import { ApiError } from './errors.js';
 import { attachGateway } from './gateway/server.js';
 import { subscribeToBus } from './gateway/events.js';
+import { ipDaRequisicao } from './lib/ip-do-cliente.js';
 import { consume, startJanitor } from './lib/ratelimit.js';
 import { authRoutes } from './routes/auth.js';
 import { authGoogleRoutes } from './routes/auth-google.js';
@@ -33,9 +34,16 @@ import { clearStaleVoiceStates, isVoiceEnabled } from './services/voice.js';
 async function buildServer() {
   const app = Fastify({
     loggerInstance: logger,
-    // O cliente desktop fala direto com o Cloudflare Tunnel, que injeta
-    // x-forwarded-for; sem isto o rate limit veria sempre o IP do tunel.
-    trustProxy: true,
+    /*
+      Confia no X-Forwarded-For so quando quem conecta e local: o cloudflared,
+      pelo loopback do host ou pelo gateway da rede do Docker.
+
+      Era `true`, que confia em qualquer um e faz o `request.ip` sair do
+      primeiro valor do cabecalho — o valor que o proprio cliente escreve. O
+      limite por IP usa `ipDaRequisicao`, que prefere o CF-Connecting-IP; isto
+      so deixa o `request.ip` de reserva certo tambem.
+    */
+    trustProxy: ['loopback', 'linklocal', 'uniquelocal'],
     bodyLimit: 12 * 1024 * 1024,
     // Em producao o log de cada requisicao so gera ruido; erros continuam saindo.
     // O Fastify 5 avisa que esta opcao sai na versao 6; a alternativa
@@ -134,7 +142,7 @@ async function buildServer() {
   app.addHook('onRequest', async (request) => {
     if (request.url.startsWith('/attachments/')) return;
     if (request.url === '/health') return;
-    consume(`global:${request.ip}`, RATE_LIMITS.global);
+    consume(`global:${ipDaRequisicao(request)}`, RATE_LIMITS.global);
   });
 
   // ---------------------------------------------------------------------------

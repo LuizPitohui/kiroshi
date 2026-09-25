@@ -26,6 +26,14 @@ export class GatewaySession {
   readonly userId: string;
   socket: WebSocket;
 
+  /**
+   * A sessao de login (linha em Session, o `sid` do token) que abriu esta
+   * conexao. E por ela que encerrar uma sessao encontra a conexao para
+   * derrubar. Muda no RESUME, que pode chegar com o token de outra sessao da
+   * mesma conta.
+   */
+  authSessionId: string;
+
   /** Sequencia do ultimo evento enviado. */
   seq = 0;
 
@@ -49,10 +57,11 @@ export class GatewaySession {
 
   private readonly buffer: BufferedEvent[] = [];
 
-  constructor(id: string, userId: string, socket: WebSocket) {
+  constructor(id: string, userId: string, socket: WebSocket, authSessionId: string) {
     this.id = id;
     this.userId = userId;
     this.socket = socket;
+    this.authSessionId = authSessionId;
   }
 
   get isOpen(): boolean {

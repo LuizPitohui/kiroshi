@@ -65,7 +65,14 @@ class RedisBus implements Bus {
 
   async subscribe(pattern: string, handler: BusHandler): Promise<void> {
     await this.sub.psubscribe(pattern);
-    this.sub.on('pmessage', (_pattern: string, channel: string, message: string) => {
+    this.sub.on('pmessage', (assinado: string, channel: string, message: string) => {
+      /*
+        O ioredis entrega toda mensagem a TODOS os ouvintes de `pmessage`, com
+        o padrao que casou no primeiro argumento. Sem esta conferencia, uma
+        mensagem de `order:guild:*` rodava tambem os handlers de usuario e de
+        canal — igual ao barramento em memoria, que so chama quem casa.
+      */
+      if (assinado !== pattern) return;
       try {
         handler(channel, JSON.parse(message));
       } catch (error) {
@@ -124,7 +131,10 @@ export const BusChannel = {
   channel: (channelId: string) => `order:channel:${channelId}`,
   /** Mudancas de presenca. */
   presence: () => 'order:presence',
+  /** Ordens sobre as conexoes de um usuario, como encerrar sessoes. */
+  controle: (userId: string) => `order:controle:${userId}`,
   allUsers: 'order:user:*',
   allGuilds: 'order:guild:*',
   allChannels: 'order:channel:*',
+  todosOsControles: 'order:controle:*',
 } as const;

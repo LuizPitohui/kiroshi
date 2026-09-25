@@ -3,6 +3,7 @@ import { Permission, has, joinVoiceSchema, playSoundSchema } from '@kiroshi/shar
 import { prisma } from '../db.js';
 import { ApiError, forbidden, notFound } from '../errors.js';
 import { requireAuth } from '../auth/middleware.js';
+import { ipDaRequisicao } from '../lib/ip-do-cliente.js';
 import { toVoiceState } from '../lib/serialize.js';
 import { emitToGuild } from '../gateway/events.js';
 import { membrosQueVeem, resolveChannelPermissions } from '../services/permissions.js';
@@ -43,7 +44,7 @@ export async function voiceRoutes(app: FastifyInstance): Promise<void> {
       O IP entra no registro porque ele diz de onde a pessoa vem, e o caminho
       da midia depende exatamente disso.
     */
-    const registro = { userId, channelId: body.channelId, ip: request.ip };
+    const registro = { userId, channelId: body.channelId, ip: ipDaRequisicao(request) };
 
     if (!isVoiceEnabled()) {
       logger.warn(registro, 'voz: negada, voz desligada no servidor');
