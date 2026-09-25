@@ -127,6 +127,9 @@ O que o dono relatou e o que causa cada um:
 | "nao consigo ensurdecer" | nao ha botao; no servidor, ensurdecer so grava no banco (nada no SFU) |
 | "nao consigo dar o cargo ADM para uma pessoa" | nao ha tela para isso |
 
+No Kiroshi Beta (fatia 3 do F1, 2026-09-25): mover (cartao da pessoa na chamada
+e arrastar na navegacao), silenciar e ensurdecer no servidor com efeito no SFU.
+
 Onde a moderacao existe hoje: clique esquerdo na lista de membros (so em canal de
 texto) abre o `MemberCard` com "Silenciar no servidor", "Desconectar da voz",
 "Expulsar", "Banir" — sem confirmacao e com erros engolidos. Clique direito abre
@@ -151,6 +154,9 @@ Nunca foi usado em producao (0 emojis).
 | Limites | PARCIAL | o limite de 5 s nao e aplicado; MP3 servido como `octet-stream` |
 
 Nunca foi usado em producao (0 sons).
+
+No Kiroshi Beta (fatia 3): tocar na chamada pela barra (botao SONS), com
+permissao, moderacao e espera entre sons.
 
 ### Figurinhas
 

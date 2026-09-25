@@ -46,6 +46,14 @@ const api = {
         ipcRenderer.removeListener('window:maximized', listener);
       };
     },
+    /** Minimizada ou escondida na bandeja (true), ou de volta (false). */
+    onOcultaChange: (handler: (oculta: boolean) => void): (() => void) => {
+      const listener = (_event: unknown, oculta: boolean): void => handler(oculta);
+      ipcRenderer.on('window:oculta', listener);
+      return () => {
+        ipcRenderer.removeListener('window:oculta', listener);
+      };
+    },
   },
 
   /**

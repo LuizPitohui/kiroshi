@@ -89,13 +89,52 @@ export interface CamadaDeTela {
   fps: number;
 }
 
-export function camadasDeTela(altura: number, fps: number): CamadaDeTela[] {
+/**
+ * O que a pessoa vai transmitir, escolhido no seletor de tela.
+ *
+ *   movimento  jogo, video: o que importa e a fluidez
+ *   detalhe    texto, codigo, planilha: o que importa e ler
+ *
+ * Sem essa escolha a captura de tela ia sem `contentHint`, e o Chromium trata
+ * captura sem dica como documento: segura a resolucao e derruba quadros
+ * quando aperta. Num jogo isso e exatamente a "travada com a imagem nitida"
+ * (04-midia.md, hipotese 4).
+ */
+export type ConteudoDaTela = 'movimento' | 'detalhe';
+
+/** A dica do WebRTC para cada conteudo (`MediaStreamTrack.contentHint`). */
+export function dicaDoConteudo(conteudo: ConteudoDaTela): 'motion' | 'detail' {
+  return conteudo === 'movimento' ? 'motion' : 'detail';
+}
+
+/**
+ * Do que o codificador abre mao quando a banda aperta.
+ *
+ * Antes saia da taxa de quadros (60 fps = fluidez); agora sai do conteudo,
+ * que e a pergunta certa: um jogo a 30 fps tambem quer fluidez, e uma
+ * planilha a 60 fps continua querendo o texto nitido.
+ */
+export function degradacaoDoConteudo(conteudo: ConteudoDaTela): 'maintain-framerate' | 'maintain-resolution' {
+  return conteudo === 'movimento' ? 'maintain-framerate' : 'maintain-resolution';
+}
+
+export function camadasDeTela(altura: number, fps: number, conteudo: ConteudoDaTela = 'movimento'): CamadaDeTela[] {
   /*
-    A camada baixa existe para caber em rede ruim, nao para ser bonita: 360p a
-    15 fps ainda deixa acompanhar o que esta acontecendo, e cabe em quase
-    qualquer conexao.
+    Texto em 1080p nao tem camada de 360p: texto a 360p nao se le, entao ela
+    so gastaria codificacao. A queda vai para 720p a poucos quadros, que ainda
+    deixa ler (a receita do Discord para texto: 720p a 5 fps de reserva).
   */
-  const baixa: CamadaDeTela = { largura: 640, altura: 360, bitrate: 500_000, fps: 15 };
+  if (conteudo === 'detalhe' && altura > 720) {
+    return [{ largura: 1280, altura: 720, bitrate: 600_000, fps: 5 }];
+  }
+
+  /*
+    A camada baixa existe para caber em rede ruim, nao para ser bonita. Em jogo
+    ela vai a 30 fps: 15 fps com o personagem andando e o que se chama de
+    travada, e quem cai para esta camada e justamente quem ja esta sofrendo.
+    Em texto de 720p, 15 fps bastam.
+  */
+  const baixa: CamadaDeTela = { largura: 640, altura: 360, bitrate: 500_000, fps: conteudo === 'movimento' ? Math.min(30, fps) : 15 };
 
   if (altura <= 720) return [baixa];
 

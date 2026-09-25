@@ -83,7 +83,40 @@ fixar, apagar, busca, fixadas, quem digita, rascunho por canal) mais:
 - no servidor: **fixar em DM** passou a funcionar (a regra exigia
   MANAGE_MESSAGES, que o conjunto da DM nao tem).
 
-Proximo: fatia 3 (chamada e palco).
+**Fatia 3 (chamada e palco) entregue em 2026-09-25, no Kiroshi Beta**
+(`src/features/chamada/`): a tela do canal de voz, o palco e os controles, com
+os consertos de F2 do lado do cliente, conferidos numa chamada entre duas
+instancias do Beta e um LiveKit local
+([04-midia.md](04-midia.md#o-que-a-fatia-3-implementou-2026-09-25)):
+
+- **o `<video>` nao e recriado** — um elemento por transmissao e por camera,
+  que muda de lugar entre grade, destaque e mini palco sem pausar;
+- **a camada e escolhida pelo app**: quem assiste uma transmissao nunca recebe
+  menos que 720p (1080p com o quadro alto), e o que ninguem ve e pausado no
+  servidor — inclusive com a janela minimizada. Num quadro de 340 px chegou
+  720p29, onde a 1.x entregava 360p15;
+- **o que vai passar**, escolhido ao transmitir: movimento (jogo, video) ou
+  detalhe (texto, codigo), que muda a dica do codificador, as camadas e o que
+  ceder primeiro;
+- **qualidade medida no proprio quadro**: resolucao, fps, banda e travadas para
+  quem assiste; camada enviada, banda e limitacao (CPU ou rede) para quem
+  transmite;
+- convite para assistir, contagem de quem assiste, destaque com fita, grade,
+  tela cheia, volume por pessoa e por transmissao, mini palco nas outras telas
+  e a conversa do canal de voz ao lado;
+- **soundboard tocavel** na barra da chamada;
+- **moderacao de voz de verdade**: silenciar e ensurdecer valem no SFU na hora
+  e sobrevivem a sair e entrar e a troca de canal; mover funciona (antes a
+  pessoa ficava desconectada) e recusa canal onde ela nao pode entrar; arrastar
+  alguem para outro canal na navegacao; quem e desconectado ve o motivo;
+- no motor de voz, que as duas interfaces usam: parar a transmissao nao trava
+  mais, e a latencia sai do par ICE da propria conexao (sem a conexao
+  descartavel a cada 2 s).
+
+Fica para depois: telemetria enviada ao servidor (as medidas ficam na tela) e o
+estado do motor por evento (regra 5 de 04-midia).
+
+Proximo: fatia 4 (inicio, amigos e DM, com a chamada em DM e o toque de F5).
 
 ## F2 — Estabilidade das transmissoes
 
@@ -112,7 +145,11 @@ Proximo: fatia 3 (chamada e palco).
    levar o SFU para uma VPS com IP publico — **decisao do dono**, muda a premissa
    "tudo em casa").
 
-**Estado:** diagnosticado; instrumentacao a fazer.
+**Estado:** os consertos do item 2 entraram na fatia 3 do F1, no Kiroshi Beta, e
+a medida aparece no proprio quadro. Falta o resto do item 1 (telemetria enviada
+ao servidor, Prometheus do LiveKit, upload de casa) e o item 3. A 1.15.0
+publicada segue como estava; os consertos do motor de voz, que e comum, entram
+em qualquer versao nova.
 
 ## F3 — Supressao de ruido do zero
 
@@ -255,12 +292,20 @@ Canais e permissoes, Emojis, Soundboard), com os consertos no servidor e
 moderacao de voz de verdade (mover, silenciar e ensurdecer aplicados no SFU).
 Referencia em [09-referencia-discord.md](09-referencia-discord.md).
 
+**Estado:** moderacao de voz feita na fatia 3 do F1 (Beta e servidor): silenciar
+e ensurdecer tiram o microfone no SFU na hora, e o token de entrada ja sai sem
+ele; mover funciona e recusa destino sem CONNECT. Ajustes de servidor e cargos:
+fatia 6.
+
 ## F10 — Emojis, soundboard, figurinhas
 
 Emojis funcionam (nunca foram usados). Soundboard: a biblioteca funciona e
 **nenhuma tela toca um som na chamada**; limite de duracao nao aplicado.
 Figurinhas nao funcionam. Proposta: soundboard na barra da chamada, com volume,
 limites e permissao; figurinhas consertadas ou retiradas.
+
+**Estado:** tocar na chamada feito na fatia 3 do F1 (Beta), com permissao,
+moderacao e espera entre sons. Limite de duracao e gerenciamento: fatia 6.
 
 ## F11 — Atualizacao e atualizador em segundo plano
 

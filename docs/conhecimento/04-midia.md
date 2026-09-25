@@ -379,3 +379,46 @@ Detalhe e fontes em [09-referencia-discord.md](09-referencia-discord.md#10-trans
    limitacao do emissor), sem sondar ICE a cada 2 s.
 5. Estado da chamada por evento, nao por polling de 200 ms; niveis de audio
    separados do resto do estado para nao re-renderizar o app inteiro.
+
+## O que a fatia 3 implementou (2026-09-25)
+
+Na interface nova (Kiroshi Beta); a 1.x segue com a adaptacao automatica do
+LiveKit. Conferido numa chamada entre duas instancias do Beta na mesma maquina,
+com um LiveKit local (`--dev`): prova a escolha de camada, a pausa e o
+`<video>`. **Nao prova a rede de producao** — isso so a telemetria vai medir.
+
+| Regra | Como ficou | Conferido |
+|---|---|---|
+| 1. Camada pelo que a pessoa quer ver | `adaptiveStream` desligado; `voice/recepcao.ts` (testado) pede a camada pela altura REAL do quadro, com a escala do Windows: transmissao assistida nunca abaixo de 720p, 1080p a partir de 600 px reais; camera 1080p/360p/180p por 480/200 px. Escolha fixa por quadro: Automatica, Alta, Media, Baixa | quadro de 340 px: **720p29, 1,7 Mbps** (a 1.x mandava 360p15). "Alta": 1080p29, 3,6 Mbps, com 1 travada na troca de camada |
+| 2. `<video>` nunca recriado | um elemento por pessoa e fonte (`features/chamada/videos.ts`), movido com `moveBefore` entre grade, destaque e mini palco | 58 quadros em 2 s durante a mudanca para o mini palco, o mesmo elemento |
+| 3. Ninguem vendo = pausado no SFU | `setEnabled(false)` quando o quadro sai da tela, a janela minimiza (evento `window:oculta` do processo principal: com `backgroundThrottling: false` a pagina segue "visivel") ou o quadro desmonta (400 ms de folga para trocas de layout) | minimizado: 0 quadros, bytes parados, o emissor parou a camada; ao voltar, primeiro quadro em 201 ms |
+| 4. Metrica de video de verdade, sem sondar ICE | ficha no quadro (`features/chamada/medicao.ts`, testado): resolucao, fps, banda e travadas em 30 s para quem assiste; camada de topo viva, banda somada e limitacao (CPU, rede) para quem transmite. Latencia do par ICE nomeado da propria conexao | emissor em 1080p30 com as 3 camadas: 6,2 Mbps; RTT 1 ms (local) |
+| 5. Estado por evento | **nao feito** — o motor ainda emite a cada 200 ms | — |
+
+O que vai passar, escolhido no seletor de tela (`qualidade.ts`, testado):
+`contentHint` `motion` ou `detail`, preferencia de degradacao pela fluidez ou
+pela nitidez, e as camadas:
+
+| Captura 1080p | Camada baixa | Media | Topo |
+|---|---|---|---|
+| Movimento, 30 fps | 640x360 @30, 0,5 Mbps | 1280x720 @30, 1,8 | a captura |
+| Movimento, 60 fps | 640x360 @30, 0,5 | 1280x720 @30, 2,5 | a captura |
+| Detalhe | — | 1280x720 @5, 0,6 | a captura |
+
+A camada baixa de movimento passou de 15 para 30 fps: quem cai para ela ja esta
+sofrendo, e 15 fps num jogo e a travada. Texto a 360p nao se le, entao detalhe
+nao tem camada de 360p.
+
+Tambem da fatia:
+
+- **Dynacast confirmado:** sem ninguem pedindo 1080p, o emissor para a camada de
+  topo (de 6,2 para 2,2 Mbps).
+- **Quem assiste** vai no atributo `assistindo` do participante; o quadro de quem
+  transmite mostra quantos estao vendo.
+- **Parar a transmissao travava** (a faixa era lida depois de despublicada e
+  `screenSharing` ficava ligado) — defeito tambem da 1.x, consertado no motor.
+- **Moderacao no SFU:** ver [03-servidor.md](03-servidor.md#voz-no-servidor). O
+  app le `serverMute`/`serverDeaf` do token ao entrar: quem entra silenciado
+  nao abre o microfone, e a moderacao nao se perde ao ser movido de canal.
+- `explicarQueda` distingue `PARTICIPANT_REMOVED`: "Voce foi desconectado da
+  chamada", e nao um diagnostico da rede.

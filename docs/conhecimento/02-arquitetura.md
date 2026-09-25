@@ -171,6 +171,8 @@ de teste estaveis.
 | SFU | `deploy/livekit.yaml` |
 | Interface nova (Beta): entrada, rotas, tema | `packages/desktop/src/app/` |
 | Interface nova: sistema de design | `packages/desktop/src/design/` (tokens, assinatura, primitivos) |
-| Interface nova: telas | `packages/desktop/src/features/` (casca, conversa, ajustes, entrada, vitrine) |
+| Interface nova: telas | `packages/desktop/src/features/` (casca, conversa, chamada, ajustes, entrada, vitrine) |
 | Markdown, autocompletar e mencoes (puros, testados) | `packages/desktop/src/features/conversa/{markdown,mencoes,linhas}.ts` |
+| Palco: quadros, medicao, recepcao (puros, testados) | `packages/desktop/src/features/chamada/{quadros,medicao}.ts`, `src/voice/recepcao.ts` |
+| Direitos de voz no SFU (puro, testado) | `packages/server/src/lib/direitos-de-voz.ts` |
 | Deploy | `deploy/scripts/deploy.sh`, `docs/DEPLOY.md` |

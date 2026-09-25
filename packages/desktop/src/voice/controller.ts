@@ -14,11 +14,21 @@ import {
   type RemoteTrack,
   type RemoteTrackPublication,
   type RoomOptions,
+  VideoQuality,
 } from 'livekit-client';
 import type { VoiceServerUpdateEvent } from '@kiroshi/shared';
 import { api, ApiRequestError } from '../api/client.js';
 import { lerCaminhos, type CaminhosDisponiveis } from './caminhos.js';
-import { bitrateDeTela, restricoesDeTela, camadasDeTela } from './qualidade.js';
+import {
+  bitrateDeTela,
+  camadasDeTela,
+  degradacaoDoConteudo,
+  dicaDoConteudo,
+  restricoesDeTela,
+  type ConteudoDaTela,
+} from './qualidade.js';
+import type { Recepcao } from './recepcao.js';
+import type { EntradaDeStats } from './metricas.js';
 import { explicarFalhaDeMidia } from './falhas.js';
 import { SaidaDeAudio } from './saida.js';
 import { prepararFaixaParaProcessador, type ProcessadorDeLimpeza } from './ruido.js';
@@ -71,6 +81,8 @@ export interface VoiceParticipant {
   hasScreenShare: boolean;
   connectionQuality: 'excellent' | 'good' | 'poor' | 'unknown';
   isLocal: boolean;
+  /** De quem esta pessoa assiste a transmissao (atributo no LiveKit). */
+  assistindo: string[];
 }
 
 export interface VoiceSettings {
@@ -192,6 +204,10 @@ export interface VoiceState {
   participants: VoiceParticipant[];
   selfMuted: boolean;
   selfDeafened: boolean;
+  /** Silenciado pela moderacao do servidor: o microfone fica fechado ate liberarem. */
+  silenciadoPeloServidor: boolean;
+  /** Ensurdecido pela moderacao: nao ouve nem fala ate liberarem. */
+  ensurdecidoPeloServidor: boolean;
   cameraOn: boolean;
   screenSharing: boolean;
   /** Erro da ultima tentativa de conexao, para mostrar na interface. */
@@ -258,6 +274,8 @@ class VoiceController {
     participants: [],
     selfMuted: false,
     selfDeafened: false,
+    silenciadoPeloServidor: false,
+    ensurdecidoPeloServidor: false,
     cameraOn: false,
     screenSharing: false,
     error: null,
@@ -323,6 +341,20 @@ class VoiceController {
    * poe a transmissao em destaque, grande, e a camada cheia vem junto.
    */
   private assistindo = new Set<string>();
+
+  /**
+   * A interface escolhe as camadas (interface nova) ou o LiveKit escolhe pelo
+   * tamanho do quadro (1.x). Ver `recepcao.ts`: com a adaptacao ligada o
+   * tamanho do quadro e teto, e a transmissao ao lado do chat vinha em 360p.
+   * Vale a partir da proxima conexao.
+   */
+  private recepcaoManual = false;
+
+  /** O que a interface pediu para cada video: `${identidade}|${fonte}`. */
+  private readonly recepcoes = new Map<string, Recepcao>();
+
+  /** Saidas de quadro esperando para virar pausa (ver `ajustarRecepcao`). */
+  private readonly esperasDeSaida = new Map<string, ReturnType<typeof setTimeout>>();
 
   private loadSettings(): VoiceSettings {
     try {
@@ -504,10 +536,19 @@ class VoiceController {
       error: null,
       channelId: payload.channelId,
       guildId: payload.guildId,
+      /*
+        A moderacao vem com o token, que ja a respeita. Vale a partir daqui,
+        depois do leave() acima: ele zera o estado da chamada anterior, e quem
+        e movido de canal recebe o aviso de moderacao ANTES do token. Ele se
+        perdia nessa limpeza, e quem estava ensurdecido voltava a ouvir tudo no
+        canal novo.
+      */
+      silenciadoPeloServidor: payload.serverMute ?? false,
+      ensurdecidoPeloServidor: payload.serverDeaf ?? false,
     });
 
     const options: RoomOptions = {
-      adaptiveStream: true,
+      adaptiveStream: !this.recepcaoManual,
       // Publica varias resolucoes: quem esta com a janela pequena ou com
       // internet ruim recebe a menor sem afetar os outros.
       dynacast: true,
@@ -563,15 +604,22 @@ class VoiceController {
       // proposito. Quem nao tem microfone, ou negou a permissao, ainda deve
       // conseguir entrar para ouvir e ver a tela de alguem. Tratar a falha do
       // microfone como falha da chamada deixaria essa pessoa de fora.
-      try {
-        await this.publishMicrophone();
-      } catch (micError) {
-        this.emit({
-          error:
-            'Entrou sem microfone. Voce ouve os outros, mas eles nao ouvem voce. ' +
-            'Confira a permissao de microfone nos ajustes do sistema.',
-        });
-        console.warn('microfone indisponivel, seguindo so como ouvinte', micError);
+      //
+      // Silenciado pela moderacao, o microfone nem abre: o token nao deixaria
+      // publicar, e a recusa virava o aviso errado, de permissao do sistema.
+      // Quando liberarem, `ajustarMicrofone` abre.
+      const moderado = this.state.silenciadoPeloServidor || this.state.ensurdecidoPeloServidor;
+      if (!moderado) {
+        try {
+          await this.publishMicrophone();
+        } catch (micError) {
+          this.emit({
+            error:
+              'Entrou sem microfone. Voce ouve os outros, mas eles nao ouvem voce. ' +
+              'Confira a permissao de microfone nos ajustes do sistema.',
+          });
+          console.warn('microfone indisponivel, seguindo so como ouvinte', micError);
+        }
       }
 
       this.emit({ connected: true, connecting: false });
@@ -612,6 +660,9 @@ class VoiceController {
             // ouve, e cada um tem o proprio controle de volume.
             const fonte = pub.source === Track.Source.ScreenShareAudio ? 'tela' : 'voz';
             this.attachRemoteAudio(track, participant, fonte);
+          } else {
+            // Video recem-assinado ja nasce com a camada e a pausa pedidas.
+            this.aplicarRecepcao(pub, participant.identity);
           }
           this.refreshParticipants();
         },
@@ -685,16 +736,48 @@ class VoiceController {
     }, 2000);
   }
 
-  /** Le o tempo de ida e volta ate o SFU e guarda no estado. */
+  /**
+   * Le o tempo de ida e volta ate o SFU e guarda no estado.
+   *
+   * So a latencia do par em uso. Antes chamava o diagnostico inteiro, que para
+   * listar os enderecos desta maquina abre uma RTCPeerConnection descartavel e
+   * coleta candidatos por ate 2,5 s — a cada 2 s, a chamada inteira, em todo
+   * mundo (04-midia.md). O diagnostico continua existindo, sob demanda.
+   */
   private async samplePing(): Promise<void> {
-    const stats = await this.inspectConnection();
-    if (stats.latenciaMs === this.state.ping) return;
-    this.emit({ ping: stats.latenciaMs });
+    const latencia = await this.lerLatencia();
+    if (latencia === this.state.ping) return;
+    this.emit({ ping: latencia });
+  }
+
+  private async lerLatencia(): Promise<number | null> {
+    const pc = this.conexaoDeMidia();
+    if (!pc || !this.state.connected) return null;
+    try {
+      const pares = [...(await pc.getStats()).values()] as Record<string, unknown>[];
+      const par = pares.find((s) => s.type === 'candidate-pair' && s.state === 'succeeded' && s.nominated);
+      return par?.currentRoundTripTime != null ? Math.round(Number(par.currentRoundTripTime) * 1000) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A RTCPeerConnection do LiveKit. Nao ha API publica para ela: atravessar o
+   * interno e o preco do diagnostico. Se a estrutura mudar, so o numero some.
+   */
+  private conexaoDeMidia(): RTCPeerConnection | null {
+    const engine = (
+      this.room as unknown as {
+        engine?: { pcManager?: { publisher?: { _pc?: RTCPeerConnection }; subscriber?: { _pc?: RTCPeerConnection } } };
+      } | null
+    )?.engine;
+    return engine?.pcManager?.publisher?._pc ?? engine?.pcManager?.subscriber?._pc ?? null;
   }
 
   /** O volume final de uma faixa: geral vezes o ajuste daquela fonte. */
   private volumeDe(identidade: string, fonte: FonteDeAudio): number {
-    if (this.state.selfDeafened) return 0;
+    if (this.state.selfDeafened || this.state.ensurdecidoPeloServidor) return 0;
     const individual =
       fonte === 'tela'
         ? (this.settings.screenVolumes[identidade] ?? 1)
@@ -790,6 +873,9 @@ class VoiceController {
         hasScreenShare: Boolean(screen && !screen.isMuted),
         connectionQuality: quality,
         isLocal,
+        assistindo: isLocal
+          ? [...this.assistindo]
+          : (participant.attributes?.assistindo ?? '').split(',').filter(Boolean),
       };
     };
 
@@ -960,11 +1046,52 @@ class VoiceController {
     }
 
     if (!this.micTrack) return;
+    await this.ajustarMicrofone();
+  }
 
-    if (muted) await this.micTrack.mute();
-    else if (this.settings.inputMode !== 'push-to-talk' || this.pttActive) {
-      await this.micTrack.unmute();
+  /**
+   * A moderacao do servidor, lida do estado de voz que o gateway manda.
+   *
+   * O servidor ja tira o microfone das permissoes no SFU; aqui o app obedece
+   * do lado de dentro: fecha o microfone, corta o som (ensurdecido) e, quando
+   * liberarem, devolve tudo como a pessoa tinha deixado. Antes o silencio da
+   * moderacao so aparecia na lista — o app seguia transmitindo a voz.
+   */
+  aplicarModeracao({ silenciado, ensurdecido }: { silenciado: boolean; ensurdecido: boolean }): void {
+    if (this.state.silenciadoPeloServidor === silenciado && this.state.ensurdecidoPeloServidor === ensurdecido) return;
+    this.emit({ silenciadoPeloServidor: silenciado, ensurdecidoPeloServidor: ensurdecido });
+    this.aplicarVolumes();
+    void this.ajustarMicrofone();
+  }
+
+  /**
+   * Abre ou fecha o microfone pelo que manda agora: a escolha da pessoa, a
+   * moderacao e o push-to-talk. Um lugar so decide, para nenhum caminho
+   * esquecer um dos tres.
+   */
+  private async ajustarMicrofone(): Promise<void> {
+    const room = this.room;
+    const moderado = this.state.silenciadoPeloServidor || this.state.ensurdecidoPeloServidor;
+    const fechado = this.state.selfMuted || moderado || (this.settings.inputMode === 'push-to-talk' && !this.pttActive);
+
+    /*
+      Liberado pela moderacao, e a faixa nao esta no ar: o SFU a derruba quando
+      o microfone sai das permissoes, e quem entrou ja silenciado nem chegou a
+      abrir. Publica de novo, com a mesma cascata de limpeza de sempre.
+    */
+    if (room && !moderado && !this.state.selfMuted && !room.localParticipant.getTrackPublication(Track.Source.Microphone)) {
+      this.micTrack?.stop();
+      this.micTrack = null;
+      try {
+        await this.publishMicrophone();
+      } catch {
+        this.emit({ error: 'Liberaram seu microfone, mas ele nao abriu. Tente desligar e ligar de novo.' });
+      }
     }
+
+    if (!this.micTrack) return;
+    if (fechado) await this.micTrack.mute();
+    else await this.micTrack.unmute();
     this.refreshParticipants();
   }
 
@@ -987,11 +1114,7 @@ class VoiceController {
 
     this.pttActive = active;
     if (!this.micTrack || this.state.selfMuted || this.state.selfDeafened) return;
-
-    if (active) await this.micTrack.unmute();
-    else await this.micTrack.mute();
-
-    this.refreshParticipants();
+    await this.ajustarMicrofone();
   }
 
   // ---------------------------------------------------------------------------
@@ -1097,7 +1220,7 @@ class VoiceController {
    */
   async startScreenShare(
     sourceId: string,
-    options: { withAudio?: boolean; fps?: number; maxHeight?: number } = {},
+    options: { withAudio?: boolean; fps?: number; maxHeight?: number; conteudo?: ConteudoDaTela } = {},
   ): Promise<{ comSom: boolean; motivoSemSom: string | null }> {
     const room = this.room;
     if (!room) throw new Error('Entre em um canal de voz antes de compartilhar a tela.');
@@ -1123,6 +1246,7 @@ class VoiceController {
     const quisSom = options.withAudio ?? false;
     const fps = options.fps ?? 30;
     const altura = options.maxHeight ?? 1080;
+    const conteudo = options.conteudo ?? 'movimento';
 
     /*
       A captura limita a ALTURA, e so ela. A conta mora em `qualidade.ts`,
@@ -1177,6 +1301,12 @@ class VoiceController {
 
     for (const mediaTrack of stream.getTracks()) {
       if (mediaTrack.kind === 'video') {
+        /*
+          A dica vai na faixa ANTES do codificador ver o primeiro quadro. Sem
+          ela o Chromium trata a captura como documento — segura resolucao e
+          derruba quadros —, que num jogo e a travada com imagem nitida.
+        */
+        mediaTrack.contentHint = dicaDoConteudo(conteudo);
         const track = new LocalVideoTrack(mediaTrack);
         await room.localParticipant.publishTrack(track, {
           source: Track.Source.ScreenShare,
@@ -1201,7 +1331,7 @@ class VoiceController {
           },
           // Um degrau no meio: sem ele a queda ia de 1080p direto para 540p,
           // que e a diferenca entre ler o texto da tela e nao ler.
-          screenShareSimulcastLayers: camadasDeTela(altura, fps).map(
+          screenShareSimulcastLayers: camadasDeTela(altura, fps, conteudo).map(
             (c) => new VideoPreset(c.largura, c.altura, c.bitrate, c.fps),
           ),
           /*
@@ -1215,7 +1345,7 @@ class VoiceController {
             A 60 fps o motivo e movimento — jogo, video — e fluidez vem antes.
             A 30 fps o motivo e ler a tela, e nitidez vem antes.
           */
-          degradationPreference: fps >= 60 ? 'maintain-framerate' : 'maintain-resolution',
+          degradationPreference: degradacaoDoConteudo(conteudo),
         });
         published.push(track);
       } else {
@@ -1250,12 +1380,22 @@ class VoiceController {
     const room = this.room;
     if (!room) return;
 
-    for (const pub of room.localParticipant.trackPublications.values()) {
+    /*
+      Uma copia da lista, e a faixa guardada ANTES de despublicar.
+
+      `unpublishTrack` tira a publicacao do mapa e limpa `pub.track`: o
+      `pub.track.stop()` depois dela estourava com "Cannot read properties of
+      undefined", a funcao morria no meio e `stopScreenShare` nunca avisava o
+      fim — a transmissao saia do ar e o botao continuava em "ao vivo" (medido
+      no teste de ponta a ponta de 2026-09-25).
+    */
+    for (const pub of [...room.localParticipant.trackPublications.values()]) {
       const deTela =
         pub.source === Track.Source.ScreenShare || pub.source === Track.Source.ScreenShareAudio;
-      if (!deTela || !pub.track) continue;
-      await room.localParticipant.unpublishTrack(pub.track).catch(() => undefined);
-      pub.track.stop();
+      const faixa = pub.track;
+      if (!deTela || !faixa) continue;
+      await room.localParticipant.unpublishTrack(faixa).catch(() => undefined);
+      faixa.stop();
     }
 
     for (const track of this.screenTracks) track.stop();
@@ -1315,6 +1455,7 @@ class VoiceController {
     this.assistindo.add(userId);
     for (const pub of this.publicacoesDeTela(userId)) pub.setSubscribed(true);
     this.emit({ assistindo: [...this.assistindo] });
+    this.publicarAssistindo();
   }
 
   async pararDeAssistir(userId: string): Promise<void> {
@@ -1328,6 +1469,7 @@ class VoiceController {
     */
     for (const pub of this.publicacoesDeTela(userId)) pub.setSubscribed(false);
     this.emit({ assistindo: [...this.assistindo] });
+    this.publicarAssistindo();
   }
 
   /**
@@ -1377,7 +1519,10 @@ class VoiceController {
         mudou = true;
       }
     }
-    if (mudou) this.emit({ assistindo: [...this.assistindo] });
+    if (mudou) {
+      this.emit({ assistindo: [...this.assistindo] });
+      this.publicarAssistindo();
+    }
   }
 
   getVideoTrack(userId: string, source: 'camera' | 'screen'): RemoteTrack | LocalVideoTrack | null {
@@ -1396,6 +1541,111 @@ class VoiceController {
       RemoteTrackPublication | undefined;
 
     return (publication?.track as RemoteTrack | undefined) ?? null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Recepcao escolhida pela interface
+  // ---------------------------------------------------------------------------
+
+  /** Liga a recepcao manual (interface nova). Vale a partir da proxima conexao. */
+  configurarRecepcao({ manual }: { manual: boolean }): void {
+    this.recepcaoManual = manual;
+  }
+
+  /**
+   * O que o quadro quer deste video: pausado ou nao, e qual camada.
+   *
+   * `null` quando o quadro sai de cena. Sem nenhum quadro pedindo, o video
+   * fica PAUSADO no servidor: assinado (camera chega sozinha), mas sem
+   * ninguem olhando nao ha por que ele atravessar a internet de casa.
+   */
+  ajustarRecepcao(userId: string, fonte: 'camera' | 'tela', recepcao: Recepcao | null): void {
+    const chave = `${userId}|${fonte}`;
+    const espera = this.esperasDeSaida.get(chave);
+    if (espera) {
+      clearTimeout(espera);
+      this.esperasDeSaida.delete(chave);
+    }
+    if (!recepcao) {
+      /*
+        O quadro que sai pode estar so trocando de lugar (grade -> destaque,
+        palco -> mini palco): o novo pede logo em seguida. Pausar na hora e
+        retomar um instante depois custa um quadro-chave — uma travada a cada
+        troca de disposicao. Entao a saida espera; se ninguem pedir, pausa.
+      */
+      this.esperasDeSaida.set(
+        chave,
+        setTimeout(() => {
+          this.esperasDeSaida.delete(chave);
+          this.recepcoes.delete(chave);
+          this.reaplicarRecepcao(userId, fonte);
+        }, 400),
+      );
+      return;
+    }
+    const antes = this.recepcoes.get(chave);
+    if (antes && antes.ativa === recepcao.ativa && antes.qualidade === recepcao.qualidade) return;
+    this.recepcoes.set(chave, recepcao);
+    this.reaplicarRecepcao(userId, fonte);
+  }
+
+  private reaplicarRecepcao(userId: string, fonte: 'camera' | 'tela'): void {
+    const room = this.room;
+    if (!room) return;
+    const participante = [...room.remoteParticipants.values()].find((p) => p.identity === userId);
+    const pub = participante?.getTrackPublication(fonte === 'tela' ? Track.Source.ScreenShare : Track.Source.Camera) as
+      | RemoteTrackPublication
+      | undefined;
+    if (pub) this.aplicarRecepcao(pub, userId);
+  }
+
+  private aplicarRecepcao(pub: RemoteTrackPublication, identidade: string): void {
+    if (!this.recepcaoManual || pub.kind !== Track.Kind.Video || !pub.isDesired) return;
+    const fonte = pub.source === Track.Source.ScreenShare ? 'tela' : 'camera';
+    const pedido = this.recepcoes.get(`${identidade}|${fonte}`) ?? { ativa: false, qualidade: 'media' as const };
+    pub.setEnabled(pedido.ativa);
+    pub.setVideoQuality(
+      pedido.qualidade === 'alta' ? VideoQuality.HIGH : pedido.qualidade === 'media' ? VideoQuality.MEDIUM : VideoQuality.LOW,
+    );
+  }
+
+  /**
+   * As estatisticas do WebRTC de um video que chega, para o quadro mostrar a
+   * qualidade de verdade (`metricas.ts` resume). `null` sem video.
+   */
+  async estatisticasDeVideo(userId: string, fonte: 'camera' | 'tela'): Promise<EntradaDeStats[] | null> {
+    const faixa = this.getVideoTrack(userId, fonte === 'tela' ? 'screen' : 'camera');
+    if (!faixa) return null;
+    try {
+      const relatorio = await faixa.getRTCStatsReport();
+      return relatorio ? ([...relatorio.values()] as EntradaDeStats[]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** As estatisticas da minha transmissao de tela: todas as camadas que saem. */
+  async estatisticasDoEnvio(): Promise<EntradaDeStats[] | null> {
+    const video = this.screenTracks.find((t): t is LocalVideoTrack => t.kind === Track.Kind.Video);
+    if (!video) return null;
+    try {
+      const relatorio = await video.getRTCStatsReport();
+      return relatorio ? ([...relatorio.values()] as EntradaDeStats[]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Conta aos outros de quem estou assistindo a transmissao, pelos atributos
+   * do participante no LiveKit (o servidor sincroniza para todos). E dai que
+   * sai o numero de espectadores no quadro de quem transmite. Sem a permissao
+   * no token (servidor antigo), falha calado e o numero so nao aparece.
+   */
+  private publicarAssistindo(): void {
+    const room = this.room;
+    if (!room || !this.state.connected) return;
+    void room.localParticipant.setAttributes({ assistindo: [...this.assistindo].join(',') }).catch(() => undefined);
   }
 
   // ---------------------------------------------------------------------------
@@ -1568,6 +1818,9 @@ class VoiceController {
   async leaveByRemote(channelId: string | null): Promise<void> {
     if (channelId && this.state.channelId !== channelId) return;
     await this.leave();
+    // Moderador, expulsao, canal apagado, bloqueio: sem isto a chamada sumia
+    // da tela sem explicacao nenhuma.
+    this.emit({ error: 'Você foi desconectado da chamada.' });
   }
 
   /**
@@ -1613,6 +1866,16 @@ class VoiceController {
       pessoa para sempre.
     */
     this.assistindo.clear();
+
+    // A moderacao e daquela chamada; a proxima comeca pelo que o servidor mandar.
+    this.state = { ...this.state, silenciadoPeloServidor: false, ensurdecidoPeloServidor: false };
+
+    // Pausas agendadas de quadros que ja sairam nao tem mais sala onde valer.
+    for (const espera of this.esperasDeSaida.values()) clearTimeout(espera);
+    this.esperasDeSaida.clear();
+    // Nem os pedidos de camada: guardados, um video da proxima chamada
+    // nasceria ligado sem nenhum quadro na tela pedindo por ele.
+    this.recepcoes.clear();
 
     this.room = null;
   }
@@ -1663,6 +1926,15 @@ class VoiceController {
       disfarcado de problema de rede — a mensagem honesta e a que me diz onde
       procurar.
     */
+    /*
+      Tirada pelo servidor: um moderador desconectou, o canal sumiu ou o acesso
+      a ele. Tambem nao e a rede.
+    */
+    if (motivo === DisconnectReason.PARTICIPANT_REMOVED) {
+      this.emit({ error: 'Você foi desconectado da chamada.' });
+      return;
+    }
+
     if (motivo === DisconnectReason.CLIENT_INITIATED) {
       this.emit({
         error:

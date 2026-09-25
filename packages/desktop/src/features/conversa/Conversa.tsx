@@ -126,7 +126,12 @@ function editavel(el: Element | null): boolean {
  * Montada de novo a cada canal (a chave e o id): o estado de um canal —
  * resposta em andamento, edicao, anexos, rolagem — nunca vaza para outro.
  */
-export function Conversa({ canalId, extraNoCabecalho }: { canalId: string; extraNoCabecalho?: ReactNode }) {
+/**
+ * `lateral`: a conversa da chamada, no painel da direita. Sem cabecalho (o
+ * painel tem o seu) e sempre compacta — 300 px nao comportam foto de 40 px e
+ * calha de 72 em cada mensagem.
+ */
+export function Conversa({ canalId, extraNoCabecalho, lateral = false }: { canalId: string; extraNoCabecalho?: ReactNode; lateral?: boolean }) {
   const canal = useStore((s) => s.channels.get(canalId));
   const euSou = useStore((s) => s.user?.id ?? null);
   const bits = usePermissoesNoCanal(canalId);
@@ -209,6 +214,7 @@ export function Conversa({ canalId, extraNoCabecalho }: { canalId: string; extra
   return (
     <div
       className="relative flex h-full min-h-0 flex-col"
+      data-densidade={lateral ? 'compacto' : undefined}
       onDragEnter={(e) => {
         if (!podeAnexar || !temArquivos(e)) return;
         profundidadeDoArraste.current++;
@@ -230,7 +236,9 @@ export function Conversa({ canalId, extraNoCabecalho }: { canalId: string; extra
         campo.current?.focus();
       }}
     >
-      <Cabecalho canal={canal} euSou={euSou} aoBuscar={() => setBuscando(true)} podeFixar={permissoes.fixar} extra={extraNoCabecalho} />
+      {lateral ? null : (
+        <Cabecalho canal={canal} euSou={euSou} aoBuscar={() => setBuscando(true)} podeFixar={permissoes.fixar} extra={extraNoCabecalho} />
+      )}
       <ListaDeMensagens
         canalId={canalId}
         guildId={canal.guildId}
@@ -261,6 +269,7 @@ export function Conversa({ canalId, extraNoCabecalho }: { canalId: string; extra
         anexos={anexos}
         podeEnviar={podeEnviar}
         podeAnexar={podeAnexar}
+        lateral={lateral}
       />
       <Busca aberto={buscando} aoMudar={setBuscando} canalId={canalId} guildId={canal.guildId} />
 

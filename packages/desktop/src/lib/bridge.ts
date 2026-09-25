@@ -20,6 +20,12 @@ function createBrowserFallback(): KiroshiApi {
       close: noop,
       isMaximized: () => Promise.resolve(false),
       onMaximizedChange: () => unsubscribe,
+      // No navegador a aba escondida ja e `hidden`: e o mesmo sinal.
+      onOcultaChange: (handler: (oculta: boolean) => void) => {
+        const aoMudar = () => handler(document.visibilityState === 'hidden');
+        document.addEventListener('visibilitychange', aoMudar);
+        return () => document.removeEventListener('visibilitychange', aoMudar);
+      },
     },
     google: {
       /*

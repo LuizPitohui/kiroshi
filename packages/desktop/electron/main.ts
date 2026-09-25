@@ -295,6 +295,19 @@ function createWindow(): void {
   mainWindow.on('maximize', () => mainWindow?.webContents.send('window:maximized', true));
   mainWindow.on('unmaximize', () => mainWindow?.webContents.send('window:maximized', false));
 
+  /*
+    Janela minimizada ou escondida na bandeja: a interface pausa o video que
+    chega. Com `backgroundThrottling: false` a pagina continua "visivel" para
+    o Chromium mesmo minimizada, entao so o processo principal sabe — e antes
+    ninguem contava, e o video continuava vindo pela internet de casa
+    (04-midia.md).
+  */
+  const avisarOculta = (oculta: boolean) => mainWindow?.webContents.send('window:oculta', oculta);
+  mainWindow.on('minimize', () => avisarOculta(true));
+  mainWindow.on('hide', () => avisarOculta(true));
+  mainWindow.on('restore', () => avisarOculta(false));
+  mainWindow.on('show', () => avisarOculta(false));
+
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {

@@ -46,6 +46,8 @@ interface Props {
   anexos: AnexosPendentes;
   podeEnviar: boolean;
   podeAnexar: boolean;
+  /** No painel estreito da chamada: sem a dica "ENTER ENVIA", que so ocupa lugar. */
+  lateral?: boolean;
 }
 
 /**
@@ -55,7 +57,7 @@ interface Props {
  * escolha "Ctrl+Enter envia" da 1.x sai da interface nova). Numpad Enter vale
  * igual; durante a composicao de acentos (IME) o Enter e da composicao.
  */
-export function Compositor({ canalId, destino, ehDM, campo, respondendo, aoCancelarResposta, aoEnviar, aoEditarUltima, aoIrParaMensagens, anexos, podeEnviar, podeAnexar }: Props) {
+export function Compositor({ canalId, destino, ehDM, campo, respondendo, aoCancelarResposta, aoEnviar, aoEditarUltima, aoIrParaMensagens, anexos, podeEnviar, podeAnexar, lateral = false }: Props) {
   const [texto, setTexto] = useState(() => lerRascunho(canalId));
   const [erro, setErro] = useState<string | null>(null);
   const [emojis, setEmojis] = useState(false);
@@ -287,7 +289,7 @@ export function Compositor({ canalId, destino, ehDM, campo, respondendo, aoCance
           >
             {LIMITS.messageContent.max - tamanho}
           </span>
-        ) : (
+        ) : lateral ? null : (
           <span aria-hidden className="hidden self-center font-mono text-[9.5px] tracking-[0.16em] text-mudo xl:inline">
             ENTER ENVIA
           </span>

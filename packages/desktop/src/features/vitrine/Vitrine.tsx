@@ -47,6 +47,7 @@ import {
 } from '../../design/primitivos/index.js';
 import { aplicarTema, type Tema } from '../../app/tema.js';
 import { aplicarMovimento, type Movimento } from '../../lib/movimento.js';
+import { PalcoDeDemonstracao } from '../chamada/PalcoDeDemonstracao.js';
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -302,6 +303,10 @@ export default function Vitrine(): React.JSX.Element {
                 Ninguém bloqueado.
               </ConteudoDaAba>
             </Abas>
+          </Secao>
+
+          <Secao id="palco" titulo="Palco da chamada (vídeo sintético)">
+            <PalcoDeDemonstracao />
           </Secao>
 
           <Secao id="estados" titulo="Estados">

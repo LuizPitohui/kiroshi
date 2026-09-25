@@ -77,6 +77,8 @@ export function Identidade(): React.JSX.Element | null {
   const eu = useStore((s) => s.user);
   const mudo = useVoz((v) => v.selfMuted);
   const surdo = useVoz((v) => v.selfDeafened);
+  // O mesmo aviso dos controles da chamada: aqui o botao tambem nao abre nada.
+  const moderado = useVoz((v) => v.silenciadoPeloServidor || v.ensurdecidoPeloServidor);
   if (!eu) return null;
 
   const status = eu.status;
@@ -90,10 +92,11 @@ export function Identidade(): React.JSX.Element | null {
         </p>
       </div>
       <BotaoIcone
-        rotulo={mudo ? 'Ligar microfone' : 'Silenciar microfone'}
-        icone={mudo ? <MicOff className={ic} strokeWidth={1.5} /> : <Mic className={ic} strokeWidth={1.5} />}
-        ligado={mudo}
-        alerta={mudo}
+        rotulo={moderado ? 'Silenciado pela moderação' : mudo ? 'Ligar microfone' : 'Silenciar microfone'}
+        icone={mudo || moderado ? <MicOff className={ic} strokeWidth={1.5} /> : <Mic className={ic} strokeWidth={1.5} />}
+        ligado={mudo || moderado}
+        alerta={mudo || moderado}
+        disabled={moderado}
         onClick={() => void alternarMicrofone()}
       />
       <BotaoIcone

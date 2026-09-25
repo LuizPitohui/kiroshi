@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Channel } from '@kiroshi/shared';
+import { Permission, has, type Channel } from '@kiroshi/shared';
 import { ChevronDown, ChevronRight, Hash, Headphones, HeadphoneOff, LogOut, Megaphone, MicOff, Settings, UserPlus, Video, Volume2 } from 'lucide-react';
 import { selectors, useChannelsOfGuild, usePrivateChannels, useStore, useVoiceMembersOf } from '../../store/index.js';
 import { navegar, useRota } from '../../app/rotas.js';
@@ -17,6 +17,9 @@ import {
 import { entrarNaVoz } from './acoesDeVoz.js';
 import { useVoz } from './useVoz.js';
 import { agruparCanais } from './organizar.js';
+import { usePermissoesNoServidor } from '../../app/permissoes.js';
+import { CartaoNaChamada } from '../chamada/CartaoNaChamada.js';
+import { moverPara } from '../chamada/moderacao.js';
 
 const ic = 'size-4 shrink-0';
 
@@ -24,18 +27,37 @@ const ic = 'size-4 shrink-0';
 // Canais do servidor
 // ---------------------------------------------------------------------------
 
-function PessoaNaVoz({ userId, guildId }: { userId: string; guildId: string }) {
+/** Tipo do arraste de uma pessoa entre canais de voz (so quem pode mover arrasta). */
+const ARRASTE_DE_PESSOA = 'application/x-kiroshi-pessoa';
+
+function PessoaNaVoz({ userId, guildId, canalId }: { userId: string; guildId: string; canalId: string }) {
   const nome = useStore((s) => selectors.displayNameOf(s, userId, guildId));
   const avatar = useStore((s) => s.users.get(userId)?.avatarUrl ?? null);
   const estado = useStore((s) => s.voiceStates.get(userId));
+  const eu = useStore((s) => s.user?.id === userId);
+  const podeMover = has(usePermissoesNoServidor(guildId), Permission.MOVE_MEMBERS);
+  const [cartao, setCartao] = useState(false);
   // Quem fala so e conhecido de dentro da chamada: o SFU conta ao cliente.
   const falando = useVoz((v) => v.participants.some((p) => p.userId === userId && p.speaking));
 
   const mudo = estado?.selfMute || estado?.serverMute;
   const surdo = estado?.selfDeaf || estado?.serverDeaf;
 
-  return (
-    <li className="flex h-7 items-center gap-2 pl-8 pr-2 text-13 text-texto-2">
+  const linha = (
+    <li
+      className="flex h-7 items-center gap-2 pl-8 pr-2 text-13 text-texto-2"
+      draggable={podeMover}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(ARRASTE_DE_PESSOA, userId);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      onContextMenu={(e) => {
+        // Botao direito: o mesmo cartao do palco (volume e, com permissao, moderacao).
+        if (eu) return;
+        e.preventDefault();
+        setCartao(true);
+      }}
+    >
       <Avatar nome={nome} id={userId} url={avatar} tamanho={20} falando={falando} />
       <span className="min-w-0 flex-1 truncate">{nome}</span>
       <span className="flex items-center gap-1 text-texto-3">
@@ -49,6 +71,13 @@ function PessoaNaVoz({ userId, guildId }: { userId: string; guildId: string }) {
       </span>
     </li>
   );
+
+  if (eu) return linha;
+  return (
+    <CartaoNaChamada userId={userId} guildId={guildId} canalId={canalId} transmitindo={Boolean(estado?.selfStream)} aberto={cartao} aoMudar={setCartao}>
+      {linha}
+    </CartaoNaChamada>
+  );
 }
 
 function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: string; ativo: boolean }) {
@@ -57,6 +86,8 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
   const presentes = useVoiceMembersOf(canal.id);
   const ehVoz = canal.type === 'GUILD_VOICE';
   const Icone = ehVoz ? Volume2 : canal.type === 'GUILD_ANNOUNCEMENT' ? Megaphone : Hash;
+  // Alvo de arrastar uma pessoa de outro canal de voz (mover, com permissao).
+  const [recebendo, setRecebendo] = useState(false);
 
   function abrir() {
     // Abrir um canal de voz tambem entra nele: e um lugar onde se esta, nao um
@@ -66,13 +97,29 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
   }
 
   return (
-    <li>
+    <li
+      onDragOver={(e) => {
+        if (!ehVoz || !e.dataTransfer.types.includes(ARRASTE_DE_PESSOA)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setRecebendo(true);
+      }}
+      onDragLeave={() => setRecebendo(false)}
+      onDrop={(e) => {
+        setRecebendo(false);
+        const userId = e.dataTransfer.getData(ARRASTE_DE_PESSOA);
+        if (!ehVoz || !userId) return;
+        e.preventDefault();
+        void moverPara(guildId, userId, canal.id);
+      }}
+    >
       <button
         type="button"
         onClick={abrir}
         aria-current={ativo ? 'page' : undefined}
         className={cx(
           'relative flex h-[30px] w-full items-center gap-2 px-2 text-left text-14',
+          recebendo && 'outline outline-1 -outline-offset-1 outline-acento',
           ativo ? 'bg-elevado text-texto' : naoLido ? 'font-semibold text-texto hover:bg-terminal' : 'text-texto-3 hover:bg-terminal hover:text-texto-2',
         )}
       >
@@ -88,7 +135,7 @@ function LinhaDeCanal({ canal, guildId, ativo }: { canal: Channel; guildId: stri
       {ehVoz && presentes.length > 0 ? (
         <ul aria-label={`Na chamada ${canal.name}`}>
           {presentes.map((p) => (
-            <PessoaNaVoz key={p.userId} userId={p.userId} guildId={guildId} />
+            <PessoaNaVoz key={p.userId} userId={p.userId} guildId={guildId} canalId={canal.id} />
           ))}
         </ul>
       ) : null}

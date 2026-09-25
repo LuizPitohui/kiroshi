@@ -153,6 +153,11 @@ export function installGatewayHandlers(): void {
   gateway.on('VOICE_STATE_UPDATE', (state) => {
     store().setVoiceState(state);
 
+    // A moderacao sobre mim vale na hora, no microfone e no som.
+    if (state.userId === store().user?.id && state.channelId) {
+      voice.aplicarModeracao({ silenciado: state.serverMute, ensurdecido: state.serverDeaf });
+    }
+
     // Este aviso sobre a propria pessoa so chega quando um moderador
     // desconectou: a saida por vontade propria nao volta como eco, justamente
     // para nao derrubar a chamada seguinte quando alguem sai e entra rapido.

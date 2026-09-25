@@ -8,9 +8,12 @@ import { BarraDeEstado } from './BarraDeEstado.js';
 import { Navegacao } from './Navegacao.js';
 import { Identidade, PainelDeVoz } from './PainelDeVoz.js';
 import { Trilho } from './Trilho.js';
-import { entrarNaVoz } from './acoesDeVoz.js';
-import { useVoz } from './useVoz.js';
 import { Conversa } from '../conversa/Conversa.js';
+import { TelaDaChamada } from '../chamada/TelaDaChamada.js';
+import { MiniPalco } from '../chamada/MiniPalco.js';
+import { ZeladorDaChamada } from '../chamada/ZeladorDaChamada.js';
+import { ContextoDaChamada } from '../chamada/fonte.js';
+import { fonteAoVivo } from '../chamada/fonteAoVivo.js';
 import { Ajustes } from '../ajustes/Ajustes.js';
 import { useInterface } from '../../app/interface.js';
 import { useTelaLarga } from '../../app/largura.js';
@@ -89,31 +92,26 @@ export function restaurarUltimaRota(): void {
 }
 
 function CanalAberto({ guildId, canalId }: { guildId: string; canalId: string }) {
-  const canal = useStore((s) => s.channels.get(canalId));
-  const estouAqui = useVoz((v) => v.channelId === canalId && (v.connected || v.connecting));
-  if (!canal) return null;
-
-  /*
-    Canal de voz: por enquanto a conversa dele na area principal, como a 1.x
-    mostrava ao lado do palco. O palco novo (fatia 3) toma a area principal e a
-    conversa vai para o painel da direita.
-  */
-  const chamada =
-    canal.type === 'GUILD_VOICE' ? (
-      estouAqui ? (
-        <span className="mr-2 flex items-center gap-1.5 font-mono text-10 uppercase tracking-rotulo text-ok">
-          <span aria-hidden className="size-1.5 bg-ok" />
-          Na chamada
-        </span>
-      ) : (
-        <Botao tamanho="sm" variante="primario" onClick={() => void entrarNaVoz(canal.id, guildId)}>
-          ▸ Entrar na chamada
-        </Botao>
-      )
-    ) : null;
-
+  const tipo = useStore((s) => s.channels.get(canalId)?.type);
+  if (!tipo) return null;
+  // Canal de voz: o palco na area principal; a conversa dele vai para o painel da direita.
+  if (tipo === 'GUILD_VOICE') return <TelaDaChamada key={canalId} canalId={canalId} guildId={guildId} />;
   // A chave e o canal: estado de um canal (resposta, edicao, anexos, rolagem) nunca vaza para outro.
-  return <Conversa key={canal.id} canalId={canal.id} extraNoCabecalho={chamada} />;
+  return <Conversa key={canalId} canalId={canalId} />;
+}
+
+/** A conversa do canal de voz, no painel da direita (como no prototipo). */
+function ConversaDaChamada({ canalId }: { canalId: string }) {
+  return (
+    <aside aria-label="Conversa da chamada" className="flex w-[300px] shrink-0 flex-col border-l border-borda bg-deck">
+      <div className="flex h-12 shrink-0 items-center border-b border-borda px-3.5">
+        <p className="k-rotulo">Conversa da chamada</p>
+      </div>
+      <div className="min-h-0 flex-1">
+        <Conversa key={canalId} canalId={canalId} lateral />
+      </div>
+    </aside>
+  );
 }
 
 function AreaPrincipal({ rota }: { rota: Rota }) {
@@ -208,13 +206,18 @@ export function Casca(): React.JSX.Element {
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
   }, [gaveta, fecharGaveta]);
-  const ehTexto = useStore((s) => {
-    if (rota.tela !== 'servidor' || !rota.canalId) return false;
-    const tipo = s.channels.get(rota.canalId)?.type;
-    return tipo === 'GUILD_TEXT' || tipo === 'GUILD_ANNOUNCEMENT';
-  });
+  const tipoDoCanal = useStore((s) => (rota.tela === 'servidor' && rota.canalId ? s.channels.get(rota.canalId)?.type : undefined));
+  // O painel da direita: membros ao lado de um canal de texto, a conversa da chamada ao lado do palco.
+  const painel =
+    rota.tela !== 'servidor' || !rota.canalId ? null : tipoDoCanal === 'GUILD_VOICE' ? (
+      <ConversaDaChamada canalId={rota.canalId} />
+    ) : tipoDoCanal === 'GUILD_TEXT' || tipoDoCanal === 'GUILD_ANNOUNCEMENT' ? (
+      <Membros guildId={rota.guildId} />
+    ) : null;
 
   return (
+    <ContextoDaChamada.Provider value={fonteAoVivo}>
+    <ZeladorDaChamada />
     <div className="grid h-full grid-rows-[32px_minmax(0,1fr)_22px]">
       {/* Botao, e nao link `#conteudo`: com rotas por hash, a ancora trocaria a rota. */}
       <button
@@ -232,20 +235,22 @@ export function Casca(): React.JSX.Element {
           <PainelDeVoz />
           <Identidade />
         </aside>
-        <main id="conteudo" tabIndex={-1} className="min-h-0 min-w-0 flex-1 bg-void outline-none">
+        <main id="conteudo" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 bg-void outline-none">
           <AreaPrincipal rota={rota} />
+          <MiniPalco />
         </main>
-        {rota.tela === 'servidor' && ehTexto && telaLarga && membrosVisiveis ? <Membros guildId={rota.guildId} /> : null}
+        {painel && telaLarga && membrosVisiveis ? painel : null}
         {/* Janela estreita: o painel vira gaveta por cima da conversa (design, secao 3). */}
-        {rota.tela === 'servidor' && ehTexto && !telaLarga && gaveta ? (
+        {painel && !telaLarga && gaveta ? (
           <div className="fixed inset-x-0 bottom-[22px] top-8 z-[var(--k-z-palco-flutuante)] bg-preto/50" onClick={fecharGaveta}>
             <div className="absolute inset-y-0 right-0 flex shadow-camada" onClick={(e) => e.stopPropagation()}>
-              <Membros guildId={rota.guildId} />
+              {painel}
             </div>
           </div>
         ) : null}
       </div>
       <BarraDeEstado />
     </div>
+    </ContextoDaChamada.Provider>
   );
 }

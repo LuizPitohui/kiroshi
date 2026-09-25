@@ -30,10 +30,10 @@ abertas.
 | Area | Estado |
 |---|---|
 | Versao publicada | 1.15.0 (2026-09-23) |
-| Testes | 576 unitarios passando (shared 67, servidor 128, desktop 381); e2e 80/80; typecheck limpo |
+| Testes | 609 unitarios passando (shared 67, servidor 133, desktop 409); e2e 80/80; typecheck limpo |
 | Conversa (texto) | 1.x: funciona, sem autocompletar e com acoes so no hover. Beta: autocompletar, acoes por teclado, densidade real |
-| Voz | funciona; ajustes de audio em boa parte sem efeito; PTT global quebrado |
-| Transmissao de tela | **trava** — espectador recebe 360p15 ao lado do chat; caminho de rede instavel para quem usa relay; sem metricas |
+| Voz | funciona; ajustes de audio em boa parte sem efeito; PTT global quebrado. Beta: silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada |
+| Transmissao de tela | 1.x: **trava** — espectador recebe 360p15 ao lado do chat, sem metricas. Beta: nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Rede de quem usa relay: a medir |
 | Supressao de ruido | DFN3 roda, soa mal; vai ser refeita |
 | Chamada em DM | so no servidor, sem interface nem toque |
 | Cargos | criar so o dono; **dar cargo nao existe na interface**; 3 permissoes sem efeito |
@@ -43,7 +43,7 @@ abertas.
 | Atualizacao automatica | funciona, mas baixa 93 MiB inteiros por versao |
 | Cadastro | so com convite (`ALLOW_OPEN_REGISTRATION=false`); criar com Google ja existe no servidor |
 | Seguranca | servidor: 13 falhas corrigidas e publicadas (API `6f493df`); abertas: casca Electron e host (ver `privado/`) |
-| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca) e 2 (conversa) no Kiroshi Beta |
+| Front-end novo | design aprovado (vermelho Arasaka); fatias 1 (fundacao + casca), 2 (conversa) e 3 (chamada e palco) no Kiroshi Beta |
 
 ## Como manter
 

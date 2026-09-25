@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { bitrateDeTela, restricoesDeTela, camadasDeTela } from './qualidade.js';
+import { bitrateDeTela, camadasDeTela, degradacaoDoConteudo, dicaDoConteudo, restricoesDeTela } from './qualidade.js';
 
 describe('cada modo do seletor recebe banda propria', () => {
   it('720p30 e o modo leve', () => {
@@ -140,5 +140,29 @@ describe('as camadas da transmissao de tela', () => {
 
   it('a camada baixa cabe em rede ruim', () => {
     expect(camadasDeTela(1080, 60)[0]!.bitrate).toBeLessThanOrEqual(500_000);
+  });
+});
+
+describe('o conteudo escolhido no seletor', () => {
+  it('jogo: dica de movimento, fluidez primeiro e camada baixa a 30 fps', () => {
+    expect(dicaDoConteudo('movimento')).toBe('motion');
+    expect(degradacaoDoConteudo('movimento')).toBe('maintain-framerate');
+    expect(camadasDeTela(1080, 60, 'movimento')[0]).toMatchObject({ altura: 360, fps: 30 });
+    // Pedir 30 no modo de 30 nao vira 60, e o de 720p30 tambem vai a 30.
+    expect(camadasDeTela(720, 30, 'movimento')[0]!.fps).toBe(30);
+  });
+
+  it('texto: dica de detalhe, resolucao primeiro', () => {
+    expect(dicaDoConteudo('detalhe')).toBe('detail');
+    expect(degradacaoDoConteudo('detalhe')).toBe('maintain-resolution');
+  });
+
+  it('texto em 1080p cai para 720p legivel, nunca para 360p', () => {
+    const c = camadasDeTela(1080, 30, 'detalhe');
+    expect(c).toEqual([{ largura: 1280, altura: 720, bitrate: 600_000, fps: 5 }]);
+  });
+
+  it('texto em 720p mantem a camada de 360p a 15 fps', () => {
+    expect(camadasDeTela(720, 30, 'detalhe')).toEqual([{ largura: 640, altura: 360, bitrate: 500_000, fps: 15 }]);
   });
 });
