@@ -119,10 +119,10 @@ ataque 3 ms, soltura 250 ms) -> destino (`saida.ts:159-196`).
   rebaixa a voz de todo mundo.
 - **`TrackUnsubscribed` nao limpa** `audioElements` nem o grafo
   (`controller.ts:619-622`): parar de assistir deixa nos pendurados.
-- **Som da transmissao inclui a chamada:** `audio: 'loopback'` (`main.ts:498`)
-  captura todo o audio do sistema, inclusive as vozes que o Kiroshi toca, e
-  "Incluir o som" vem ligado (`ScreenPickerModal.tsx:24`). O Electron so oferece
-  `loopback` e `loopbackWithMute`. [I no efeito]
+- **Som da transmissao incluia a chamada — consertado na 2.0.1.** O
+  `audio: 'loopback'` capturava todo o audio do sistema, inclusive as vozes que o
+  Kiroshi toca, e quem assistia ouvia a propria voz de volta (relato do dono,
+  2026-09-25). Agora e `loopbackWithoutChrome`; ver a captura de tela abaixo.
 - Qualidade `Lost` vira `'unknown'` e aparece como "Ainda medindo a conexao".
 
 ## Publicacao de video e tela
@@ -134,7 +134,7 @@ ataque 3 ms, soltura 250 ms) -> destino (`saida.ts:159-196`).
 | `singlePeerConnection` | `true` (padrao da 2.22.3) |
 | `simulcast` | `true`; camera com camadas padrao h180/h360 |
 | `videoCodec` | nao definido -> **VP8**; `backupCodec` sem efeito com VP8 |
-| `audioPreset` | 64 kbps; `dtx` e `red` ligados |
+| `audioPreset` | 64 kbps; `dtx` e `red` ligados (o som da tela desliga os dois, desde a 2.0.1) |
 | `reconnectPolicy` | padrao (0, 0,3, 1,2, 2,7, 4,8 s e 5x 7 s) |
 | `connect` | `autoSubscribe: true`, `maxRetries: 3`, ICE do servidor, `relay` so com `FORCE_TURN_RELAY` |
 
@@ -142,8 +142,44 @@ ataque 3 ms, soltura 250 ms) -> destino (`saida.ts:159-196`).
 `getDisplayMedia` com altura e fps `ideal/max`; o handler do processo principal
 responde com a fonte escolhida (e chama `desktopCapturer.getSources` de novo,
 gerando miniaturas de todas as janelas a cada pedido). Modos: 720p30,
-**1080p30 (padrao)**, 1080p60. Audio do sistema por `loopback`; se falhar, tenta
-sem som.
+**1080p30 (padrao)**, 1080p60. Se o pedido com som falhar, tenta sem som e avisa.
+
+**Som da tela (2.0.1):** o sistema inteiro **menos o proprio Kiroshi**.
+- `audio: 'loopbackWithoutChrome'` no handler (`SOM_DA_TELA`, `main.ts`). E um
+  dispositivo do Chromium: a tipagem do Electron so lista `loopback` e
+  `loopbackWithMute`, mas a string passa direto como id. No Windows ele ativa a
+  captura por processo (`AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`) em modo
+  `EXCLUDE_TARGET_PROCESS_TREE`, com o pid do servico de audio, que e quem toca
+  todo som do app (`media/audio/win/audio_low_latency_input_win.cc`). Nao precisa
+  de modulo nativo.
+- Sem captura por processo (Windows antes do 10 2004, build 19041, o mesmo corte
+  do OBS; a Microsoft documenta 20348), o `screen:select` devolve `false`, a
+  tela vai muda e a pessoa le `SOM_DA_TELA_PEDE_WINDOWS_NOVO`. Nunca volta para o
+  `loopback` puro, e o Chromium tambem nao volta sozinho: a ativacao falha e o
+  pedido cai no "tenta sem som".
+- `loopbackWithMute` nao serve: cala as caixas de quem transmite.
+- Pedido **sem tratamento de voz** (`SOM_DA_TELA_COMO_VEIO`: `echoCancellation`,
+  `noiseSuppression` e `autoGainControl` falsos). Sem isso o Chromium processava
+  o som da tela como microfone e em mono.
+- Publicado **sem DTX e sem RED** (os padroes do LiveKit para estereo; a sala liga
+  os dois para o microfone): 64 kbps estereo no SFU (`audioFeatures`
+  `TF_STEREO` e `TF_NO_DTX`), contra 131 kbps antes.
+
+Medido em 2026-09-25 (Electron 38.8.6, Windows 11 25H2) com tons inaudiveis de
+-40 dB: o app toca 18 kHz (WebAudio) e 17,25 kHz (`<audio>` com MediaStream, o
+caminho da voz de quem esta na chamada); o PowerShell toca 18,75 kHz.
+
+| Captura | Som do proprio app | Outro programa |
+|---|---|---|
+| `loopback` (antes) | -40 dB (entra inteiro) | -40 dB |
+| `loopbackWithoutChrome` no Beta | -128 a -139 dB (silencio) | presente |
+| Electron separado, ao mesmo tempo | o som do Beta aparece (-49 a -60 dB) | presente |
+| padrao, com tratamento de voz | — | -41 a -46 dB, oscilando (no Beta ate -56); mono |
+| sem tratamento de voz | — | -40,0 dB exatos; estereo |
+
+A terceira linha e a prova de que o som do Beta sai de fato nas caixas: so a
+captura do proprio Beta o deixa de fora. Os scripts ficaram no scratchpad da
+sessao (`loopback/`); a receita esta na memoria do teste de voz local.
 
 - **`contentHint` nunca definido** (`controller.ts:1180`, faixa criada com
   `new LocalVideoTrack`). [I] O Chromium trata como screencast: prefere manter
@@ -369,8 +405,9 @@ Detalhe e fontes em [09-referencia-discord.md](09-referencia-discord.md#10-trans
   (manter resolucao) — escolher pelo que a pessoa vai transmitir, junto com a
   qualidade no seletor.
 - **Eco na transmissao:** a solucao e captura de audio **por processo** (WASAPI
-  `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS`, Windows 10 build 20348+), por modulo
-  nativo — o Electron so oferece `loopback` (tudo) e `loopbackWithMute`.
+  `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS`). Feito na 2.0.1 sem modulo nativo: o
+  proprio Chromium ja tem o dispositivo `loopbackWithoutChrome`, que o Electron
+  aceita embora nao documente (ver a captura de tela acima).
 - Voz prioritaria, ensurdecer de verdade e mover no LiveKit auto-hospedado:
   `canPublishSources`, `canSubscribe: false` e token novo + reconexao (nao ha
   `MoveParticipant` fora do LiveKit Cloud).

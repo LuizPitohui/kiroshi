@@ -274,9 +274,13 @@ lista de amigos vazia). **O Discord nao tem login com Google.**
   | Jogo | 720p60 ou 1080p30 | `motion` + `maintain-framerate` | 360p ou 540p a 30 fps |
 
 - **Audio da transmissao:** o `loopback` do Electron pega todo o som do sistema,
-  inclusive a chamada (eco para quem assiste). Para fazer como o Discord (so o
-  processo compartilhado) e preciso modulo nativo WASAPI com
-  `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS` (Windows 10 build 20348+) [O].
+  inclusive a chamada (eco para quem assiste). O eco se resolve com captura por
+  processo (WASAPI `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS`) [O], e o Chromium ja
+  traz isso pronto: o dispositivo `loopbackWithoutChrome` exclui o proprio app.
+  Feito na 2.0.1, sem modulo nativo (ver [04-midia.md](04-midia.md#publicacao-de-video-e-tela)).
+  Fazer como o Discord numa janela (so o som daquele programa) seria o
+  dispositivo `applicationLoopback` do mesmo codigo, que inclui a arvore de um
+  processo [I: formato do id e pid da janela a descobrir].
 
 ## 11. Atualizadores em segundo plano
 

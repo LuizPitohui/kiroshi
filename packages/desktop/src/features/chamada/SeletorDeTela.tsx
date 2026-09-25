@@ -106,7 +106,7 @@ export function SeletorDeTela({ aberto, aoMudar }: { aberto: boolean; aoMudar: (
     >
       {semSom ? (
         <Aviso tipo="aviso" titulo="Transmitindo, mas sem o som">
-          {semSom} A imagem já está no ar.
+          A imagem já está no ar; só o som ficou de fora: {semSom}
         </Aviso>
       ) : (
         <div className="space-y-5">
@@ -187,7 +187,7 @@ export function SeletorDeTela({ aberto, aoMudar }: { aberto: boolean; aoMudar: (
           />
           <LinhaDeInterruptor
             titulo="Incluir o som do computador"
-            descricao="Vai todo o som do Windows, inclusive o da chamada: quem assiste pode se ouvir com atraso."
+            descricao="Vai o som do Windows, menos o do próprio Kiroshi: quem assiste não ouve a própria voz de volta."
             ligado={som}
             aoMudar={setSom}
           />

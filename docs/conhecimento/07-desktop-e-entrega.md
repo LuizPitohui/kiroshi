@@ -75,7 +75,9 @@ Caminhos relativos a `packages/desktop/`.
 - **WebRTC:** `setWebRTCIPHandlingPolicy('default')` (`259`) para usar todas as
   interfaces (e o que permite o caminho pelo Tailscale).
 - **Captura de tela** (`477-505`): `setDisplayMediaRequestHandler` com a fonte
-  escolhida no seletor proprio, `audio:'loopback'` no Windows.
+  escolhida no seletor proprio e `audio:'loopbackWithoutChrome'` (sem o som do
+  proprio app) no Windows 10 2004 ou mais novo; `screen:select` devolve se o som
+  vai junto.
 - **Depuracao:** `remote-debugging-port=9222` so quando `!app.isPackaged`.
 
 ### Canais IPC

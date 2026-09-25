@@ -113,7 +113,9 @@ const api = {
     sources: (): Promise<ScreenSource[]> => ipcRenderer.invoke('screen:sources'),
     /**
      * Marca qual fonte o proximo getDisplayMedia deve usar. Chame logo antes
-     * de pedir a captura; a escolha vale uma vez so.
+     * de pedir a captura; a escolha vale uma vez so. Devolve se o som do
+     * sistema vai junto: nao vai onde o Windows nao consegue deixar o som do
+     * Kiroshi fora da captura.
      */
     select: (id: string, withAudio: boolean): Promise<boolean> =>
       ipcRenderer.invoke('screen:select', id, withAudio),

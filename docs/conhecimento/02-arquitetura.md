@@ -60,7 +60,8 @@ Tailscale ou relay TURN da Cloudflare).
 
 **Tela:** seletor proprio (`screen:sources` por IPC) -> `screen:select` ->
 `getDisplayMedia` atendido pelo `setDisplayMediaRequestHandler` com a fonte
-escolhida e `audio: 'loopback'` -> faixa publicada com 2–3 camadas de simulcast
+escolhida e `audio: 'loopbackWithoutChrome'` (o som do sistema menos o do
+proprio Kiroshi) -> faixa publicada com 2–3 camadas de simulcast
 -> quem assiste clica "Assistir" (a assinatura e opt-in).
 
 ## Convencoes do repositorio

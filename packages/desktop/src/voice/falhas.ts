@@ -109,6 +109,15 @@ function mensagem(erro: unknown, fonte: FonteDeMidia): string {
 }
 
 /**
+ * O som ficou de fora antes de tentar: este Windows nao separa o som do
+ * Kiroshi do resto, e o som do sistema inteiro levaria a chamada junto. Quem
+ * assiste ouviria a propria voz de volta, que e o retorno relatado pelo dono
+ * em 2026-09-25. O corte de versao mora no `main.ts` (`windowsSeparaOSomDoApp`).
+ */
+export const SOM_DA_TELA_PEDE_WINDOWS_NOVO =
+  'este Windows não consegue deixar o som do Kiroshi fora da captura, e quem assiste ouviria a própria voz de volta. O som da tela precisa do Windows 10 versão 2004 ou mais novo.';
+
+/**
  * Por que o som do sistema nao entrou na transmissao.
  *
  * A imagem, nesse ponto, JA esta no ar — o aplicativo tenta de novo sem o som

@@ -29,7 +29,7 @@ import {
 } from './qualidade.js';
 import type { Recepcao } from './recepcao.js';
 import type { EntradaDeStats } from './metricas.js';
-import { explicarFalhaDeMidia } from './falhas.js';
+import { SOM_DA_TELA_PEDE_WINDOWS_NOVO, explicarFalhaDeMidia } from './falhas.js';
 import { SaidaDeAudio } from './saida.js';
 import { prepararFaixaParaProcessador, type ProcessadorDeLimpeza } from './ruido.js';
 import {
@@ -178,6 +178,26 @@ interface AudioRemoto {
 }
 
 const SETTINGS_KEY = 'kiroshi.voice';
+
+/*
+  O som da tela chega como saiu do computador, sem o tratamento de voz.
+
+  Sem pedir, o Chromium trata o som do sistema como se fosse um microfone:
+  cancelamento de eco, supressao de ruido e ganho automatico, e ainda junta os
+  dois canais em um. Medido no Electron 38 com um tom estavel de -40 dB tocado
+  por outro programa: com o padrao ele chegava oscilando entre -41 e -46 dB
+  (no Beta, ate -56), e em mono; sem o tratamento, -40,0 dB exatos e em
+  estereo. Musica e barulho de jogo sao justamente o que a supressao de ruido
+  existe para apagar.
+
+  O eco que o cancelamento prometia tirar ja nao entra: o som do proprio
+  Kiroshi fica fora da captura (`SOM_DA_TELA` no main.ts).
+*/
+const SOM_DA_TELA_COMO_VEIO: MediaTrackConstraints = {
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+};
 
 const DEFAULT_SETTINGS: VoiceSettings = {
   inputDeviceId: null,
@@ -1275,10 +1295,18 @@ class VoiceController {
     let stream: MediaStream;
     let motivoSemSom: string | null = null;
 
-    await window.kiroshi.screen.select(sourceId, quisSom);
+    /*
+      O processo principal responde se o som vai junto. Nao vai onde o Windows
+      nao consegue deixar o som do proprio Kiroshi fora da captura: com o som
+      do sistema inteiro, a chamada entrava na transmissao e quem assistia
+      ouvia a propria voz de volta. Ai a tela vai muda, e a pessoa sabe por que.
+    */
+    const somVaiJunto = await window.kiroshi.screen.select(sourceId, quisSom);
+    const pedirSom = quisSom && somVaiJunto;
+    if (quisSom && !pedirSom) motivoSemSom = SOM_DA_TELA_PEDE_WINDOWS_NOVO;
 
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video, audio: quisSom });
+      stream = await navigator.mediaDevices.getDisplayMedia({ video, audio: pedirSom ? SOM_DA_TELA_COMO_VEIO : false });
     } catch (erro) {
       /*
         O som nao pode levar o video junto.
@@ -1296,7 +1324,7 @@ class VoiceController {
         O `select` vai de novo porque o processo principal descarta a escolha
         depois de responder ao primeiro pedido.
       */
-      if (!quisSom) throw erro;
+      if (!pedirSom) throw erro;
 
       motivoSemSom = explicarFalhaDeMidia(erro, 'som-da-tela');
       await window.kiroshi.screen.select(sourceId, false);
@@ -1308,8 +1336,8 @@ class VoiceController {
       imagem e simplesmente omite o loopback. Silencioso, e o mesmo resultado
       pratico, entao tambem precisa ser dito.
     */
-    if (quisSom && !motivoSemSom && stream.getAudioTracks().length === 0) {
-      motivoSemSom = 'O Windows nao entregou o audio do sistema.';
+    if (pedirSom && !motivoSemSom && stream.getAudioTracks().length === 0) {
+      motivoSemSom = 'o Windows não entregou o áudio do sistema.';
     }
 
     const published: (LocalVideoTrack | LocalAudioTrack)[] = [];
@@ -1365,7 +1393,18 @@ class VoiceController {
         published.push(track);
       } else {
         const track = new LocalAudioTrack(mediaTrack);
-        await room.localParticipant.publishTrack(track, { source: Track.Source.ScreenShareAudio });
+        await room.localParticipant.publishTrack(track, {
+          source: Track.Source.ScreenShareAudio,
+          /*
+            Som de jogo e musica, nao de voz: sem DTX, que troca trecho baixo
+            por ruido de conforto, e sem RED, que manda cada pacote duas vezes
+            (medido: 131 kbps em vez de 64, no upload de quem transmite). Sao
+            os padroes do proprio LiveKit para faixa estereo; o
+            `publishDefaults` da sala liga os dois pensando no microfone.
+          */
+          dtx: false,
+          red: false,
+        });
         published.push(track);
       }
     }

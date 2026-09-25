@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { explicarFalhaDeMidia, codigoDaFalha } from './falhas.js';
+import { SOM_DA_TELA_PEDE_WINDOWS_NOVO, explicarFalhaDeMidia, codigoDaFalha } from './falhas.js';
 
 /** Um erro como o navegador entrega: nome proprio, mensagem tecnica. */
 const falha = (nome: string, mensagem = 'detalhe tecnico'): Error => {
@@ -150,5 +150,16 @@ describe('falha do som da transmissao e um assunto proprio', () => {
     expect(explicarFalhaDeMidia(falha('NotReadableError'), 'som-da-tela')).toContain(
       '(NotReadableError)',
     );
+  });
+
+  /*
+    Windows sem captura por processo: o som fica de fora antes de tentar, para
+    a chamada nao voltar pela transmissao. A frase diz o motivo e o que resolve;
+    sem isso, "tela muda" parece defeito do app.
+  */
+  it('sem Windows novo, diz o motivo e a versao que resolve', () => {
+    expect(SOM_DA_TELA_PEDE_WINDOWS_NOVO).toMatch(/própria voz/);
+    expect(SOM_DA_TELA_PEDE_WINDOWS_NOVO).toMatch(/Windows 10 versão 2004/);
+    expect(SOM_DA_TELA_PEDE_WINDOWS_NOVO).not.toMatch(/tela cheia|camera|câmera/i);
   });
 });

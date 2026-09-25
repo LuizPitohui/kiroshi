@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
+import { release } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -513,6 +514,41 @@ function setupAtualizacao(): void {
 }
 
 /**
+ * O som que acompanha a tela: o do Windows inteiro, MENOS o do proprio Kiroshi.
+ *
+ * O `loopback` puro grava tudo o que sai nas caixas, e isso inclui a chamada.
+ * Quem assistia ouvia a propria voz de volta pela transmissao, com o atraso da
+ * ida e volta: o dono relatou em 2026-09-25 um retorno "muito forte" assistindo
+ * a tela de um amigo.
+ *
+ * `loopbackWithoutChrome` e um dispositivo do proprio Chromium. A tipagem do
+ * Electron so lista `loopback` e `loopbackWithMute`, mas a string passa direto
+ * como id do dispositivo. No Windows ele usa a captura por processo
+ * (AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK) excluindo a arvore do servico
+ * de audio, que e quem toca todo som do app: chamada, soundboard, avisos.
+ * Medido no Electron 38 com dois tons inaudiveis: o tocado pelo app sumiu da
+ * captura (de -40 dB para -117 dB) e o de outro programa continuou (-39 dB).
+ *
+ * `loopbackWithMute` nao serve: ele cala as caixas de quem transmite, que
+ * deixaria de ouvir a chamada e o proprio jogo.
+ *
+ * Sem volta para o `loopback` puro, de proposito. Onde a captura por processo
+ * nao existe, a tela vai sem som e a pessoa e avisada: tela muda e melhor que
+ * devolver a voz de todo mundo.
+ */
+const SOM_DA_TELA: string = 'loopbackWithoutChrome';
+
+/**
+ * A captura por processo existe a partir do Windows 10 2004 (build 19041). A
+ * Microsoft documenta 20348, mas funciona antes: o OBS usa o mesmo corte.
+ */
+function windowsSeparaOSomDoApp(): boolean {
+  if (process.platform !== 'win32') return false;
+  const build = Number(release().split('.')[2]);
+  return Number.isFinite(build) && build >= 19041;
+}
+
+/**
  * Captura de tela.
  *
  * O getDisplayMedia do Chromium abriria o seletor nativo, que nao combina com
@@ -539,8 +575,8 @@ function setupDisplayMedia(): void {
         }
         callback({
           video: source,
-          // Audio do sistema so funciona no Windows; em outros e ignorado.
-          ...(withAudio && process.platform === 'win32' ? { audio: 'loopback' } : {}),
+          // `withAudio` ja passou por `windowsSeparaOSomDoApp` no `screen:select`.
+          ...(withAudio ? { audio: SOM_DA_TELA as 'loopback' } : {}),
         });
       });
     },
@@ -623,9 +659,11 @@ function registerIpc(): void {
     }));
   });
 
+  // Devolve se o som do sistema vai junto: so onde o Windows deixa o Kiroshi fora dele.
   ipcMain.handle('screen:select', (_event, id: string, withAudio: boolean) => {
-    pendingScreenSource = { id, withAudio };
-    return true;
+    const comSom = withAudio && windowsSeparaOSomDoApp();
+    pendingScreenSource = { id, withAudio: comSom };
+    return comSom;
   });
 
   // ---- Push-to-talk global ----

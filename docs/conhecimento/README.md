@@ -29,11 +29,11 @@ abertas.
 
 | Area | Estado |
 |---|---|
-| Versao publicada | **2.0.0** (2026-09-25): a interface nova para todos, pela atualizacao automatica. Beta 1.16.x segue como canal de teste |
-| Testes | 741 unitarios passando (shared 79, servidor 153, desktop 509); e2e 136/136; typecheck limpo |
+| Versao publicada | **2.0.1** (2026-09-25): o som da transmissao sem o retorno da chamada. A 2.0.0 trouxe a interface nova para todos. Beta 1.16.x segue como canal de teste |
+| Testes | 742 unitarios passando (shared 79, servidor 153, desktop 510); e2e 136/136; typecheck limpo |
 | Conversa (texto) | autocompletar de mencao, canal e emoji; acoes por teclado; densidade confortavel e compacta |
 | Voz | silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada (5 s no maximo); atalhos globais de verdade (falar segurando, mutar, ensurdecer) |
-| Transmissao de tela | nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Telemetria enviada ao servidor e rede de quem usa relay: a fazer (F2) |
+| Transmissao de tela | som do computador sem o do proprio Kiroshi (quem assiste nao ouve a propria voz de volta), sem tratamento de voz e em estereo (2.0.1); nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Telemetria enviada ao servidor e rede de quem usa relay: a fazer (F2) |
 | Supressao de ruido | DFN3 roda, soa mal; vai ser refeita (F3, o proximo) |
 | Chamada em DM | ligar e atender com toque, recusar, registro na conversa, desliga quem fica 3 min sozinho |
 | Cargos | ajustes do servidor completos; dar cargo pelo perfil, pelo clique direito e nos ajustes; permissoes por canal em tres estados; 3 bits sem efeito ficam fora da tela |

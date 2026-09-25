@@ -262,11 +262,23 @@ problema. Proximo: F3 (supressao de ruido do zero).
    levar o SFU para uma VPS com IP publico — **decisao do dono**, muda a premissa
    "tudo em casa").
 
-**Estado:** os consertos do item 2 entraram na fatia 3 do F1, no Kiroshi Beta, e
-a medida aparece no proprio quadro. Falta o resto do item 1 (telemetria enviada
-ao servidor, Prometheus do LiveKit, upload de casa) e o item 3. A 1.15.0
-publicada segue como estava; os consertos do motor de voz, que e comum, entram
-em qualquer versao nova.
+**Estado:** os consertos do item 2 entraram na fatia 3 do F1 e, desde a 2.0.0,
+estao no Kiroshi de todo mundo; a medida aparece no proprio quadro. Falta o resto
+do item 1 (telemetria enviada ao servidor, Prometheus do LiveKit, upload de casa)
+e o item 3.
+
+**Retorno da voz pela transmissao (2026-09-25, 2.0.1).** Pedido do dono: "a
+transmissao nunca pode pegar o audio do proprio Kiroshi pois da um retorno muito
+forte" (ele assistiu a tela de um amigo e ouviu a propria voz de volta). O som da
+tela saia do `loopback`, que grava tudo o que toca nas caixas de quem transmite,
+inclusive a chamada. Conserto: o dispositivo `loopbackWithoutChrome` do Chromium,
+que no Windows captura o sistema inteiro menos a arvore do servico de audio do
+proprio app (ver [04-midia.md](04-midia.md#publicacao-de-video-e-tela)). Onde o
+Windows nao tem captura por processo (antes do 10 2004), a tela vai sem som e a
+pessoa le o motivo: nunca volta para o `loopback` puro. Junto, dois defeitos do
+mesmo som, achados na medicao: o Chromium tratava o som da tela como microfone
+(eco, ruido e ganho automatico, e em mono), e a faixa saia com DTX e RED (131
+kbps em vez de 64). O conserto vale quando **quem transmite** esta na 2.0.1.
 
 ## F3 — Supressao de ruido do zero
 
