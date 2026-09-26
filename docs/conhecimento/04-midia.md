@@ -175,6 +175,23 @@ ataque 3 ms, soltura 250 ms) -> destino (`saida.ts:159-196`).
 | `reconnectPolicy` | padrao (0, 0,3, 1,2, 2,7, 4,8 s e 5x 7 s) |
 | `connect` | `autoSubscribe: true`, `maxRetries: 3`, ICE do servidor, `relay` so com `FORCE_TURN_RELAY` |
 
+**Dynacast e a renegociacao (2.0.6, medido em 2026-09-26).** O `dynacast`
+funciona: transmissao que ninguem assiste pausa as tres camadas em ~6 s (0 kbps
+na conexao de quem transmite, o mesmo que sem transmissao), e quem assiste na
+media recebe baixa + media ligadas (o LiveKit mantem as camadas abaixo da
+pedida), a alta pausada. **Mas a renegociacao desfaz a pausa:** com
+`singlePeerConnection`, a conexao de quem transmite e a mesma que recebe, e
+comecar ou parar de assistir alguem (ou gente entrando e saindo) renegocia; o
+Chromium religa as camadas pausadas, e o servidor nao manda pausar de novo
+(para ele nada mudou). Em producao, uma transmissao 1080p60 sem espectador subiu
+11,7 Mbit/s por ~20 minutos (medido na porta 7881 do servidor, por remetente);
+reproduzido com dois Betas (0 kbps -> 3,7 Mbit/s e ficou, depois de quem
+transmitia parar de assistir o outro). O LiveKit guarda a ultima ordem do
+servidor na faixa (`subscribedCodecs`); desde a 2.0.6 o controlador confere a
+cada 1,5 s se as camadas que saem batem com ela e reaplica quando nao batem
+(`voice/camadas.ts`). Medido depois: a camada religada dura 1–2 s (0,7 MB em
+34 s com duas renegociacoes, contra 13,2 MB em 40 s antes).
+
 **Captura de tela:** duas etapas — `screen:select` por IPC, depois
 `getDisplayMedia` com altura e fps `ideal/max`; o handler do processo principal
 responde com a fonte escolhida (e chama `desktopCapturer.getSources` de novo,

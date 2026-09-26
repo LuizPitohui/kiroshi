@@ -30,7 +30,7 @@ abertas.
 
 | Area | Estado |
 |---|---|
-| Versao publicada | **2.0.5** (2026-09-26): voz que saia de um lado so do fone (microfone estereo com o cancelamento de eco desligado). A 2.0.4 trouxe a foto de perfil em GIF que anima enquanto a pessoa fala; a 2.0.3 tirou os fantasmas da chamada; a 2.0.2, a limpeza por IA (F3); a 2.0.1, o retorno da chamada no som da transmissao. Beta 1.16.x segue como canal de teste |
+| Versao publicada | **2.0.6** (2026-09-26): transmissao sem espectador voltava a subir o video inteiro a cada renegociacao da conexao; agora fica pausada. A 2.0.5 tirou a voz de um lado so do fone; a 2.0.4 trouxe a foto de perfil em GIF que anima enquanto a pessoa fala; a 2.0.3 tirou os fantasmas da chamada; a 2.0.2, a limpeza por IA (F3); a 2.0.1, o retorno da chamada no som da transmissao. Beta 1.16.x segue como canal de teste |
 | Testes | 742 unitarios passando (shared 79, servidor 162, desktop 501); e2e 136/136; typecheck limpo |
 | Conversa (texto) | autocompletar de mencao, canal e emoji; acoes por teclado; densidade confortavel e compacta |
 | Voz | sem fantasmas: a API confere a chamada com o LiveKit a cada 15 s e o app avisa a propria saida e a queda; silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada (5 s no maximo); atalhos globais de verdade (falar segurando, mutar, ensurdecer) |

@@ -28,6 +28,7 @@ import {
   type ConteudoDaTela,
 } from './qualidade.js';
 import type { Recepcao } from './recepcao.js';
+import { camadasDesalinhadas, type CodecPedido } from './camadas.js';
 import type { EntradaDeStats } from './metricas.js';
 import { SOM_DA_TELA_PEDE_WINDOWS_NOVO, explicarFalhaDeMidia } from './falhas.js';
 import { SaidaDeAudio } from './saida.js';
@@ -353,6 +354,8 @@ class VoiceController {
    * Vale a partir da proxima conexao.
    */
   private recepcaoManual = false;
+  /** Quantas vezes o vigia reaplicou a pausa das camadas (depuracao). */
+  camadasReaplicadas = 0;
 
   /** O que a interface pediu para cada video: `${identidade}|${fonte}`. */
   private readonly recepcoes = new Map<string, Recepcao>();
@@ -754,6 +757,47 @@ class VoiceController {
       }
       void this.samplePing();
     }, 2000);
+
+    // A pausa das camadas que ninguem assiste, desfeita pela renegociacao
+    // (`camadas.ts`). A cada 1,5 s: ate o vigia passar, o video sobe a toa.
+    const camadasTimer = setInterval(() => {
+      if (this.room !== room) {
+        clearInterval(camadasTimer);
+        return;
+      }
+      this.conferirCamadasDeEnvio(room);
+    }, 1500);
+  }
+
+  /**
+   * Reaplica a ultima ordem de camadas do servidor quando a renegociacao da
+   * conexao religou camadas que ninguem esta assistindo. Ver `camadas.ts`.
+   *
+   * Usa campos internos do LiveKit (`subscribedCodecs`, `setPublishingCodecs`,
+   * `sender`): se uma versao nova os tirar, o vigia so para de agir.
+   */
+  private conferirCamadasDeEnvio(room: Room): void {
+    for (const pub of room.localParticipant.videoTrackPublications.values()) {
+      const faixa = pub.track as unknown as
+        | {
+            codec?: string;
+            subscribedCodecs?: CodecPedido[];
+            optimizeForPerformance?: boolean;
+            sender?: RTCRtpSender;
+            setPublishingCodecs?: (codecs: CodecPedido[]) => Promise<unknown>;
+          }
+        | undefined;
+      if (!faixa?.sender || !faixa.subscribedCodecs || typeof faixa.setPublishingCodecs !== 'function') continue;
+      if (faixa.optimizeForPerformance) continue;
+      const camadas = faixa.sender.getParameters().encodings ?? [];
+      if (!camadasDesalinhadas(faixa.codec, faixa.subscribedCodecs, camadas)) continue;
+      this.camadasReaplicadas++;
+      console.info('[dynacast] camadas religadas pela renegociacao; ordem do servidor reaplicada', {
+        fonte: pub.source,
+        vezes: this.camadasReaplicadas,
+      });
+      void faixa.setPublishingCodecs(faixa.subscribedCodecs).catch(() => undefined);
+    }
   }
 
   /**

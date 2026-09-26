@@ -127,7 +127,16 @@ journalctl -u cloudflared --since "72 hours ago" --no-pager -o short-iso --utc
 LC_ALL=C sar -n DEV -f /var/log/sysstat/saDD
 # quem esta em chamada (so contagens; saida 0 = vazio, 1 = tem gente) — rodar ANTES de qualquer deploy
 ssh <host> 'docker exec -i -w /app kiroshi-api node --input-type=module -' < deploy/scripts/quem-em-chamada.mjs
+# as chamadas em detalhe: quem transmite, codec, camadas e tetos, quem assiste quem (P1, P2..., sem nomes)
+ssh <host> 'docker exec -i -w /app kiroshi-api node --input-type=module -' < deploy/scripts/transmissoes.mjs
+# banda de verdade de cada um na porta de midia (UDP 7881), por remetente e tipo de rede, sem enderecos (sudo)
+ssh <host> 'SEGUNDOS=10 bash -s' < deploy/scripts/banda-da-midia.sh
 ```
+
+O contador da placa (`sar`) soma todos os servicos da maquina, e o LiveKit usa
+a rede do host (o `docker stats` dele mostra zero): para saber quanto e do SFU,
+e de quem, so o `banda-da-midia.sh`. Os logs do LiveKit em `info` nao mostram as
+decisoes do `dynacast` (so em `debug`, que exige reiniciar o SFU).
 
 ## Pendencias de operacao
 

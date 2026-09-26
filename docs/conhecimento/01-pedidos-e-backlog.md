@@ -317,6 +317,18 @@ canal direito nem chegava. A 2.0.5 junta o microfone num canal antes do
 portao, sem perder volume quando a voz vem de um lado so. Detalhe em
 [04-midia.md](04-midia.md#entrada-de-audio).
 
+**Transmissao sem espectador subindo video (2026-09-26, 2.0.6).** Pedido do
+dono: diagnostico com duas pessoas transmitindo, e depois "pode investigar" a
+entrada alta no servidor. Medido na porta de midia: uma transmissao 1080p60 que
+ninguem assistia subia 11,7 Mbit/s havia ~20 minutos. O `dynacast` pausa
+certo, mas cada renegociacao da conexao de quem transmite (comecar ou parar de
+assistir alguem, gente entrando ou saindo) religa as camadas, e o servidor nao
+manda pausar de novo. A 2.0.6 reaplica a ultima ordem do servidor a cada 1,5 s
+(`voice/camadas.ts`). Detalhe em
+[04-midia.md](04-midia.md#publicacao-de-video-e-tela). Ferramentas novas:
+`deploy/scripts/transmissoes.mjs` e `banda-da-midia.sh`
+([08-producao.md](08-producao.md)).
+
 ## F3 — Supressao de ruido do zero
 
 **Pedido:** "o que esta implementado esta horrivel"; retirar, estudar, plano
