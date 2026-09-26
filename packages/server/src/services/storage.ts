@@ -206,6 +206,126 @@ export async function storeImage(args: {
   };
 }
 
+/** Lado da foto de perfil parada: a de todo lugar, de 20 a 72 px na tela, com folga para tela 2x. */
+const AVATAR_PARADO_PX = 256;
+/**
+ * Lado da animada. Ela so aparece nos avatares da chamada (ate 72 px, ou seja,
+ * 144 em tela 2x) e cada quadro pesa: 160 mantem a nitidez e deixa o arquivo
+ * bem menor que 256 para quem baixa pela internet de casa do servidor.
+ */
+const AVATAR_ANIMADO_PX = 160;
+/** Teto da animada depois de convertida: acima disso, e GIF longo ou grande demais. */
+export const AVATAR_ANIMADO_MAX_BYTES = 6 * 1024 * 1024;
+
+async function gravarImagem(buffer: Buffer): Promise<{ url: string; storageKey: string }> {
+  const storageKey = buildStorageKey('webp');
+  const target = resolvePath(storageKey);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, buffer);
+  return { url: `${config.publicBaseUrl}/attachments/${storageKey}`, storageKey };
+}
+
+/**
+ * A foto de perfil, sempre em duas partes quando ela se mexe.
+ *
+ *   PARADA   o primeiro quadro, em `avatarUrl`. E a que aparece em todo lugar,
+ *            e a unica que as versoes antigas do app conhecem.
+ *   ANIMADA  todos os quadros, em `avatarAnimatedUrl`, so quando veio um GIF
+ *            (ou WebP animado). O app troca para ela enquanto a pessoa fala.
+ *
+ * Antes, um GIF virava um WebP animado direto na `avatarUrl` e ficava se
+ * mexendo em toda tela, o tempo todo. O pedido do dono (2026-09-26) foi o
+ * contrario: parado, e animando quando ele fala.
+ *
+ * A animada sai em WebP com repeticao infinita (`loop: 0`): um GIF feito para
+ * tocar uma vez so pararia no ultimo quadro depois da primeira fala.
+ */
+export async function storeAvatar(
+  buffer: Buffer,
+  maxBytes: number,
+): Promise<{ url: string; animatedUrl: string | null }> {
+  if (buffer.length > maxBytes) {
+    throw new ApiError('PAYLOAD_TOO_LARGE', `A imagem passa de ${Math.floor(maxBytes / 1024 / 1024)} MB.`);
+  }
+
+  let quadros: number;
+  let menorLado: number;
+  try {
+    const meta = await sharp(buffer, { animated: true }).metadata();
+    quadros = meta.pages ?? 1;
+    menorLado = Math.min(meta.width ?? 0, meta.pageHeight ?? meta.height ?? 0);
+  } catch (erro) {
+    /*
+      O sharp recusa imagem com mais de ~268 milhoes de pixels somando todos
+      os quadros: a protecao dele contra GIF "bomba" (poucos KB que abrem em
+      gigabytes). Ate esse teto, converter leva ~1 s. Acima, a mensagem certa
+      e "grande demais", e nao "invalida".
+    */
+    if (erro instanceof Error && /pixel limit/i.test(erro.message)) {
+      throw new ApiError('PAYLOAD_TOO_LARGE', 'Esse GIF e grande demais (quadros demais ou muito grandes). Tente um mais curto ou menor.');
+    }
+    throw new ApiError('UNSUPPORTED_MEDIA_TYPE', 'Isto nao parece ser uma imagem valida.');
+  }
+  if (!(menorLado > 0)) throw new ApiError('UNSUPPORTED_MEDIA_TYPE', 'Isto nao parece ser uma imagem valida.');
+
+  /*
+    Sempre quadrada, cortada no centro, e nunca ampliada: imagem menor que o
+    alvo fica no proprio tamanho, mas quadrada. Com `withoutEnlargement` num
+    alvo fixo, um 300x200 saia 256x200 — o circulo da tela escondia, mas o
+    arquivo ficava torto.
+  */
+  const lado = (alvo: number): number => Math.min(alvo, menorLado);
+
+  // Um arquivo que passou do cabecalho e quebra no meio (GIF cortado): recusa com motivo, nao erro 500.
+  const converter = async (fazer: () => Promise<Buffer>): Promise<Buffer> => {
+    try {
+      return await fazer();
+    } catch {
+      throw new ApiError('UNSUPPORTED_MEDIA_TYPE', 'Nao consegui abrir essa imagem inteira. O arquivo pode estar cortado.');
+    }
+  };
+
+  // So o primeiro quadro: `animated: false` le uma pagina.
+  const parada = await converter(() =>
+    sharp(buffer, { animated: false })
+      .resize(lado(AVATAR_PARADO_PX), lado(AVATAR_PARADO_PX), { fit: 'cover' })
+      .webp({ quality: 88 })
+      .toBuffer(),
+  );
+
+  if (quadros <= 1) {
+    return { url: (await gravarImagem(parada)).url, animatedUrl: null };
+  }
+
+  const animada = await converter(() =>
+    sharp(buffer, { animated: true })
+      .resize(lado(AVATAR_ANIMADO_PX), lado(AVATAR_ANIMADO_PX), { fit: 'cover' })
+      .webp({ quality: 80, loop: 0 })
+      .toBuffer(),
+  );
+  if (animada.length > AVATAR_ANIMADO_MAX_BYTES) {
+    throw new ApiError(
+      'PAYLOAD_TOO_LARGE',
+      'Esse GIF ficou pesado demais mesmo reduzido. Tente um mais curto ou com menos quadros.',
+    );
+  }
+
+  const [p, a] = await Promise.all([gravarImagem(parada), gravarImagem(animada)]);
+  return { url: p.url, animatedUrl: a.url };
+}
+
+/** O data URL de imagem, ja conferido: tipo aceito e conteudo em bytes. */
+export function lerDataUrlDeImagem(input: string): Buffer {
+  const match = input.match(/^data:([a-z]+\/[a-z0-9.+-]+);base64,(.+)$/i);
+  if (!match?.[1] || !match[2]) {
+    throw badRequest('Envie a imagem como data URL em base64.');
+  }
+  if (!(IMAGE_MIME_TYPES as readonly string[]).includes(match[1].toLowerCase())) {
+    throw new ApiError('UNSUPPORTED_MEDIA_TYPE', 'Use PNG, JPEG, GIF ou WebP.');
+  }
+  return Buffer.from(match[2], 'base64');
+}
+
 /** Aceita data URL (`data:image/png;base64,...`) ou URL ja hospedada aqui. */
 export async function resolveImageInput(
   input: string,
@@ -215,15 +335,7 @@ export async function resolveImageInput(
     return { url: input, animated: input.endsWith('.gif') };
   }
 
-  const match = input.match(/^data:([a-z]+\/[a-z0-9.+-]+);base64,(.+)$/i);
-  if (!match?.[1] || !match[2]) {
-    throw badRequest('Envie a imagem como data URL em base64.');
-  }
-  if (!(IMAGE_MIME_TYPES as readonly string[]).includes(match[1].toLowerCase())) {
-    throw new ApiError('UNSUPPORTED_MEDIA_TYPE', 'Use PNG, JPEG, GIF ou WebP.');
-  }
-
-  const buffer = Buffer.from(match[2], 'base64');
+  const buffer = lerDataUrlDeImagem(input);
   const stored = await storeImage({ buffer, ...options });
   return { url: stored.url, animated: stored.animated };
 }

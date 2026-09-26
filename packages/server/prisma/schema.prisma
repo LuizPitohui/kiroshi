@@ -28,22 +28,25 @@ enum PresenceStatus {
 }
 
 model User {
-  id           String  @id
-  email        String  @unique @db.VarChar(254)
-  username     String  @unique @db.VarChar(32)
-  displayName  String  @db.VarChar(32)
+  id                String  @id
+  email             String  @unique @db.VarChar(254)
+  username          String  @unique @db.VarChar(32)
+  displayName       String  @db.VarChar(32)
   /**
    * Opcional: quem cria a conta pelo Google pode nunca definir uma.
    * Todo lugar que confere senha precisa tratar o nulo como "esta conta nao
    * entra por senha" — e nao como "senha vazia confere".
    */
-  passwordHash String?
-  avatarUrl    String?
-  bannerUrl    String?
-  bio          String? @db.VarChar(190)
-  pronouns     String? @db.VarChar(40)
-  accentColor  String? @db.VarChar(7)
-  bot          Boolean @default(false)
+  passwordHash      String?
+  /// A foto como todo mundo ve: sempre parada (o primeiro quadro, quando veio um GIF).
+  avatarUrl         String?
+  /// A mesma foto animada, quando veio um GIF: o app troca para ela enquanto a pessoa fala.
+  avatarAnimatedUrl String?
+  bannerUrl         String?
+  bio               String? @db.VarChar(190)
+  pronouns          String? @db.VarChar(40)
+  accentColor       String? @db.VarChar(7)
+  bot               Boolean @default(false)
 
   // Presenca persistida: o status escolhido sobrevive ao fechar o app.
   status       PresenceStatus @default(ONLINE)

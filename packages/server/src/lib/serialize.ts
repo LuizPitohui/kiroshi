@@ -40,6 +40,7 @@ export interface UserRow {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  avatarAnimatedUrl: string | null;
   bannerUrl: string | null;
   bio: string | null;
   pronouns: string | null;
@@ -54,6 +55,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     username: row.username,
     displayName: row.displayName,
     avatarUrl: row.avatarUrl,
+    avatarAnimatedUrl: row.avatarAnimatedUrl,
     bannerUrl: row.bannerUrl,
     bio: row.bio,
     pronouns: row.pronouns,
@@ -86,6 +88,7 @@ export const USER_SELECT = {
   username: true,
   displayName: true,
   avatarUrl: true,
+  avatarAnimatedUrl: true,
   bannerUrl: true,
   bio: true,
   pronouns: true,

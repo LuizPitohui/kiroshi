@@ -12,7 +12,14 @@ export interface PublicUser {
   id: Snowflake;
   username: string;
   displayName: string;
+  /** A foto parada: a que aparece em todo lugar (o primeiro quadro, quando veio um GIF). */
   avatarUrl: string | null;
+  /**
+   * A mesma foto animada, quando a pessoa subiu um GIF. O app mostra esta
+   * enquanto ela fala (e no cartao de perfil); no resto, a parada. Ausente em
+   * servidor antigo — o app trata como `null`.
+   */
+  avatarAnimatedUrl?: string | null;
   bannerUrl: string | null;
   bio: string | null;
   pronouns: string | null;

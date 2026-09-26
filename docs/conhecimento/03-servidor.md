@@ -116,7 +116,7 @@ Ids snowflake em texto (42 bits de ms desde 2024-01-01, 5 worker, 5 processo,
 
 | Modelo | Pontos-chave |
 |---|---|
-| User | email/username unicos; `passwordHash?` (nulo = so Google); perfil; status; `totpSecret` + `backupCodes` (hash); `disabledAt` |
+| User | email/username unicos; `passwordHash?` (nulo = so Google); perfil; status; `totpSecret` + `backupCodes` (hash); `disabledAt`; foto em duas: `avatarUrl` (sempre parada) e `avatarAnimatedUrl` (a animada, so de GIF — ver "Foto de perfil") |
 | LinkedAccount | GOOGLE por `sub`; unico por conta e por provedor |
 | Session | refresh em sha256, userAgent, IP, `expiresAt` |
 | Relationship | PENDING / ACCEPTED / BLOCKED |
@@ -135,7 +135,9 @@ Ids snowflake em texto (42 bits de ms desde 2024-01-01, 5 worker, 5 processo,
 | AuditLogEntry | 16 acoes, apagadas em 90 dias |
 
 Migracoes: `inicial`; `placeholder_sem_limite` (VARCHAR(64) fazia todo envio de
-imagem falhar); `conta_do_google` (senha opcional + LinkedAccount).
+imagem falhar); `conta_do_google` (senha opcional + LinkedAccount);
+`chamada_na_mensagem`; `silenciar_por_tempo`; `avatar_animado` (2.0.4, a
+coluna `avatarAnimatedUrl`).
 
 Atencao: trocar `PUBLIC_BASE_URL` quebra avatares, icones, emojis, figurinhas e
 sons (URL absoluta em `storage.ts:203`). Paginacao compara ids como **texto**
@@ -323,6 +325,35 @@ Consertos de cargos (fatia 6; o e2e cobre cada um):
 
 Ainda: `mentionable` e decorativo (a tela nao mostra); `hoist` e do cliente (a
 lista de membros do Beta agrupa por ele).
+
+## Foto de perfil (2.0.4, pedido do dono em 2026-09-26)
+
+Foto em GIF que fica parada e **anima enquanto a pessoa fala**. O servidor
+guarda duas (`storeAvatar`, `S/services/storage.ts`):
+
+- **Parada** em `avatarUrl`: o primeiro quadro, quadrado no centro, 256 px
+  (menor, se a imagem for menor: nunca amplia), WebP 88. E a de todo lugar, e a
+  unica que as versoes antigas do app conhecem.
+- **Animada** em `avatarAnimatedUrl`, so quando veio mais de um quadro: 160 px
+  (so aparece ate 72 px, 144 em tela 2x), WebP 80 com `loop: 0` (repete sempre:
+  GIF feito para tocar uma vez pararia depois da primeira fala). O WebP junta
+  quadros iguais sem mudar a duracao: um GIF real de 316 quadros e 44 s virou 59
+  KB em 1,5 s.
+- Limites: 8 MB na entrada (`LIMITS.imageBytes`); 6 MB na animada convertida;
+  o sharp recusa acima de ~268 milhoes de pixels somando os quadros (GIF
+  "bomba": poucos KB que abrem em gigabytes) — vira "grande demais", nunca 500.
+  Ate esse teto, converter leva ~1 s e ~150 MB. GIF cortado no meio aproveita
+  os quadros inteiros, como o navegador.
+- `PATCH /users/@me`: `avatarUrl: null` tira as duas; uma URL daqui diferente
+  da atual vale, mas sem a animada antiga; a propria foto de volta nao muda nada
+  (um app antigo que reenvie o perfil nao apaga a animada).
+- Fotos de GIF subidas antes da 2.0.4 estavam animadas direto na `avatarUrl`:
+  `deploy/scripts/separar-fotos-animadas.mjs` (dentro do container, `APLICAR=1`
+  para gravar) separa as duas. Idempotente; nao apaga arquivo.
+- Testes: `S/services/avatar.test.ts` (GIF montado no proprio teste, sem
+  biblioteca, inclusive a bomba com LZW de verdade).
+
+O que o app faz com a animada esta em [10-front-end-novo.md](10-front-end-novo.md).
 
 ## Emojis, figurinhas, soundboard
 

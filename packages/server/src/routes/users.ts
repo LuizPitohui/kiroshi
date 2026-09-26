@@ -21,7 +21,8 @@ import {
 } from '../lib/serialize.js';
 import { emitToGuild, emitToUser } from '../gateway/events.js';
 import { encerrarSessoesDeGateway } from '../gateway/server.js';
-import { resolveImageInput } from '../services/storage.js';
+import { lerDataUrlDeImagem, resolveImageInput, storeAvatar } from '../services/storage.js';
+import { config } from '../config.js';
 
 export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -47,18 +48,36 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     if (body.pronouns !== undefined) data.pronouns = body.pronouns;
     if (body.accentColor !== undefined) data.accentColor = body.accentColor;
 
-    for (const field of ['avatarUrl', 'bannerUrl'] as const) {
-      const value = body[field];
-      if (value === undefined) continue;
-      if (value === null) {
-        data[field] = null;
+    /*
+      A foto de perfil vira duas: a parada (avatarUrl, a de todo lugar) e, se
+      veio um GIF, a animada (avatarAnimatedUrl, que o app mostra enquanto a
+      pessoa fala). Ver `storeAvatar`. As duas andam juntas: tirar a foto tira
+      as duas, e uma foto parada nova apaga a animada antiga.
+    */
+    if (body.avatarUrl !== undefined) {
+      if (body.avatarUrl === null) {
+        data.avatarUrl = null;
+        data.avatarAnimatedUrl = null;
+      } else if (body.avatarUrl.startsWith(config.publicBaseUrl)) {
+        // Uma imagem ja hospedada aqui. A propria foto de volta nao muda nada;
+        // outra imagem do servidor vale, mas sem a animada da foto anterior.
+        const atual = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
+        if (atual?.avatarUrl !== body.avatarUrl) {
+          data.avatarUrl = body.avatarUrl;
+          data.avatarAnimatedUrl = null;
+        }
       } else {
-        const stored = await resolveImageInput(value, {
-          maxSize: field === 'avatarUrl' ? 256 : 960,
-          maxBytes: LIMITS.imageBytes,
-        });
-        data[field] = stored.url;
+        const foto = await storeAvatar(lerDataUrlDeImagem(body.avatarUrl), LIMITS.imageBytes);
+        data.avatarUrl = foto.url;
+        data.avatarAnimatedUrl = foto.animatedUrl;
       }
+    }
+
+    if (body.bannerUrl !== undefined) {
+      data.bannerUrl =
+        body.bannerUrl === null
+          ? null
+          : (await resolveImageInput(body.bannerUrl, { maxSize: 960, maxBytes: LIMITS.imageBytes })).url;
     }
 
     const updated = await prisma.user.update({
@@ -288,6 +307,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
           email: `apagado+${userId}@invalido.local`,
           displayName: 'Conta apagada',
           avatarUrl: null,
+          avatarAnimatedUrl: null,
           bannerUrl: null,
           bio: null,
           pronouns: null,
