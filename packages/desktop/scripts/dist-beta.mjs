@@ -28,7 +28,6 @@ const env = { ...process.env, VITE_INTERFACE: 'nova', KIROSHI_CANAL: 'beta', KIR
 const rodar = (comando) => execSync(comando, { stdio: 'inherit', env });
 
 console.log(`Kiroshi Beta ${versao}`);
-rodar('node scripts/baixar-modelos.mjs --verificar');
 rodar('npx electron-vite build');
 rodar(
   `npx electron-builder --config electron-builder.beta.yml --win${process.argv.includes('--dir') ? ' --dir' : ''} -c.extraMetadata.version=${versao} --publish never`,

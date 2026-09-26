@@ -54,10 +54,10 @@
 | **Sensibilidade do microfone** | FUNCIONA (mal percebida) | portao ao vivo (`controller.ts:1454-1466`); corte seco; o medidor do teste e linear, depois do portao, sem marca do limiar — impossivel calibrar no olho | medidor em dB antes do portao, com a marca do limiar e modo automatico |
 | Tecla do apertar-para-falar | PARCIAL + DECORATIVO | so com a janela em foco; o atalho global nunca e registrado; trocar a tecla exige reiniciar | refazer (ver [04-midia.md](04-midia.md)) |
 | **Aviso sonoro de entrada e saida** | FUNCIONA, mas **deixa de ser opcao** | toca no dispositivo padrao com volume fixo, ignorando saida/volume/ensurdecer | decisao do dono: sempre ligado, como no Discord — tirar o interruptor e passar os sons pela saida da chamada |
-| **Limpeza por IA (DeepFilterNet3)** | FUNCIONA tecnicamente, soa mal | ver [04-midia.md](04-midia.md) | **refazer do zero** (fase propria) |
-| Intensidade da limpeza | PARCIAL | escala em dB; de 30 a 100 soa igual | idem |
-| **Isolamento de voz** | DECORATIVO com IA ligada | forcado a `false` (`limpeza.ts:139-140`) | idem |
-| **Supressao de ruido** | DECORATIVO com IA ligada | idem | idem |
+| **Limpeza por IA (DeepFilterNet3)** | RETIRADA na 2.0.2 | funcionava tecnicamente e soava mal, ver [04-midia.md](04-midia.md) | **refazer do zero** (F3, em estudo) |
+| Intensidade da limpeza | RETIRADA na 2.0.2 | escala em dB; de 30 a 100 soava igual | idem |
+| **Isolamento de voz** | DECORATIVO com IA ligada ate a 2.0.1; desde a 2.0.2 sempre pedido, efeito no Windows a medir | forcado a `false` (`limpeza.ts:139-140`) | idem |
+| **Supressao de ruido** | DECORATIVO com IA ligada ate a 2.0.1; desde a 2.0.2 FUNCIONA e e a supressao do Kiroshi | idem | idem |
 | **Cancelamento de eco** | FUNCIONA como restricao | eficacia nao medida [I] | idem |
 | **Ganho automatico** | FUNCIONA | | idem |
 | **Diagnostico** | FUNCIONA, limitado | IPv6/VPN sempre; caminho, latencia e perda so em chamada; nenhuma metrica de video; depende de interno do LiveKit | refazer com metricas de video (camada recebida, fps, travadas, limitacao do emissor) |

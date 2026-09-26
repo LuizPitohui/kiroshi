@@ -29,12 +29,12 @@ abertas.
 
 | Area | Estado |
 |---|---|
-| Versao publicada | **2.0.1** (2026-09-25): o som da transmissao sem o retorno da chamada. A 2.0.0 trouxe a interface nova para todos. Beta 1.16.x segue como canal de teste |
-| Testes | 742 unitarios passando (shared 79, servidor 153, desktop 510); e2e 136/136; typecheck limpo |
+| Versao publicada | **2.0.2** (2026-09-25): a limpeza por IA sai para ser refeita (F3). A 2.0.1 tirou o retorno da chamada do som da transmissao; a 2.0.0 trouxe a interface nova para todos. Beta 1.16.x segue como canal de teste |
+| Testes | 733 unitarios passando (shared 79, servidor 153, desktop 501); e2e 136/136; typecheck limpo |
 | Conversa (texto) | autocompletar de mencao, canal e emoji; acoes por teclado; densidade confortavel e compacta |
 | Voz | silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada (5 s no maximo); atalhos globais de verdade (falar segurando, mutar, ensurdecer) |
 | Transmissao de tela | som do computador sem o do proprio Kiroshi (quem assiste nao ouve a propria voz de volta), sem tratamento de voz e em estereo (2.0.1); nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Telemetria enviada ao servidor e rede de quem usa relay: a fazer (F2) |
-| Supressao de ruido | DFN3 roda, soa mal; vai ser refeita (F3, o proximo) |
+| Supressao de ruido | sendo refeita do zero (F3). Passo 1 feito na 2.0.2: a limpeza por IA (DFN3 e GTCRN) saiu, fica a do navegador e o portao do modo por voz. Proximo: o estudo e o plano comprovado, para o dono ler antes de codar |
 | Chamada em DM | ligar e atender com toque, recusar, registro na conversa, desliga quem fica 3 min sozinho |
 | Cargos | ajustes do servidor completos; dar cargo pelo perfil, pelo clique direito e nos ajustes; permissoes por canal em tres estados; 3 bits sem efeito ficam fora da tela |
 | Convites | link `order.arasaka.fun/convite/<codigo>` com pagina no navegador, `kiroshi://` (registrado pelo instalador do Kiroshi), janela com validade e usos, envio pela DM, lista e revogacao |

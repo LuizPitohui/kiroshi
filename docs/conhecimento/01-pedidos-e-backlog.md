@@ -294,7 +294,18 @@ ligada; latencia nunca medida. O plano novo precisa de metricas objetivas (antes
 e depois, em gravacoes de referencia) e de um criterio de aceitacao definido antes
 de codar.
 
-**Estado:** aguardando F1.
+**Estado (2026-09-25):**
+1. **Retirar — feito na 2.0.2.** Saiu a limpeza por modelo inteira: DeepFilterNet3
+   (pacote, 24 MB de arquivos no instalador, protocolo `kiroshi-modelos://`,
+   autoteste), GTCRN, a cascata e os ajustes "Limpeza por IA" e "Intensidade".
+   Ficam a supressao, o isolamento, o eco e o ganho do navegador, e o portao do
+   modo por voz (sensibilidade de entrada, nao supressao). Quem tinha a IA
+   ligada volta a ter a supressao do navegador ligada. A CSP perdeu
+   `wasm-unsafe-eval`, `blob:` e `kiroshi-modelos:`.
+2. **Estudar e plano comprovado — em andamento.** O documento vai para o dono
+   ler antes de qualquer codigo: candidatos, gravacoes de referencia, metricas
+   objetivas, criterio de aceitacao.
+3. Implementar e testar — so depois da aprovacao.
 
 ## F4 — Conta: cadastro sem convite, com Google
 

@@ -18,6 +18,5 @@ delete env.KIROSHI_VERSAO;
 const rodar = (comando) => execSync(comando, { stdio: 'inherit', env });
 
 console.log(`Kiroshi ${version}`);
-rodar('node scripts/baixar-modelos.mjs --verificar');
 rodar('npx electron-vite build');
 rodar(`npx electron-builder --win${process.argv.includes('--dir') ? ' --dir' : ''} --publish never`);

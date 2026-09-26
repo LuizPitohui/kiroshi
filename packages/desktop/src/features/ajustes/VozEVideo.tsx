@@ -100,8 +100,8 @@ function PreviaDaCamera({ deviceId }: { deviceId: string | null }) {
  * Voz e video (10-front-end-novo.md 4.6): dispositivos, volume, modo de
  * entrada, sensibilidade com medidor em dB, teste de microfone e camera.
  *
- * A limpeza de ruido vai ser refeita do zero (F3); ate la aparece so o que
- * funciona hoje, sem prometer o que nao entrega.
+ * A limpeza por modelo saiu para ser refeita do zero (F3); ate la aparece so
+ * o que funciona hoje, sem prometer o que nao entrega.
  */
 export function PaginaVozEVideo() {
   const [ajustes, setAjustes] = useState<VoiceSettings>(() => ({ ...voice.getSettings() }));
@@ -200,21 +200,13 @@ export function PaginaVozEVideo() {
         {teste.erro ? <Aviso tipo="erro">{teste.erro}</Aviso> : null}
       </Bloco>
 
-      <Bloco titulo="Limpeza do som" descricao="A limpeza de ruído vai ser refeita do zero logo depois desta interface. Por enquanto, estas são as que funcionam.">
+      <Bloco titulo="Limpeza do som" descricao="A limpeza por IA saiu enquanto a nova é feita do zero. Até lá, fica a do navegador.">
         <LinhaDeInterruptor
-          titulo="Limpeza de ruído por IA"
-          descricao="Tira teclado, ventilador e barulho de fundo da sua voz."
-          ligado={ajustes.limpezaDeRuido}
-          aoMudar={(limpezaDeRuido) => void mudar({ limpezaDeRuido })}
+          titulo="Supressão de ruído"
+          descricao="Tira ruído constante: ventilador, chiado, ar-condicionado. Teclado e clique ainda passam."
+          ligado={ajustes.noiseSuppression}
+          aoMudar={(noiseSuppression) => void mudar({ noiseSuppression })}
         />
-        {!ajustes.limpezaDeRuido ? (
-          <LinhaDeInterruptor
-            titulo="Supressão de ruído do navegador"
-            descricao="A mais simples, sem IA. Com a IA ligada ela fica desligada, para não empilhar duas."
-            ligado={ajustes.noiseSuppression}
-            aoMudar={(noiseSuppression) => void mudar({ noiseSuppression })}
-          />
-        ) : null}
         <LinhaDeInterruptor
           titulo="Cancelamento de eco"
           descricao="Evita que o som das caixas volte pelo microfone. Com fone, pode desligar."

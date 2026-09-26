@@ -3,17 +3,13 @@ import { api, ApiRequestError } from '../api/client.js';
 import { gateway } from '../api/gateway.js';
 import { useStore } from '../store/index.js';
 import { voice, type EstadoDaLimpeza, type InputMode } from '../voice/controller.js';
-import {
-  aplicarEmFaixaAvulsa,
-  aplicarLimpeza,
-  planejarLimpeza,
-  planoSemModelos,
-} from '../voice/cadeia.js';
+import { aplicarEmFaixaAvulsa, aplicarLimpeza } from '../voice/cadeia.js';
 import {
   LIMIAR_MAXIMO_DB,
   LIMIAR_MINIMO_DB,
   limiarDoPortao,
   nomeDoMotor,
+  restricoesDoNavegador,
 } from '../voice/limpeza.js';
 import type { ProcessadorDeLimpeza } from '../voice/ruido.js';
 import { tocarAviso } from '../voice/sons.js';
@@ -788,23 +784,14 @@ function VoiceSection() {
     let cancelado = false;
 
     /*
-      A MESMA cascata da chamada, e nao um getUserMedia avulso.
-
-      O teste antigo abria o microfone direto: o que se ouvia no "Ouvir minha
-      voz" nunca tinha passado por modelo nenhum, e a barra media o som cru.
-      Agora o retorno e a barra vem DEPOIS da limpeza e do portao — e o que os
-      outros ouvem, que e a unica coisa que interessa testar.
+      A MESMA entrada da chamada, e nao um getUserMedia avulso: o retorno e a
+      barra vem DEPOIS da limpeza e do portao — e o que os outros ouvem, que e
+      a unica coisa que interessa testar.
     */
-    const abrir = (restricoes: MediaTrackConstraints): Promise<MediaStream> =>
-      navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: settings.inputDeviceId ?? undefined, ...restricoes },
-      });
-
     void (async () => {
-      const plano = await planejarLimpeza(settings);
-      if (cancelado) return;
-
-      let mediaStream = await abrir(plano.restricoes);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: settings.inputDeviceId ?? undefined, ...restricoesDoNavegador(settings) },
+      });
       // Fechar o teste enquanto o microfone abria: a limpeza do efeito ja
       // rodou e nao vai ver esta faixa, entao ela para aqui.
       if (cancelado) {
@@ -812,24 +799,10 @@ function VoiceSection() {
         return;
       }
       stream = mediaStream;
-      let montada = await aplicarLimpeza(
-        plano,
+      const montada = await aplicarLimpeza(
         settings,
         aplicarEmFaixaAvulsa(mediaStream.getAudioTracks()[0] as MediaStreamTrack),
       );
-
-      if (montada.precisaReabrir) {
-        // Mesmo resgate da chamada: nenhum modelo pegou, reabre com o
-        // supressor do navegador em vez de deixar o som cru.
-        mediaStream.getTracks().forEach((t) => t.stop());
-        mediaStream = await abrir(montada.restricoesDeResgate);
-        stream = mediaStream;
-        montada = await aplicarLimpeza(
-          planoSemModelos(settings, montada.falhas),
-          settings,
-          aplicarEmFaixaAvulsa(mediaStream.getAudioTracks()[0] as MediaStreamTrack),
-        );
-      }
 
       processador = montada.processador;
       if (cancelado) {
@@ -912,19 +885,9 @@ function VoiceSection() {
     settings.autoGainControl,
     // Faltava: mudar o isolamento com o teste aberto nao reabria o microfone.
     settings.voiceIsolation,
-    settings.limpezaDeRuido,
   ]);
 
-  /*
-    Intensidade e portao mudam AO VIVO no teste, como na chamada.
-
-    Remontar a cadeia a cada passo do controle deslizante recarregaria o
-    modelo dezenas de vezes por segundo e picotaria o retorno.
-  */
-  useEffect(() => {
-    processadorDoTeste.current?.definirIntensidade(settings.intensidadeDaLimpeza);
-  }, [settings.intensidadeDaLimpeza]);
-
+  // O portao muda AO VIVO no teste, como na chamada.
   useEffect(() => {
     const limiar = limiarDoPortao(settings);
     void processadorDoTeste.current?.definirPortao(limiar);
@@ -1166,56 +1129,10 @@ function VoiceSection() {
       </div>
 
       {/*
-        A limpeza reforcada vem primeiro e as outras duas aparecem esmaecidas
-        quando ela esta ligada. E honesto: ligada, ela SUBSTITUI as duas, e
-        mostrar tres interruptores ativos sugeriria que se somam.
+        A limpeza por IA saiu na 2.0.2 para ser refeita do zero (backlog F3).
+        Ficam as do navegador.
       */}
       <div className="row">
-        <div className="row-text">
-          <div className="row-title">Limpeza de ruido por IA</div>
-          <div className="row-desc">
-            Um modelo (DeepFilterNet3) que reconhece voz e descarta o resto —
-            inclusive teclado e clique de mouse, que a limpeza do navegador nao
-            pega. Em computador mais fraco, entra um modelo mais leve no lugar.
-            Substitui as duas opcoes abaixo enquanto estiver ligada.
-          </div>
-        </div>
-        <button
-          className={`switch ${settings.limpezaDeRuido ? 'on' : ''}`}
-          onClick={() => void update({ limpezaDeRuido: !settings.limpezaDeRuido })}
-          aria-pressed={settings.limpezaDeRuido}
-          aria-label="Limpeza de ruido por IA"
-        />
-      </div>
-
-      {settings.limpezaDeRuido && (
-        <div className="row">
-          <div className="row-text">
-            <div className="row-title">Intensidade da limpeza</div>
-            <div className="row-desc">
-              No maximo, o modelo remove tudo que nao for voz. Se a sua voz soar
-              artificial, abaixe um pouco: parte do som ambiente volta junto.
-              So vale para o DeepFilterNet3.
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={settings.intensidadeDaLimpeza}
-              onChange={(e) => void update({ intensidadeDaLimpeza: Number(e.target.value) })}
-              aria-label="Intensidade da limpeza"
-            />
-            <span style={{ fontSize: 12, minWidth: 40, textAlign: 'right' }}>
-              {settings.intensidadeDaLimpeza}%
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div className="row" style={settings.limpezaDeRuido ? { opacity: 0.45 } : undefined}>
         <div className="row-text">
           <div className="row-title">Isolamento de voz</div>
           <div className="row-desc">
@@ -1226,13 +1143,12 @@ function VoiceSection() {
         <button
           className={`switch ${settings.voiceIsolation ? 'on' : ''}`}
           onClick={() => void update({ voiceIsolation: !settings.voiceIsolation })}
-          disabled={settings.limpezaDeRuido}
           aria-pressed={settings.voiceIsolation}
           aria-label="Isolamento de voz"
         />
       </div>
 
-      <div className="row" style={settings.limpezaDeRuido ? { opacity: 0.45 } : undefined}>
+      <div className="row">
         <div className="row-text">
           <div className="row-title">Supressao de ruido</div>
           <div className="row-desc">
@@ -1244,7 +1160,6 @@ function VoiceSection() {
         <button
           className={`switch ${settings.noiseSuppression ? 'on' : ''}`}
           onClick={() => void update({ noiseSuppression: !settings.noiseSuppression })}
-          disabled={settings.limpezaDeRuido}
           aria-pressed={settings.noiseSuppression}
           aria-label="Supressao de ruido"
         />
@@ -1704,24 +1619,16 @@ function LimpezaAtiva({
   limpeza: EstadoDaLimpeza;
 }) {
   /*
-    O motor vem do que a cascata CONSEGUIU montar, nao do interruptor.
+    O que a entrada CONSEGUIU montar, nao o interruptor.
 
-    A versao anterior escrevia "Limpeza reforcada: sim" olhando para o
+    Uma versao anterior escrevia "Limpeza reforcada: sim" olhando para o
     ajuste, enquanto o processador falhava em todas as maquinas. A tela dizia
     que estava tudo certo e o teclado passava. Esta linha so pode mostrar o
     que de fato esta rodando.
   */
-  const comModelo = limpeza.motor === 'deepfilternet3' || limpeza.motor === 'gtcrn';
-
-  const itens: { rotulo: string; estado: 'sim' | 'nao' | 'ausente' | 'substituido' }[] = [
-    {
-      rotulo: 'Isolamento de voz',
-      estado: comModelo ? 'substituido' : estadoDe(aplicado.voiceIsolation),
-    },
-    {
-      rotulo: 'Supressao de ruido',
-      estado: comModelo ? 'substituido' : estadoDe(aplicado.noiseSuppression),
-    },
+  const itens: { rotulo: string; estado: 'sim' | 'nao' | 'ausente' }[] = [
+    { rotulo: 'Isolamento de voz', estado: estadoDe(aplicado.voiceIsolation) },
+    { rotulo: 'Supressao de ruido', estado: estadoDe(aplicado.noiseSuppression) },
     { rotulo: 'Cancelamento de eco', estado: estadoDe(aplicado.echoCancellation) },
     { rotulo: 'Ganho automatico', estado: estadoDe(aplicado.autoGainControl) },
     { rotulo: 'Portao de voz', estado: limpeza.portao ? 'sim' : 'nao' },
@@ -1730,11 +1637,8 @@ function LimpezaAtiva({
   const texto = {
     sim: 'sim',
     nao: 'NAO',
-    // Tres estados nao bastavam: "o aparelho nem conhece esse ajuste" e
-    // diferente de "esta desligado", e ambos sao diferentes de "outra coisa
-    // esta cuidando disso".
+    // "O aparelho nem conhece esse ajuste" e diferente de "esta desligado".
     ausente: '—',
-    substituido: 'nao precisa',
   } as const;
 
   return (
@@ -1749,21 +1653,11 @@ function LimpezaAtiva({
           </span>
         ))}
       </div>
-      {comModelo && (
-        <div style={{ marginTop: 6 }}>
-          Os marcados como &quot;nao precisa&quot; estao desligados de proposito: o
-          modelo faz o trabalho dos dois, e empilhar supressores deixa a voz
-          robotica.
-        </div>
-      )}
-      {/*
-        Por que o motor preferido ficou de fora, em texto que a pessoa pode
-        copiar e mandar. Sem isto, "caiu para o GTCRN" nao tem conserto.
-      */}
+      {/* O que falhou ao montar, em texto que a pessoa pode copiar e mandar. */}
       {limpeza.falhas.length > 0 && (
         <details style={{ marginTop: 6 }}>
           <summary style={{ cursor: 'pointer' }}>
-            Por que nao esta usando o DeepFilterNet3?
+            Por que o portao de voz nao entrou?
           </summary>
           <ul style={{ margin: '4px 0 0 16px', padding: 0, userSelect: 'text' }}>
             {limpeza.falhas.map((f) => (

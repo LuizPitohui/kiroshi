@@ -63,8 +63,10 @@ Caminhos relativos a `packages/desktop/`.
 - **Instancia unica** (`186-189`): `whenReady` fora do `else` — a segunda
   instancia pode chegar a criar janela e bandeja antes de sair [nao verificado].
   `second-instance` restaura sem olhar os argumentos.
-- **Protocolos:** nao ha `kiroshi://`. O unico esquema e o interno
-  `kiroshi-modelos://` (`67-81`, `131-162`), que serve `resources/modelos`.
+- **Protocolos:** `kiroshi://` para os convites (ver a secao do protocolo). O
+  esquema interno `kiroshi-modelos://`, que servia os arquivos do DeepFilterNet3
+  de `resources/modelos`, saiu na 2.0.2 junto com a limpeza por modelo; o
+  instalador ficou ~24 MB menor e a CSP perdeu `wasm-unsafe-eval` e `blob:`.
 - **Atalho global:** so o do push-to-talk (`577-597`), que alterna (o
   `globalShortcut` nao avisa quando a tecla e solta) e, no Windows, **prende a
   tecla** — ela deixa de chegar ao jogo. Hoje nem e registrado: o renderer nunca

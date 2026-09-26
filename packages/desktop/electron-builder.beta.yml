@@ -36,11 +36,6 @@ electronLanguages:
 # recompilar exigiria o Visual Studio instalado so para empacotar.
 npmRebuild: false
 asar: true
-extraResources:
-  - from: resources/modelos
-    to: modelos
-    filter:
-      - '**/*'
 win:
   target:
     - target: nsis

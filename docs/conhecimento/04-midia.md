@@ -6,12 +6,13 @@
 > `cloudflared`). **[I]** = deducao ou comportamento externo (Chromium, servidor
 > LiveKit) que precisa ser medido.
 >
-> A supressao de ruido vai ser **refeita do zero** depois do front-end; o que
-> esta aqui sobre ela e o ponto de partida do estudo, nao o plano.
+> A supressao de ruido vai ser **refeita do zero** (F3). A limpeza por modelo
+> saiu na 2.0.2, o primeiro passo do processo; o que esta aqui sobre ela e o
+> ponto de partida do estudo, nao o plano.
 
 Versoes: `livekit-client` 2.22.3, Electron 38.8.6 (~Chromium 140 [I]),
-`livekit/livekit-server:v1.13`, `deepfilternet3-noise-filter` 1.3.0,
-`@sapphi-red/web-noise-suppressor` 0.4.1.
+`livekit/livekit-server:v1.13`, `@sapphi-red/web-noise-suppressor` 0.4.1 (so o
+portao, desde a 2.0.2). O `deepfilternet3-noise-filter` 1.3.0 saiu na 2.0.2.
 
 ---
 
@@ -24,8 +25,8 @@ Versoes: `livekit-client` 2.22.3, Electron 38.8.6 (~Chromium 140 [I]),
 2. **O emissor esta pesado:** VP8 por software em 3 camadas (ate 11 Mbps no
    1080p60), sem `contentHint` (jogo tratado como "tela de documento"),
    `maintain-resolution` no modo padrao 1080p30 — somado ao DFN3 (~38% de um
-   nucleo), ao React re-renderizando o app 5x por segundo e a uma
-   RTCPeerConnection descartavel criada a cada 2 s para diagnostico.
+   nucleo; retirado na 2.0.2), ao React re-renderizando o app 5x por segundo e
+   a uma RTCPeerConnection descartavel criada a cada 2 s para diagnostico.
 3. **Toda a saida do SFU sai pela internet de casa** (~9 Mbps por espectador no
    topo do 1080p60). Janela minimizada continua baixando video; atualizacoes
    automaticas (93 MiB por maquina, sem diferencial) usam o mesmo upload.
@@ -45,32 +46,43 @@ Versoes: `livekit-client` 2.22.3, Electron 38.8.6 (~Chromium 140 [I]),
 
 ## Entrada de audio
 
-Cadeia real (`controller.ts`, `cadeia.ts`, `limpeza.ts`, `ruido.ts`):
+Cadeia desde a 2.0.2 (`controller.ts`, `cadeia.ts`, `limpeza.ts`, `ruido.ts`):
 
-1. **Dispositivo:** `createLocalAudioTrack({ deviceId })` (`controller.ts:908-911`).
-   Id em texto puro vale como `ideal` — se o aparelho sumir, o Chromium escolhe
-   outro sem avisar [I].
-2. **Plano:** `planejarLimpeza` (`cadeia.ts:79-95`) consulta o autoteste do DFN3,
-   que roda uma vez por execucao, disparado no import do controlador
-   (`controller.ts:1876`).
-3. **Restricoes** (`limpeza.ts:131-144`): `echoCancellation` e `autoGainControl`
-   seguem o ajuste; `noiseSuppression` e `voiceIsolation` vao **false** se ha
-   modelo. Nao pede `channelCount`, `sampleRate`, `latency`.
-4. **Grafo proprio:** `AudioContext(48 kHz)` -> fonte crua -> no do modelo ->
-   portao (`NoiseGateWorkletNode`) -> `MediaStreamDestination` -> `processedTrack`
-   (`ruido.ts:222-243`). A faixa recebe antes um `AudioContext` falso suspenso so
-   para passar na checagem do LiveKit (`ruido.ts:131-139`).
-5. **Resgate:** se nenhum modelo pegou, `restartTrack` religa NS/isolamento do
-   navegador e monta so o portao.
-6. **Publicacao:** Opus ate 64 kbps, DTX, RED, prioridade `high`.
-7. **Mudo/PTT:** `mute()` desliga a faixa crua; o grafo e o DFN3 seguem
-   processando silencio com o mesmo custo.
+1. **Dispositivo e restricoes:** `createLocalAudioTrack({ deviceId,
+   ...restricoesDoNavegador(ajustes) })`: `noiseSuppression`, `voiceIsolation`,
+   `echoCancellation` e `autoGainControl` exatamente como a pessoa escolheu
+   (padrao: os quatro ligados). Id em texto puro vale como `ideal` — se o
+   aparelho sumir, o Chromium escolhe outro sem avisar [I]. Nao pede
+   `channelCount`, `sampleRate`, `latency`.
+2. **Grafo proprio:** `AudioContext(48 kHz)` -> fonte -> `GainNode` que so
+   repassa -> portao (`NoiseGateWorkletNode`, so no modo por voz) ->
+   `MediaStreamDestination` -> `processedTrack` (`ApenasPortao`, `ruido.ts`). A
+   faixa recebe antes um `AudioContext` falso suspenso so para passar na
+   checagem do LiveKit (`prepararFaixaParaProcessador`).
+3. **Falha:** se o portao nao montar, a faixa segue sem ele; a limpeza do
+   navegador ja foi pedida na captura, entao nunca sai crua por engano.
+4. **Publicacao:** Opus ate 64 kbps, DTX, RED, prioridade `high`.
+5. **Mudo/PTT:** `mute()` desliga a faixa crua; o grafo segue ligado.
+6. **Ajustes gravados pela 2.0.1:** quem tinha a limpeza por IA ligada volta a
+   ter `noiseSuppression` ligado na primeira leitura (com a IA ele nao fazia
+   efeito, e desligado ninguem notava); as chaves antigas somem
+   (`migrarAjustesDaLimpezaPorModelo`).
 
 Contextos de audio abertos numa chamada: o da sala (inutil com `webAudioMix:
-false`), o de referencia suspenso, o do processador, o da saida, o dos avisos
+false`), o de referencia suspenso, o do portao, o da saida, o dos avisos
 sonoros, o do teste de microfone e um temporario a cada faixa criada.
 
-**DeepFilterNet3 hoje:** `DeepFilterNet3Core` do pacote 1.3.0; WASM de 16,4 MB +
+### Ate a 2.0.1: a limpeza por modelo (retirada)
+
+Ate a 2.0.1 a cadeia tinha um MODELO entre a fonte e o portao, escolhido por
+uma cascata DeepFilterNet3 -> GTCRN -> navegador, com um autoteste do DFN3 no
+inicio do app; com modelo, a captura pedia `noiseSuppression` e
+`voiceIsolation` **false**, e se nenhum modelo pegasse `restartTrack` religava
+os do navegador. Saiu na 2.0.2 por decisao do dono ("o que esta implementado
+esta horrivel"; processo do F3). O que foi medido fica aqui como entrada do
+estudo:
+
+**DeepFilterNet3 na 2.0.1:** `DeepFilterNet3Core` do pacote 1.3.0; WASM de 16,4 MB +
 modelo ONNX de 7,98 MB servidos por `kiroshi-modelos://dfn3`; 48 kHz; quadro de
 480 amostras (10 ms) [I]; roda na thread de audio do renderer; ~38% do tempo
 real na maquina de dev (autoteste aprova ate 60%); intensidade vai para
@@ -86,13 +98,16 @@ O codigo chamava antes de publicar, o erro virava `console.warn`, e como NS e
 isolamento tinham sido desligados "para dar lugar ao modelo", o microfone saia
 cru. Tambem: o Vite embutia o worklet do portao como `data:` (bloqueado pela CSP).
 
+A tabela abaixo e da auditoria da 1.x (antes da interface nova); as linhas da
+IA e da intensidade valiam ate a 2.0.1.
+
 | Ajuste | Efeito real | Veredito |
 |---|---|---|
-| Limpeza por IA (DFN3) | modelo no grafo | funciona quando o autoteste aprova; soa mal pelos motivos acima |
-| Intensidade | `df_set_atten_lim` em dB | parcial: so muda algo entre 0 e ~30 |
-| Sensibilidade | portao: abre no limiar, fecha 6 dB abaixo, 300 ms de espera (`ruido.ts:245-275`) | funciona; corte seco sem rampa; medidor do teste linear, depois do portao e sem marca do limiar — impossivel calibrar no olho |
-| Isolamento de voz | `voiceIsolation` | **sem efeito com a IA ligada** (padrao); com ela desligada, efeito no Windows desconhecido [I] |
-| Supressao de ruido | NS do WebRTC | **sem efeito com a IA ligada**; funciona desligada |
+| Limpeza por IA (DFN3) | modelo no grafo | funcionava quando o autoteste aprovava; soava mal pelos motivos acima. **Retirada na 2.0.2** |
+| Intensidade | `df_set_atten_lim` em dB | parcial: so mudava algo entre 0 e ~30. **Retirada na 2.0.2** |
+| Sensibilidade | portao: abre no limiar, fecha 6 dB abaixo, 300 ms de espera (`ruido.ts`) | funciona; corte seco sem rampa. Na interface nova o medidor ja e em dB, antes do portao e com a marca do limiar |
+| Isolamento de voz | `voiceIsolation` | sem efeito com a IA ligada ate a 2.0.1; desde a 2.0.2 sempre pedido; efeito no Windows desconhecido [I] (a medir no F3) |
+| Supressao de ruido | NS do WebRTC | sem efeito com a IA ligada ate a 2.0.1; desde a 2.0.2 e a supressao do Kiroshi |
 | Cancelamento de eco | restricao repassada | funciona como restricao; eficacia depende do AEC enxergar o audio remoto, que sai por WebAudio e as vezes por outro dispositivo [I] |
 | Ganho automatico | restricao repassada | funciona |
 | Apertar para falar | `keydown`/`keyup` com a janela em foco | **atalho global nunca registrado** (`kiroshi.ptt.accelerator` nunca e gravado, `usePushToTalk.ts:21-22`); mesmo registrado, o alternador nao abriria o mic em modo PTT (`controller.ts:965`); trocar a tecla so vale apos reiniciar |
@@ -324,7 +339,7 @@ Em ordem de probabilidade, ja cruzando codigo e producao:
 |---|---|---|---|
 | 1 | **Camada escolhida pelo tamanho do quadro** (360p15 ao lado do chat) + video remontado ao trocar de tela | codigo (`controller.ts:510`, `Stage`), tabela acima | no espectador, `inbound-rtp.frameHeight`/`framesPerSecond`; mesma transmissao no palco do chat, no canal de voz e em tela cheia; A/B com `setVideoQuality(HIGH)` |
 | 2 | **Caminho de rede instavel para quem usa relay** (NAT duplo + CGNAT remapeando) e reconexoes | logs: 4/7 no relay, ate 95 trocas; 10 `PUBLISHER_FAILED` | cruzar quem reclama com quem usa relay; `freezeCount` por espectador; eventos `Reconnecting` |
-| 3 | **Emissor limitado por CPU** (VP8 software 3 camadas + DFN3 + re-render 5 Hz + sondagem ICE a cada 2 s + o jogo) | codigo | `qualityLimitationReason = cpu`; `totalEncodeTime/framesEncoded`; A/B com IA desligada e 720p30 |
+| 3 | **Emissor limitado por CPU** (VP8 software 3 camadas + DFN3 + re-render 5 Hz + sondagem ICE a cada 2 s + o jogo) | codigo | `qualityLimitationReason = cpu`; `totalEncodeTime/framesEncoded`; A/B com 720p30. O DFN3 saiu na 2.0.2: comparar antes e depois |
 | 4 | **Jogo tratado como tela de documento** (`contentHint` vazio) | codigo | `media-source.frames - framesEncoded`, `hugeFramesSent`; A/B com `contentHint = 'motion'` |
 | 5 | **Upload de casa** (SFU + tunel + atualizacoes de 93 MiB + janelas minimizadas baixando) | codigo, estimativa de banda | medir o upload; perda e jitter subindo **ao mesmo tempo em todos**; cruzar travadas com horarios de publicacao |
 | 6 | **Upload do proprio emissor** (11 Mbps no 1080p60, comeco a 9,9 Mbps) | codigo | `availableOutgoingBitrate`; `qualityLimitationReason = bandwidth` |

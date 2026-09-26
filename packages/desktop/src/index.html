@@ -8,33 +8,17 @@
       As unicas origens externas sao imagens e midia dos anexos do proprio
       servidor, e as conexoes de API, gateway e SFU.
 
-      `wasm-unsafe-eval` permite compilar WebAssembly, e NADA alem disso.
-
-      E preciso para a limpeza de ruido do microfone, que roda um modelo
-      compilado em WASM dentro de um AudioWorklet. Sem esta diretiva o
-      Chromium recusa: "Refused to compile or instantiate WebAssembly module
-      because 'unsafe-eval' is not an allowed source of script".
-
-      A alternativa seria `unsafe-eval`, que tambem liberaria `eval()` e
-      `new Function()` de JavaScript — a porta classica de execucao de codigo
-      injetado. `wasm-unsafe-eval` existe justamente para separar as duas
-      coisas: o WASM passa, o eval continua barrado.
-
-      O binario do modelo e empacotado junto, nao baixado.
-
-      `blob:` em script-src: o worklet do DeepFilterNet3 chega embutido no
-      pacote como texto e e carregado por uma URL blob — o pacote nao oferece
-      outro jeito. O risco que isto abre e pequeno: uma URL blob so pode ser
-      criada por codigo que JA esta rodando nesta pagina, e esse codigo ja
-      poderia fazer o que quisesse. Nao libera nenhuma origem de fora.
-
-      `kiroshi-modelos:` em connect-src: os arquivos do modelo sao lidos do
-      disco pelo processo principal por esse esquema (ver electron/main.ts).
-      Detalhes das duas escolhas em docs/SUPRESSAO-DE-RUIDO.md.
+      Scripts so do proprio pacote (`script-src 'self'`). Ate a 2.0.1 havia
+      tambem `wasm-unsafe-eval` e `blob:` para a limpeza de ruido por modelo
+      (DeepFilterNet3 e GTCRN, em WASM dentro de um AudioWorklet) e o esquema
+      `kiroshi-modelos:` em connect-src para ler os arquivos dele. A limpeza
+      por modelo saiu para ser refeita do zero (backlog F3), e as tres
+      liberacoes sairam com ela. Se a nova precisar de WASM, volta so
+      `wasm-unsafe-eval` — nunca `unsafe-eval`, que liberaria `eval()`.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; font-src 'self' data:; connect-src 'self' ws: wss: http: https: kiroshi-modelos:; frame-src 'none'; object-src 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:; frame-src 'none'; object-src 'none'"
     />
     <title>Kiroshi</title>
   </head>

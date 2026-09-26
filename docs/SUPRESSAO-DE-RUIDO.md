@@ -1,5 +1,13 @@
 # Supressao de ruido do Kiroshi
 
+> **Historico: a limpeza por modelo descrita aqui foi retirada na 2.0.2**
+> (2026-09-25). O dono pediu a supressao de ruido refeita do zero, com o
+> processo: retirar a atual, estudar, plano comprovado, so entao implementar
+> (backlog F3, em `conhecimento/01-pedidos-e-backlog.md`). Desde entao a
+> supressao e a do navegador, e o portao do modo por voz continua. O que esta
+> abaixo fica como registro do que existiu e do que foi aprendido: e material
+> de entrada do estudo, nao descricao do app atual.
+
 Como o Kiroshi tira teclado, ventilador e barulho de fundo do microfone antes
 de a voz sair para a chamada, por que e feito assim, e o que fazer quando nao
 funciona.

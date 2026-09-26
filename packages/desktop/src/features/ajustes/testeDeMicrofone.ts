@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { voice, type VoiceSettings } from '../../voice/controller.js';
-import { aplicarEmFaixaAvulsa, aplicarLimpeza, planejarLimpeza, planoSemModelos } from '../../voice/cadeia.js';
-import { limiarDoPortao, nomeDoMotor } from '../../voice/limpeza.js';
+import { aplicarEmFaixaAvulsa, aplicarLimpeza } from '../../voice/cadeia.js';
+import { limiarDoPortao, nomeDoMotor, restricoesDoNavegador } from '../../voice/limpeza.js';
 import type { ProcessadorDeLimpeza } from '../../voice/ruido.js';
 
 /** O motivo da falha do microfone em palavras de quem usa, pelo nome do erro do navegador. */
@@ -25,13 +25,13 @@ export interface TesteDeMicrofone {
   /** O nivel agora, antes do portao; null com o teste parado. */
   nivelDb: number | null;
   erro: string | null;
-  /** O motor de limpeza que pegou ("DeepFilterNet3", "navegador"...). */
+  /** Quem limpa o som ("Navegador" ou "Nenhum"). */
   motor: string | null;
 }
 
 /**
- * O teste de microfone: a MESMA cascata da chamada (limpeza e portao), com
- * duas saidas.
+ * O teste de microfone: a MESMA entrada da chamada (limpeza do navegador e
+ * portao), com duas saidas.
  *
  *   O nivel, ANTES do portao: e com ele que se escolhe o limiar. O medidor da
  *   1.x media depois do portao — tudo abaixo do limiar ja vinha zerado — e era
@@ -51,7 +51,6 @@ export function useTesteDeMicrofone(
     | 'inputDeviceId'
     | 'outputDeviceId'
     | 'outputVolume'
-    | 'limpezaDeRuido'
     | 'noiseSuppression'
     | 'echoCancellation'
     | 'autoGainControl'
@@ -79,26 +78,12 @@ export function useTesteDeMicrofone(
 
     void (async () => {
       const completos = voice.getSettings();
-      const plano = await planejarLimpeza(completos);
-      if (cancelado) return;
-      const abrir = (restricoes: MediaTrackConstraints) =>
-        navigator.mediaDevices.getUserMedia({ audio: { deviceId: completos.inputDeviceId ?? undefined, ...restricoes } });
-
-      let mic = await abrir(plano.restricoes);
+      const mic = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: completos.inputDeviceId ?? undefined, ...restricoesDoNavegador(completos) },
+      });
       if (cancelado) return parar(mic);
       fluxo = mic;
-      let montada = await aplicarLimpeza(plano, completos, aplicarEmFaixaAvulsa(mic.getAudioTracks()[0] as MediaStreamTrack));
-      if (montada.precisaReabrir) {
-        // O mesmo resgate da chamada: nenhum modelo pegou, reabre com o supressor do navegador.
-        parar(mic);
-        mic = await abrir(montada.restricoesDeResgate);
-        fluxo = mic;
-        montada = await aplicarLimpeza(
-          planoSemModelos(completos, montada.falhas),
-          completos,
-          aplicarEmFaixaAvulsa(mic.getAudioTracks()[0] as MediaStreamTrack),
-        );
-      }
+      const montada = await aplicarLimpeza(completos, aplicarEmFaixaAvulsa(mic.getAudioTracks()[0] as MediaStreamTrack));
       proc = montada.processador;
       if (cancelado) {
         void proc?.destroy();
@@ -156,7 +141,6 @@ export function useTesteDeMicrofone(
     ajustes.inputDeviceId,
     ajustes.outputDeviceId,
     ajustes.outputVolume,
-    ajustes.limpezaDeRuido,
     ajustes.noiseSuppression,
     ajustes.echoCancellation,
     ajustes.autoGainControl,
