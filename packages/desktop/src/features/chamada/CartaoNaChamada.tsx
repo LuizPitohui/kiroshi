@@ -51,7 +51,7 @@ export function CartaoNaChamada({ userId, guildId, canalId, transmitindo, aberto
       <BalaoAncora asChild>{children}</BalaoAncora>
       <BalaoConteudo rotulo={`Opções de ${nome}`} lado="right" alinhar="start" className="w-[300px]">
         <div className="flex items-center gap-3 border-b border-borda px-4 py-3">
-          <Avatar nome={nome} id={userId} url={usuario?.avatarUrl} tamanho={40} />
+          <Avatar nome={nome} id={userId} url={usuario?.avatarUrl} urlAnimada={usuario?.avatarAnimatedUrl} tamanho={40} animar />
           <div className="min-w-0">
             <p className="truncate text-15 font-semibold text-texto">{nome}</p>
             {usuario ? <p className="truncate font-mono text-11 text-texto-3">@{usuario.username}</p> : null}

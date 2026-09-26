@@ -39,7 +39,17 @@ export function CartaoDePerfil({ userId, guildId, aberto, aoMudar, lado = 'left'
       <BalaoConteudo rotulo={`Perfil de ${nome}`} lado={lado} alinhar="start" className="w-[300px]">
         <div aria-hidden className="h-14 border-b border-borda" style={{ background: cor ?? 'var(--k-terminal)' }} />
         <div className="-mt-8 px-4 pb-4">
-          <Avatar nome={nome} id={userId} url={usuario?.avatarUrl} tamanho={72} status={status} className="ring-4 ring-elevado" />
+          {/* No cartao a foto e o destaque: o GIF, se houver, anima (como no Discord). */}
+          <Avatar
+            nome={nome}
+            id={userId}
+            url={usuario?.avatarUrl}
+            urlAnimada={usuario?.avatarAnimatedUrl}
+            tamanho={72}
+            status={status}
+            animar
+            className="ring-4 ring-elevado"
+          />
           <p className="mt-2 truncate font-display text-20 font-bold tracking-[0.04em] text-texto">{nome}</p>
           <p className="truncate font-mono text-11 text-texto-3">
             @{usuario?.username ?? '?'}

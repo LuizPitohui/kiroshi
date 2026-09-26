@@ -330,6 +330,25 @@ O coracao do produto.
   mesmo elemento de video, movido, nunca recriado.
 - **Quadro de pessoa:** avatar ou camera; anel verde de fala; nome em mono;
   icones de mudo/surdo; qualidade do sinal.
+- **Foto em GIF anima quando a pessoa fala** (2.0.4, pedido do dono em
+  2026-09-26; servidor em [03-servidor.md](03-servidor.md), "Foto de perfil"). O
+  `Avatar` (`design/primitivos/Avatar.tsx`) recebe `urlAnimada` e anima com
+  `falando` (anel + animacao: lista de voz e quadro da chamada) ou `animar` (so
+  a animacao: o proprio painel da conta enquanto eu falo, o cartao de perfil, o
+  cartao da chamada e a previa da tela de Perfil). Em todo o resto, a parada.
+  - A animada entra **por cima** da parada: carregando, aparece a parada, nunca
+    um buraco. Continua **1,2 s** depois da fala (o "falando" do SFU vai e volta
+    entre palavras; sem isso o GIF recomecaria a cada pausa).
+  - Sempre do **primeiro quadro**, colado na foto parada: os bytes sao baixados
+    uma vez (`fetch`, antes da fala) e cada fala ganha um `blob:` novo. Pelo
+    endereco direto, o Chromium divide uma animacao entre as copias: com o
+    cartao da pessoa aberto, a foto da lista entrava no quadro 4 de 12 (medido).
+  - Anima mesmo com o movimento reduzido do Windows: e a foto que a pessoa
+    escolheu, disparada pela voz dela.
+  - Medido no Beta (dois Betas por CDP, LiveKit local, microfone falso com fala
+    em rajadas, GIF de 12 cores): 12 de 12 comecos no quadro 0, nos dois lados;
+    pausa curta nao reinicia; volta a parada 1,2 s depois; uma descarga por
+    janela.
 - **Quadro de transmissao:** selo `● AO VIVO` vermelho, espectadores, e a
   **qualidade real recebida** (`1080p · 60 fps`, em mono), com "travadas nos
   ultimos 30 s" quando houver. Antes de assistir: cartao "fulano esta

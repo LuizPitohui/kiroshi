@@ -90,6 +90,7 @@ export const Quadro = memo(function Quadro({ quadro, guildId, canalId, modo, emD
   const pessoa = fonte.usarPessoa(quadro.userId);
   const nome = useStore((s) => selectors.displayNameOf(s, quadro.userId, guildId));
   const avatar = useStore((s) => s.users.get(quadro.userId)?.avatarUrl ?? null);
+  const avatarAnimado = useStore((s) => s.users.get(quadro.userId)?.avatarAnimatedUrl ?? null);
   const caixa = useRef<HTMLDivElement>(null);
   const [cheia, setCheia] = useState(false);
   const [cartao, setCartao] = useState(false);
@@ -191,7 +192,14 @@ export const Quadro = memo(function Quadro({ quadro, guildId, canalId, modo, emD
           </div>
         ) : (
           <div className="absolute inset-0 grid place-items-center">
-            <Avatar nome={nome} id={quadro.userId} url={avatar} tamanho={modo === 'fita' || modo === 'mini' ? 40 : 72} falando={pessoa.falando} />
+            <Avatar
+              nome={nome}
+              id={quadro.userId}
+              url={avatar}
+              urlAnimada={avatarAnimado}
+              tamanho={modo === 'fita' || modo === 'mini' ? 40 : 72}
+              falando={pessoa.falando}
+            />
           </div>
         )}
 

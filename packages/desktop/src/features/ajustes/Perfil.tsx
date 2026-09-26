@@ -30,7 +30,7 @@ function SecaoFoto({ eu }: { eu: SelfUser }) {
   return (
     <Bloco titulo="Foto">
       <div className="flex items-center gap-5">
-        <Avatar nome={eu.displayName || eu.username} id={eu.id} url={eu.avatarUrl} tamanho={72} />
+        <Avatar nome={eu.displayName || eu.username} id={eu.id} url={eu.avatarUrl} urlAnimada={eu.avatarAnimatedUrl} tamanho={72} animar />
         <div className="flex gap-2">
           <Botao carregando={enviando} icone={<ImagePlus className="size-4" strokeWidth={1.5} />} onClick={() => entrada.current?.click()}>
             Trocar a foto
@@ -57,7 +57,10 @@ function SecaoFoto({ eu }: { eu: SelfUser }) {
           }}
         />
       </div>
-      <p className="text-12 text-texto-3">Quadrada fica melhor: ela é cortada em círculo, com até {LIMITS.imageBytes / MB} MB.</p>
+      <p className="text-12 text-texto-3">
+        Quadrada fica melhor: ela é cortada em círculo, com até {LIMITS.imageBytes / MB} MB. Um GIF fica parado no primeiro quadro e
+        anima enquanto você fala na chamada.
+      </p>
     </Bloco>
   );
 }

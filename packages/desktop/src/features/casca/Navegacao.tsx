@@ -46,6 +46,7 @@ const ARRASTE_DE_PESSOA = 'application/x-kiroshi-pessoa';
 function PessoaNaVoz({ userId, guildId, canalId }: { userId: string; guildId: string; canalId: string }) {
   const nome = useStore((s) => selectors.displayNameOf(s, userId, guildId));
   const avatar = useStore((s) => s.users.get(userId)?.avatarUrl ?? null);
+  const avatarAnimado = useStore((s) => s.users.get(userId)?.avatarAnimatedUrl ?? null);
   const estado = useStore((s) => s.voiceStates.get(userId));
   const eu = useStore((s) => s.user?.id === userId);
   const podeMover = has(usePermissoesNoServidor(guildId), Permission.MOVE_MEMBERS);
@@ -71,7 +72,7 @@ function PessoaNaVoz({ userId, guildId, canalId }: { userId: string; guildId: st
         setCartao(true);
       }}
     >
-      <Avatar nome={nome} id={userId} url={avatar} tamanho={20} falando={falando} />
+      <Avatar nome={nome} id={userId} url={avatar} urlAnimada={avatarAnimado} tamanho={20} falando={falando} />
       <span className="min-w-0 flex-1 truncate">{nome}</span>
       <span className="flex items-center gap-1 text-texto-3">
         {estado?.selfStream ? <SeloVivo /> : null}

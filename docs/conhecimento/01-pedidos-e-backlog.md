@@ -294,6 +294,18 @@ consta sem estar na sala por 60 s sai, para qualquer versao do app. Detalhe em
 Efeito colateral bom: depois de um deploy da API, quem esta na chamada (2.0.3+)
 volta a lista em segundos, em vez de sumir ate reentrar.
 
+**Foto em GIF que anima quando a pessoa fala (2026-09-26, API + 2.0.4).**
+Pedido do dono: "Eu preciso poder subir um GIF como foto de perfil. E que
+quando eu falar, o GIF comeca a funcionar... de forma perfeita, sem errar." O
+servidor guarda duas fotos, a parada (primeiro quadro, a de todo lugar) e a
+animada; o app troca para a animada enquanto a pessoa fala, sempre a partir do
+primeiro quadro, e segura 1,2 s depois da fala. Anima tambem no cartao de
+perfil e na previa da tela de Perfil. Versoes antigas do app veem so a parada.
+As fotos de GIF de antes (animadas em todo lugar) foram separadas pelo script
+`deploy/scripts/separar-fotos-animadas.mjs`. Detalhe em
+[03-servidor.md](03-servidor.md#foto-de-perfil-204-pedido-do-dono-em-2026-09-26)
+e [10-front-end-novo.md](10-front-end-novo.md).
+
 ## F3 — Supressao de ruido do zero
 
 **Pedido:** "o que esta implementado esta horrivel"; retirar, estudar, plano

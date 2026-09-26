@@ -82,12 +82,22 @@ export function Identidade(): React.JSX.Element | null {
   const surdo = useVoz((v) => v.selfDeafened);
   // O mesmo aviso dos controles da chamada: aqui o botao tambem nao abre nada.
   const moderado = useVoz((v) => v.silenciadoPeloServidor || v.ensurdecidoPeloServidor);
+  // A propria foto em GIF anima aqui tambem enquanto eu falo (sem o anel: aqui e a conta, nao a chamada).
+  const falando = useVoz((v) => v.participants.some((p) => p.isLocal && p.speaking));
   if (!eu) return null;
 
   const status = eu.status;
   return (
     <section aria-label="Sua conta" className="flex h-14 shrink-0 items-center gap-2.5 border-t border-borda bg-void pl-3 pr-2">
-      <Avatar nome={eu.displayName || eu.username} id={eu.id} url={eu.avatarUrl} tamanho={32} status={status} />
+      <Avatar
+        nome={eu.displayName || eu.username}
+        id={eu.id}
+        url={eu.avatarUrl}
+        urlAnimada={eu.avatarAnimatedUrl}
+        tamanho={32}
+        status={status}
+        animar={falando}
+      />
       <div className="min-w-0 flex-1 leading-tight">
         <p className="truncate text-13 font-semibold text-texto">{eu.displayName || eu.username}</p>
         <p className="truncate font-mono text-10 uppercase tracking-[0.08em] text-texto-3">
