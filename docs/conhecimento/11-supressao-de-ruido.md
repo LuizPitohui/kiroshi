@@ -182,3 +182,24 @@ pelo menos uma das duas fontes:
 Com isso a rodada 2 mede os mesmos candidatos (mais o RNNoise 0.2), gera a pagina
 de escuta com voz real, e este documento vira o **plano**, com a recomendacao e o
 custo de cada escolha, para o dono aprovar antes de o codigo comecar.
+
+## Apendice: roteiro da gravacao do dono
+
+Com o microfone e o teclado de sempre, no lugar de sempre, pelo **Gravador de
+Som** do Windows. Quatro gravacoes, e depois dizer em que pasta ficaram:
+
+1. **fala** (~60 s): ler o texto abaixo em voz normal, sem digitar.
+2. **teclado** (30 s): digitar qualquer coisa, sem falar.
+3. **mouse** (20 s): clicar como clica jogando, sem falar.
+4. **silencio** (20 s): ficar quieto, com o computador ligado como sempre.
+
+> Pessoal, tem um cara no telhado do lado esquerdo, perto da caixa d'agua.
+> Espera, deixa eu recarregar antes de entrar. Alguem tem kit medico sobrando?
+> Estou com pouca vida. Vou pela ponte, me cobre daqui a pouco. Boa, pegamos o
+> objetivo! Agora segura a posicao que eles vao voltar. Cuidado com a granada,
+> ela caiu bem do seu lado. Se a minha voz estiver picotando ou metalica, me
+> avisa. Amanha a gente joga de novo, umas nove da noite, e dessa vez eu levo o
+> sniper. Quem ficou com a chave do cofre? Eu achei que estava com o Marcos, mas
+> ele saiu da partida faz tempo. Vamos com calma, sem pressa, um de cada vez.
+
+As gravacoes ficam so na maquina de testes, fora do repositorio.
