@@ -338,6 +338,19 @@ redimensiona pelas beiradas em 16:9, lembra onde ficou, continua com o app
 minimizado, e um clique abre Voltar para a chamada / Fechar miniatura / Sair da
 chamada. Detalhe em [10-front-end-novo.md](10-front-end-novo.md).
 
+**Cargo, mencao e amizade (2026-09-26, API + 2.0.8).** Tres pedidos do dono de
+uma vez:
+- "Nao consigo dar cargo a ninguem" (Unsupported Media Type) e "os pedidos de
+  amizade que ja existiam nao da para aceitar": o tunel em HTTP/2 quebrou todo
+  PUT/PATCH/POST sem corpo; consertado na API, vale para qualquer versao do
+  app (ver F13).
+- "Usuario ADM e cargo ADM: quando eu marco, chama o usuario e nao o cargo": a
+  escolha no autocompletar vale, e `@ADM` na caixa do cargo e o cargo
+  ([10-front-end-novo.md](10-front-end-novo.md), 4.3).
+- "Os pedidos de amizade, como eu faco?": botao no cartao de perfil e
+  sugestoes no Adicionar amigo ([10-front-end-novo.md](10-front-end-novo.md),
+  Inicio).
+
 ## F3 — Supressao de ruido do zero
 
 **Pedido:** "o que esta implementado esta horrivel"; retirar, estudar, plano

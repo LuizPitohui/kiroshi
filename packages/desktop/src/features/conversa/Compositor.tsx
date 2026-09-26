@@ -9,7 +9,7 @@ import { Balao, BalaoConteudo, BalaoGatilho, BotaoIcone, cx } from '../../design
 import { SeletorDeEmoji } from './SeletorDeEmoji.js';
 import { ListaDeSugestoes, ariaDoCampo, useAutocompletar } from './Autocompletar.js';
 import { dicionarioDoCanal, fontesDoCanal } from './fontes.js';
-import { paraEnvio } from './mencoes.js';
+import { escolhaDaSugestao, paraEnvio } from './mencoes.js';
 import { enviarMensagem, type AnexosPendentes } from './envio.js';
 import { motivo } from './acoes.js';
 import { tamanhoLegivel } from './Anexos.js';
@@ -66,6 +66,9 @@ export function Compositor({ canalId, destino, ehDM, campo, respondendo, aoCance
   const cursorDepois = useRef<number | null>(null);
   const nomeDaResposta = useStore((s) => (respondendo ? selectors.displayNameOf(s, respondendo.authorId, respondendo.guildId) : ''));
 
+  // O que foi escolhido na lista: numa colisao de nomes (usuario `adm`, cargo
+  // "ADM"), e a escolha que decide quem e mencionado (`paraEnvio`).
+  const escolhidas = useRef(new Map<string, string>());
   const auto = useAutocompletar({
     campo,
     valor: texto,
@@ -74,7 +77,16 @@ export function Compositor({ canalId, destino, ehDM, campo, respondendo, aoCance
       setTexto(novo);
     },
     obterFontes: () => fontesDoCanal(canalId),
+    aoAceitar: (s) => {
+      const escolha = escolhaDaSugestao(s);
+      if (escolha) escolhidas.current.set(...escolha);
+    },
   });
+
+  // Outro canal, outras escolhas.
+  useEffect(() => {
+    escolhidas.current = new Map();
+  }, [canalId]);
 
   // Rascunho por canal: trocar de canal e voltar nao perde o que se escreveu.
   useEffect(() => {
@@ -137,7 +149,7 @@ export function Compositor({ canalId, destino, ehDM, campo, respondendo, aoCance
       return;
     }
 
-    const conteudo = paraEnvio(limpo, dicionarioDoCanal(canalId));
+    const conteudo = paraEnvio(limpo, dicionarioDoCanal(canalId), escolhidas.current);
     const resposta = respondendo;
     const levados = anexos.tirarTodos();
     setTexto('');
@@ -148,6 +160,7 @@ export function Compositor({ canalId, destino, ehDM, campo, respondendo, aoCance
     try {
       await enviarMensagem({ canalId, conteudo, anexos: prontos, respostaA: resposta });
       anexos.soltar(levados);
+      escolhidas.current = new Map();
     } catch (e) {
       // Falhou: tudo volta para a caixa — o texto, os anexos e a resposta —,
       // senao a pessoa perderia o que escreveu. (A 1.x devolvia so o texto.)

@@ -59,6 +59,8 @@ interface Opcoes {
   /** Troca o texto do campo e poe o cursor na posicao. */
   aoTrocar: (texto: string, cursor: number) => void;
   obterFontes: () => FontesDeSugestao;
+  /** A sugestao que a pessoa aceitou (a escolha entre cargo e pessoa de mesmo nome vale no envio). */
+  aoAceitar?: (s: Sugestao) => void;
 }
 
 export interface Autocompletar {
@@ -77,7 +79,7 @@ export interface Autocompletar {
   idDaOpcao: (i: number) => string;
 }
 
-export function useAutocompletar({ campo, valor, aoTrocar, obterFontes }: Opcoes): Autocompletar {
+export function useAutocompletar({ campo, valor, aoTrocar, obterFontes, aoAceitar }: Opcoes): Autocompletar {
   const [consulta, setConsulta] = useState<Consulta | null>(null);
   const [indice, setIndice] = useState(0);
   // Esc fecha ate a consulta mudar de lugar: fechar e continuar digitando o
@@ -106,6 +108,7 @@ export function useAutocompletar({ campo, valor, aoTrocar, obterFontes }: Opcoes
     if (!consulta) return;
     const r = aplicarSugestao(valor, consulta, s);
     aoTrocar(r.texto, r.cursor);
+    aoAceitar?.(s);
     setConsulta(null);
   }
 

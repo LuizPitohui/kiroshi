@@ -40,10 +40,33 @@ const ic = 'size-[18px]';
 // Adicionar amigo
 // ---------------------------------------------------------------------------
 
+/**
+ * Quem a pessoa pode estar procurando: gente dos servidores em comum, pelo
+ * nome de exibicao ou de usuario, que ainda nao e amiga nem esta bloqueada.
+ * Ninguem precisa decorar o @usuario de ninguem.
+ */
+function useSugestoesDeAmizade(termo: string) {
+  const eu = useStore((s) => s.user?.id);
+  const usuarios = useStore((s) => s.users);
+  const relacoes = useStore((s) => s.relationships);
+  return useMemo(() => {
+    const t = termo.trim().replace(/^@/, '').toLowerCase();
+    if (!t) return [];
+    const comRelacao = new Set([...relacoes.values()].map((r) => r.user.id));
+    return [...usuarios.values()]
+      .filter((u) => u.id !== eu && !u.bot && !comRelacao.has(u.id))
+      .filter((u) => u.username.toLowerCase().includes(t) || (u.displayName ?? '').toLowerCase().includes(t))
+      .sort((a, b) => Number(!a.username.startsWith(t)) - Number(!b.username.startsWith(t)) || a.username.localeCompare(b.username))
+      .slice(0, 5);
+  }, [termo, eu, usuarios, relacoes]);
+}
+
 function AdicionarAmigo({ aoFechar }: { aoFechar: () => void }) {
   const [usuario, setUsuario] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<{ ok: boolean; mensagem: string } | null>(null);
+  const sugestoes = useSugestoesDeAmizade(usuario);
+  const exato = sugestoes.some((u) => u.username === usuario.trim().replace(/^@/, '').toLowerCase());
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
@@ -82,6 +105,26 @@ function AdicionarAmigo({ aoFechar }: { aoFechar: () => void }) {
           Enviar pedido
         </Botao>
       </div>
+      {sugestoes.length > 0 && !exato && !resultado?.ok ? (
+        <ul aria-label="Pessoas dos seus servidores" className="mt-2 max-w-[420px] border border-borda bg-elevado">
+          {sugestoes.map((u) => (
+            <li key={u.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsuario(u.username);
+                  setResultado(null);
+                }}
+                className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-borda"
+              >
+                <Avatar nome={u.displayName || u.username} id={u.id} url={u.avatarUrl} tamanho={24} />
+                <span className="min-w-0 flex-1 truncate text-13 text-texto">{u.displayName || u.username}</span>
+                <span className="font-mono text-11 text-texto-3">@{u.username}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {resultado?.ok ? (
         <p role="status" className="mt-2 text-13 text-ok">
           {resultado.mensagem}

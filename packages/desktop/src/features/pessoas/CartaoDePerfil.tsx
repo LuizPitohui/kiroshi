@@ -1,9 +1,61 @@
-import type { ReactNode } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Check, Clock, MessageSquare, UserPlus } from 'lucide-react';
 import { selectors, useStore } from '../../store/index.js';
-import { Avatar, Balao, BalaoAncora, BalaoConteudo, Botao } from '../../design/primitivos/index.js';
-import { abrirConversa } from '../inicio/acoes.js';
+import { Avatar, Balao, BalaoAncora, BalaoConteudo, Botao, avisar } from '../../design/primitivos/index.js';
+import { abrirConversa, aceitarPedido, pedirAmizade } from '../inicio/acoes.js';
 import { CargosDaPessoa } from './CargosDaPessoa.js';
+
+/**
+ * A amizade no proprio perfil, como no Discord: sem precisar saber o nome de
+ * usuario (pedido do dono em 2026-09-26, "os pedidos de amizade, como eu
+ * faco?"). Pedido recebido vira "Aceitar"; enviado, so avisa; amigo, nada.
+ */
+function BotaoDeAmizade({ userId, username }: { userId: string; username: string }) {
+  const relacao = useStore((s) => [...s.relationships.values()].find((r) => r.user.id === userId));
+  const [enviando, setEnviando] = useState(false);
+
+  if (relacao?.type === 'FRIEND' || relacao?.type === 'BLOCKED') return null;
+  if (relacao?.type === 'PENDING_OUTGOING') {
+    return (
+      <Botao className="mt-2 w-full" disabled icone={<Clock className="size-4" strokeWidth={1.5} />}>
+        Pedido de amizade enviado
+      </Botao>
+    );
+  }
+  if (relacao?.type === 'PENDING_INCOMING') {
+    return (
+      <Botao
+        variante="primario"
+        className="mt-2 w-full"
+        carregando={enviando}
+        icone={<Check className="size-4" strokeWidth={1.75} />}
+        onClick={() => {
+          setEnviando(true);
+          void aceitarPedido(relacao.id).finally(() => setEnviando(false));
+        }}
+      >
+        Aceitar pedido de amizade
+      </Botao>
+    );
+  }
+  return (
+    <Botao
+      className="mt-2 w-full"
+      carregando={enviando}
+      icone={<UserPlus className="size-4" strokeWidth={1.5} />}
+      onClick={() => {
+        setEnviando(true);
+        void pedirAmizade(username).then((r) => {
+          setEnviando(false);
+          if (r.ok) avisar.ok(r.mensagem);
+          else avisar.erro('Não consegui enviar o pedido', r.mensagem);
+        });
+      }}
+    >
+      Adicionar amigo
+    </Botao>
+  );
+}
 
 const data = (iso: string | undefined) =>
   iso ? new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
@@ -92,6 +144,7 @@ export function CartaoDePerfil({ userId, guildId, aberto, aoMudar, lado = 'left'
               Mandar mensagem
             </Botao>
           ) : null}
+          {!souEu && usuario && !usuario.bot ? <BotaoDeAmizade userId={userId} username={usuario.username} /> : null}
         </div>
       </BalaoConteudo>
     </Balao>

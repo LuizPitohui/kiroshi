@@ -1,5 +1,5 @@
 import type { Channel } from '@kiroshi/shared';
-import { api } from '../../api/client.js';
+import { api, ApiRequestError } from '../../api/client.js';
 import { useStore } from '../../store/index.js';
 import { navegar } from '../../app/rotas.js';
 import { avisar } from '../../design/primitivos/index.js';
@@ -102,12 +102,23 @@ export async function tocarDeNovo(canalId: string): Promise<void> {
 export async function pedirAmizade(usuario: string): Promise<{ ok: boolean; mensagem: string }> {
   const nome = usuario.trim().replace(/^@/, '');
   if (!nome) return { ok: false, mensagem: 'Digite o nome de usuário.' };
+  // Nome de exibição ("Nilton Ferreira") não é nome de usuário: o servidor
+  // respondia "campos inválidos", e a pessoa não sabia o que tinha errado.
+  if (!/^[a-zA-Z0-9._]{2,32}$/.test(nome)) {
+    return {
+      ok: false,
+      mensagem: 'Isso parece o nome de exibição. Use o nome de usuário (o que vem depois do @ no perfil) ou escolha a pessoa na lista.',
+    };
+  }
   try {
     const resposta = await api.post<{ status: string }>('/relationships', { username: nome });
     return resposta.status === 'FRIEND'
       ? { ok: true, mensagem: `Vocês agora são amigos — @${nome} já tinha te convidado.` }
       : { ok: true, mensagem: `Pedido enviado para @${nome}.` };
   } catch (erro) {
+    if (erro instanceof ApiRequestError && erro.status === 404) {
+      return { ok: false, mensagem: `Ninguém usa @${nome}. Confira no perfil da pessoa o que vem depois do @.` };
+    }
     return { ok: false, mensagem: motivo(erro, 'Não consegui enviar o pedido.') };
   }
 }

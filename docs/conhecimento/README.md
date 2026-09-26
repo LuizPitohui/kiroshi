@@ -30,7 +30,7 @@ abertas.
 
 | Area | Estado |
 |---|---|
-| Versao publicada | **2.0.7** (2026-09-26): a miniatura da chamada virou janela propria (anda pelo computador, redimensiona, clique para voltar). A 2.0.6 parou de subir video de transmissao sem espectador; a 2.0.5 tirou a voz de um lado so do fone; a 2.0.4 trouxe a foto de perfil em GIF que anima enquanto a pessoa fala; a 2.0.3 tirou os fantasmas da chamada; a 2.0.2, a limpeza por IA (F3); a 2.0.1, o retorno da chamada no som da transmissao. Beta 1.16.x segue como canal de teste |
+| Versao publicada | **2.0.8** (2026-09-26): mencao de cargo com nome igual ao de um usuario, e amizade pelo cartao de perfil (a API consertou no mesmo dia dar cargo e aceitar amizade, quebrados pelo tunel em HTTP/2). A 2.0.7 pos a miniatura da chamada numa janela propria; a 2.0.6 parou de subir video de transmissao sem espectador; a 2.0.5 tirou a voz de um lado so do fone; a 2.0.4 trouxe a foto de perfil em GIF que anima enquanto a pessoa fala; a 2.0.3 tirou os fantasmas da chamada; a 2.0.2, a limpeza por IA (F3); a 2.0.1, o retorno da chamada no som da transmissao. Beta 1.16.x segue como canal de teste |
 | Testes | 742 unitarios passando (shared 79, servidor 162, desktop 501); e2e 136/136; typecheck limpo |
 | Conversa (texto) | autocompletar de mencao, canal e emoji; acoes por teclado; densidade confortavel e compacta |
 | Voz | sem fantasmas: a API confere a chamada com o LiveKit a cada 15 s e o app avisa a propria saida e a queda; silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada (5 s no maximo); atalhos globais de verdade (falar segurando, mutar, ensurdecer) |

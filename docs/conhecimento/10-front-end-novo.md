@@ -302,6 +302,14 @@ indicador de chamada ativa e de "em chamada em ARASAKA/Geral"). Area principal:
 adicionar por usuario; conversar; ligar; remover; bloquear) e um quadro "agora"
 (quem esta em voz e onde, quem esta ao vivo — um clique entra).
 
+Pedido de amizade (2.0.8, pedido do dono em 2026-09-26: "como eu faco?"): o
+**cartao de perfil** tem o botao — Adicionar amigo, Aceitar pedido de amizade
+(quem ja te convidou) ou Pedido enviado —, sem precisar saber o @usuario. No
+"Adicionar amigo" do Inicio, o campo sugere gente dos servidores em comum pelo
+nome de exibicao ou de usuario (um clique preenche), e nome de exibicao digitado
+("Nilton Ferreira") explica o que falta em vez do "campos invalidos" do
+servidor; usuario inexistente diz "ninguem usa @x".
+
 ### 4.3 Conversa (canal de texto e DM)
 
 - Cabecalho: `# canal` + topico; acoes fixadas, busca, membros; em DM: **ligar
@@ -315,6 +323,13 @@ adicionar por usuario; conversar; ligar; remover; bloquear) e um quadro "agora"
   `NOVAS`. Fixada: marca ciano.
 - Acoes da mensagem (reagir, responder, editar, fixar, copiar, apagar) no hover
   **e** por teclado (setas navegam mensagens; `Enter` abre o menu).
+- Menção de cargo e pessoa com o mesmo nome (2.0.8, o caso do dono: usuario
+  `adm`, cargo "ADM"; antes a pessoa sempre ganhava e o cargo nao tinha como
+  ser mencionado). No envio (`paraEnvio`, `mencoes.ts`) vale, nesta ordem: o
+  que foi escolhido na lista do autocompletar; o nome escrito na caixa exata
+  (nome de usuario e sempre minusculo, entao `@ADM` igual ao cargo e o cargo e
+  `@adm` e a pessoa); sem caixa, pessoa antes de cargo. Editar uma mensagem
+  parte das mencoes que ela ja tinha (`escolhasDoConteudo`).
 - Compositor: **autocompletar** de `@pessoa`, `@cargo`, `#canal`, `:emoji:`;
   anexos com previa e progresso; responder; editar a ultima com seta para cima;
   **Enter envia, Shift+Enter quebra linha** (sem opcao).

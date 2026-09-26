@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   aplicarSugestao,
   consultaNoCursor,
+  escolhaDaSugestao,
+  escolhasDoConteudo,
   paraEdicao,
   paraEnvio,
   pontuar,
@@ -192,7 +194,78 @@ describe('paraEnvio', () => {
   it('emoji desconhecido e hora ficam como estao', () => {
     expect(paraEnvio(':nao_existe: 12:gato:', DIC)).toBe(':nao_existe: 12:gato:');
   });
+
+  describe('usuario e cargo com o mesmo nome (o caso do dono: usuario adm, cargo ADM)', () => {
+    const COLISAO: Dicionario = {
+      ...DIC,
+      pessoas: [...DIC.pessoas, { id: '5', username: 'adm', nomes: ['ADM PATRNO'] }],
+      cargos: [...DIC.cargos, { id: '12', nome: 'ADM' }],
+    };
+
+    it('escrito igual ao cargo, e o cargo; igual ao usuario, e a pessoa', () => {
+      expect(paraEnvio('@ADM venham', COLISAO)).toBe('<@&12> venham');
+      expect(paraEnvio('@adm venha', COLISAO)).toBe('<@5> venha');
+    });
+
+    it('caixa diferente dos dois: a pessoa, como antes', () => {
+      expect(paraEnvio('@Adm', COLISAO)).toBe('<@5>');
+    });
+
+    it('o que foi escolhido na lista vale, mesmo com a caixa igual', () => {
+      // Cargo "kaya" e usuario "kaya": so a escolha distingue.
+      expect(paraEnvio('@kaya', DIC)).toBe('<@1>');
+      expect(paraEnvio('@kaya', DIC, new Map([['@kaya', '<@&11>']]))).toBe('<@&11>');
+    });
+
+    it('a escolha pelo cargo e pela pessoa na mesma mensagem', () => {
+      const escolhidas = new Map([
+        ['@ADM', '<@&12>'],
+        ['@adm', '<@5>'],
+      ]);
+      expect(paraEnvio('@ADM e @adm', COLISAO, escolhidas)).toBe('<@&12> e <@5>');
+    });
+
+    it('a sugestao da lista vira a escolha certa', () => {
+      const [pessoa, cargo] = [
+        sugerir({ gatilho: '@', termo: 'adm', inicio: 0, fim: 4 }, fontesDe(COLISAO)).find((s) => s.tipo === 'pessoa'),
+        sugerir({ gatilho: '@', termo: 'adm', inicio: 0, fim: 4 }, fontesDe(COLISAO)).find((s) => s.tipo === 'cargo'),
+      ];
+      expect(escolhaDaSugestao(pessoa!)).toEqual(['@adm', '<@5>']);
+      expect(escolhaDaSugestao(cargo!)).toEqual(['@ADM', '<@&12>']);
+    });
+
+    it('editar uma mensagem com o cargo devolve o cargo', () => {
+      expect(paraEnvio(paraEdicao('<@&12> venham', COLISAO), COLISAO)).toBe('<@&12> venham');
+    });
+
+    it('editar devolve cargo e pessoa mesmo com o nome identico (cargo kaya, usuario kaya)', () => {
+      const conteudo = '<@&11> e <@1>';
+      const texto = paraEdicao(conteudo, DIC);
+      expect(texto).toBe('@kaya e @kaya');
+      // Sem as escolhas, os dois virariam a pessoa; com elas, cada um o que era...
+      // mas o mesmo texto para dois donos nao tem como separar: vale o ultimo.
+      expect(paraEnvio('@kaya', DIC, escolhasDoConteudo('<@&11>', DIC))).toBe('<@&11>');
+      expect(paraEnvio('@kaya', DIC, escolhasDoConteudo('<@1>', DIC))).toBe('<@1>');
+      expect(escolhasDoConteudo('<@!1> <@&10>', DIC)).toEqual(
+        new Map([
+          ['@kaya', '<@1>'],
+          ['@Moderador Chefe', '<@&10>'],
+        ]),
+      );
+    });
+  });
 });
+
+/** As fontes da lista a partir do dicionario (para os testes de colisao). */
+function fontesDe(d: Dicionario): FontesDeSugestao {
+  return {
+    pessoas: d.pessoas.map((p) => ({ id: p.id, username: p.username, nome: p.nomes[0] ?? p.username, avatarUrl: null })),
+    cargos: d.cargos.map((c) => ({ id: c.id, nome: c.nome, cor: null, membros: 1 })),
+    podeMencionarTodos: false,
+    canais: [],
+    emojis: [],
+  };
+}
 
 describe('paraEdicao', () => {
   it('as marcas voltam a ser nomes', () => {

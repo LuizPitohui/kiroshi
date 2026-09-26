@@ -24,7 +24,7 @@ import { SeletorDeEmoji, type EmojiEscolhido } from './SeletorDeEmoji.js';
 import { alternarFixada, alternarReacao, copiarTexto, editar, type EmojiDeReacao } from './acoes.js';
 import { dataCompleta, horaCurta } from './linhas.js';
 import { dicionarioDoCanal, fontesDoCanal } from './fontes.js';
-import { paraEdicao, paraEnvio } from './mencoes.js';
+import { escolhaDaSugestao, escolhasDoConteudo, paraEdicao, paraEnvio } from './mencoes.js';
 import { ListaDeSugestoes, ariaDoCampo, useAutocompletar } from './Autocompletar.js';
 import { idsOtimistas } from './envio.js';
 import { CartaoDePerfil } from '../pessoas/CartaoDePerfil.js';
@@ -229,6 +229,10 @@ function CampoDeEdicao({ mensagem, aoTerminar, aoApagar }: { mensagem: Message; 
   const [texto, setTexto] = useState(() => paraEdicao(mensagem.content, dicionarioDoCanal(mensagem.channelId)));
   const campo = useRef<HTMLTextAreaElement>(null);
   const cursorDepois = useRef<number | null>(null);
+  // As mencoes que a mensagem ja tinha contam como escolhidas: salvar sem
+  // mexer devolve as mesmas, mesmo com cargo e pessoa de nome igual.
+  const escolhidas = useRef<Map<string, string> | null>(null);
+  escolhidas.current ??= escolhasDoConteudo(mensagem.content, dicionarioDoCanal(mensagem.channelId));
   const auto = useAutocompletar({
     campo,
     valor: texto,
@@ -237,6 +241,10 @@ function CampoDeEdicao({ mensagem, aoTerminar, aoApagar }: { mensagem: Message; 
       setTexto(novo);
     },
     obterFontes: () => fontesDoCanal(mensagem.channelId),
+    aoAceitar: (s) => {
+      const escolha = escolhaDaSugestao(s);
+      if (escolha) escolhidas.current?.set(...escolha);
+    },
   });
 
   useLayoutEffect(() => {
@@ -263,7 +271,7 @@ function CampoDeEdicao({ mensagem, aoTerminar, aoApagar }: { mensagem: Message; 
       aoApagar();
       return;
     }
-    const conteudo = paraEnvio(limpo, dicionarioDoCanal(mensagem.channelId));
+    const conteudo = paraEnvio(limpo, dicionarioDoCanal(mensagem.channelId), escolhidas.current ?? undefined);
     aoTerminar();
     if (conteudo !== mensagem.content) void editar(mensagem, conteudo).catch(() => undefined);
   }

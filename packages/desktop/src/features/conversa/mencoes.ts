@@ -292,12 +292,63 @@ function tabelaDeArroba(d: Dicionario): Map<string, string> {
 }
 
 /**
+ * Os nomes na caixa EXATA em que foram escritos: nome de usuario (sempre
+ * minusculo) e nome de cargo como o cargo se chama. `@ADM` escrito igual ao
+ * cargo "ADM" e o cargo, mesmo com alguem de usuario `adm` (pedido do dono em
+ * 2026-09-26: "quando eu marco, chama o usuario ADM e nao o cargo"); `@adm`
+ * continua sendo a pessoa.
+ */
+function tabelaExata(d: Dicionario): Map<string, string> {
+  const tabela = new Map<string, string>();
+  for (const p of d.pessoas) tabela.set(p.username, `<@${p.id}>`);
+  for (const c of d.cargos) {
+    const n = c.nome.trim();
+    if (n && !tabela.has(n)) tabela.set(n, `<@&${c.id}>`);
+  }
+  tabela.delete('everyone');
+  tabela.delete('here');
+  return tabela;
+}
+
+/**
+ * O que a pessoa escolheu na lista de sugestoes, para valer no envio: o
+ * texto inserido (`@ADM`) e a marca de quem ela escolheu. Numa colisao de
+ * nomes, a lista mostra os dois — e a escolha e a resposta.
+ */
+export function escolhaDaSugestao(s: Sugestao): [texto: string, marca: string] | null {
+  if (s.tipo === 'pessoa') return [s.inserir.trim(), `<@${s.id}>`];
+  if (s.tipo === 'cargo') return [s.inserir.trim(), `<@&${s.id}>`];
+  return null;
+}
+
+/**
+ * As mencoes de uma mensagem como escolhas ja feitas: editar e salvar devolve
+ * as mesmas mencoes, mesmo quando cargo e pessoa tem o mesmo nome (a edicao
+ * mostra `@kaya` para os dois).
+ */
+export function escolhasDoConteudo(conteudo: string, d: Dicionario): Map<string, string> {
+  const pessoas = new Map(d.pessoas.map((p) => [p.id, p.username]));
+  const cargos = new Map(d.cargos.map((c) => [c.id, c.nome]));
+  const escolhas = new Map<string, string>();
+  for (const [, tipo, id] of conteudo.matchAll(/<@([&!]?)(\d{1,20})>/g)) {
+    if (!id) continue;
+    const cargo = tipo === '&';
+    const nome = cargo ? cargos.get(id) : pessoas.get(id);
+    if (nome) escolhas.set(`@${nome}`, cargo ? `<@&${id}>` : `<@${id}>`);
+  }
+  return escolhas;
+}
+
+/**
  * O texto do campo, com os nomes trocados pelas marcas, pronto para enviar.
  *
- * So troca o que tem dono conhecido; o resto fica como a pessoa escreveu.
+ * So troca o que tem dono conhecido; o resto fica como a pessoa escreveu. A
+ * ordem numa colisao de nomes: o que foi escolhido na lista (`escolhidas`),
+ * depois o nome na caixa exata, depois sem caixa (pessoa antes de cargo).
  */
-export function paraEnvio(texto: string, d: Dicionario): string {
+export function paraEnvio(texto: string, d: Dicionario, escolhidas?: ReadonlyMap<string, string>): string {
   const arroba = tabelaDeArroba(d);
+  const exatos = tabelaExata(d);
   const canais = new Map<string, string>();
   for (const c of d.canais) {
     const n = c.nome.toLowerCase();
@@ -319,7 +370,12 @@ export function paraEnvio(texto: string, d: Dicionario): string {
 
   return foraDoIntocavel(texto, (trecho) => {
     let t = trecho;
-    if (reArroba) t = t.replace(reArroba, (inteiro, nome: string) => arroba.get(nome.toLowerCase()) ?? inteiro);
+    if (reArroba) {
+      t = t.replace(
+        reArroba,
+        (inteiro, nome: string) => escolhidas?.get(inteiro) ?? exatos.get(nome) ?? arroba.get(nome.toLowerCase()) ?? inteiro,
+      );
+    }
     if (reCanal) t = t.replace(reCanal, (inteiro, nome: string) => canais.get(nome.toLowerCase()) ?? inteiro);
     if (reEmoji) t = t.replace(reEmoji, (inteiro, nome: string) => emojis.get(nome) ?? inteiro);
     return t;
