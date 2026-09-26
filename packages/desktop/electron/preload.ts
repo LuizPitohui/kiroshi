@@ -64,6 +64,14 @@ export interface ScreenSource {
 const api = {
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
+    /** Traz a janela principal de volta (minimizada ou na bandeja) e foca. */
+    mostrar: () => ipcRenderer.send('window:mostrar'),
+    /**
+     * Poe a miniatura flutuante da chamada em (x, y) da tela. Pelo processo
+     * principal, e nao `window.moveTo`: o do navegador prende a janela dentro
+     * do monitor em que ela esta, e ela nao passaria para outro.
+     */
+    moverMiniatura: (x: number, y: number) => ipcRenderer.send('window:mover-miniatura', x, y),
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),

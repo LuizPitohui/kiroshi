@@ -87,6 +87,7 @@ Caminhos relativos a `packages/desktop/`.
 | Canal | O que faz |
 |---|---|
 | `window:minimize/maximize/close/isMaximized` | janela (fechar = esconder) |
+| `window:mostrar`, `window:mover-miniatura` | trazer o app de volta (minimizado ou na bandeja); posicao da miniatura flutuante da chamada (2.0.7, `miniPalco.ts`) |
 | `app:quit`, `app:version`, `app:platform` | sair (sem uso), versao, `process.platform` |
 | `atualizacao:estado/procurar/instalar` + evento `atualizacao:mudou` | atualizacao |
 | `screen:sources`, `screen:select` | seletor de tela |

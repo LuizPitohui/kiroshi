@@ -12,7 +12,7 @@ import { CartaoNaChamada } from './CartaoNaChamada.js';
 export type ModoDoQuadro = 'destaque' | 'grade' | 'fita' | 'mini';
 
 /** O `<video>` do registro, emprestado a este quadro enquanto ele existe. */
-function VideoHospedado({ quadro }: { quadro: DadosDoQuadro }) {
+export function VideoHospedado({ quadro }: { quadro: DadosDoQuadro }) {
   const fonte = useFonteDaChamada();
   const versao = fonte.usarVersaoDeMidia();
   const caixa = useRef<HTMLDivElement>(null);

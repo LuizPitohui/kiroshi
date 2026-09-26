@@ -10,10 +10,12 @@ import {
   Menu,
   nativeImage,
   Notification,
+  screen,
   session,
   shell,
   Tray,
 } from 'electron';
+import { NOME_DA_JANELA_DO_MINI_PALCO, limitesDentroDaArea, opcoesDoMiniPalco } from './miniPalco.js';
 import { autoUpdater } from 'electron-updater';
 import type { AcaoDeAtalho, AtualizacaoEstado, PreferenciasDoApp } from './preload.js';
 import { gravarPreferencias, lerPreferencias, primeiraExecucao } from './preferencias.js';
@@ -45,6 +47,8 @@ if (isDev) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+/** A miniatura flutuante da chamada, quando aberta (`miniPalco.ts`). */
+let miniPalco: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
@@ -180,12 +184,32 @@ function createWindow(): void {
     mainWindow = null;
   });
 
-  // Link externo abre no navegador, nunca dentro do app.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  // Link externo abre no navegador, nunca dentro do app. A unica janela que a
+  // interface abre e a miniatura da chamada (`miniPalco.ts`), em branco: ela
+  // mesma desenha dentro.
+  mainWindow.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    if (frameName.startsWith(NOME_DA_JANELA_DO_MINI_PALCO) && (url === '' || url === 'about:blank')) {
+      return { action: 'allow', overrideBrowserWindowOptions: opcoesDoMiniPalco(resolveIcon()) };
+    }
     if (url.startsWith('http://') || url.startsWith('https://')) {
       void shell.openExternal(url);
     }
     return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('did-create-window', (janela, { frameName }) => {
+    if (!frameName.startsWith(NOME_DA_JANELA_DO_MINI_PALCO)) return;
+    miniPalco = janela;
+    janela.on('closed', () => {
+      if (miniPalco === janela) miniPalco = null;
+    });
+    // Imagem de transmissao e 16:9: redimensionar pelas beiradas mantem a
+    // proporcao, sem faixa preta sobrando.
+    janela.setAspectRatio(16 / 9);
+    janela.setAlwaysOnTop(true, 'floating');
+    const limites = janela.getBounds();
+    janela.setBounds(limitesDentroDaArea(limites, screen.getDisplayMatching(limites).workArea));
+    janela.showInactive();
   });
 
   // Impede navegacao para fora da aplicacao caso algum link escape.
@@ -464,6 +488,20 @@ function setupDisplayMedia(): void {
 function registerIpc(): void {
   // ---- Janela ----
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
+  // "Voltar para a chamada" da miniatura: a janela principal pode estar
+  // minimizada ou escondida na bandeja.
+  ipcMain.on('window:mostrar', () => {
+    if (mainWindow?.isMinimized()) mainWindow.restore();
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+  // O arraste da miniatura: `setPosition` nao prende a janela no monitor em
+  // que ela esta, como o `window.moveTo` do navegador prende.
+  ipcMain.on('window:mover-miniatura', (_event, x: unknown, y: unknown) => {
+    if (!miniPalco || miniPalco.isDestroyed()) return;
+    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    miniPalco.setPosition(Math.round(x), Math.round(y));
+  });
   ipcMain.on('window:maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
     else mainWindow?.maximize();

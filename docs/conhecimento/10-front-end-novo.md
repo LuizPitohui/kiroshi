@@ -328,6 +328,34 @@ O coracao do produto.
 - **Layouts:** grade (todos), destaque (um grande + fita), tela cheia, e **mini
   palco flutuante** quando voce navega para outro canal com a chamada ativa — o
   mesmo elemento de video, movido, nunca recriado.
+- **Mini palco numa janela propria (2.0.7, pedido do dono em 2026-09-26: "devo
+  poder mover ela livremente pelo computador e redimensionar, clicar e ter a
+  opcao de voltar para a tela da chamada").** No app instalado a miniatura e
+  uma janela do Windows sem moldura, sempre por cima e fora da barra de tarefas
+  (`electron/miniPalco.ts`), desenhada pelo React por portal
+  (`JanelaFlutuante.tsx`, com os estilos do app copiados para la):
+  - arrasta por qualquer ponto da imagem, inclusive para outro monitor (o
+    arraste pede a posicao ao processo principal: o `window.moveTo` do
+    navegador prendia a janela na beirada do monitor em que ela estava);
+    redimensiona pelas beiradas, travada em 16:9; abre onde a pessoa a deixou
+    (`limitesDaMiniatura.ts`), e o processo principal a traz para dentro se o
+    monitor sumiu;
+  - um clique abre as opcoes: **Voltar para a chamada** (traz o app de volta,
+    mesmo minimizado ou na bandeja, e abre a chamada), **Fechar miniatura**
+    (vale ate a pessoa passar pela tela da chamada de novo; fechar pelo sistema
+    conta igual) e **Sair da chamada**; o × no canto fecha direto;
+  - continua tocando com o app minimizado; a qualidade pedida segue a altura
+    DA JANELA (`useRecepcaoDaJanela`): os observadores do documento do app nao
+    enxergam elementos de outra janela e pausariam o video;
+  - abre sem roubar o foco (`showInactive`). Na versao web continua presa no
+    canto da pagina.
+  - Medido no Beta: video 1280x720 tocando na janela; arrastes exatos, um
+    deles atravessando para o monitor da esquerda; reabre na posicao e no
+    tamanho salvos; 1120x630 pede a camada alta, 480x270 a media; voltar poe a
+    chamada na tela com o video tocando no palco (o mesmo elemento); com o app
+    minimizado a miniatura segue tocando. No teste, eventos de mouse sinteticos
+    do CDP podem vir com `screenX` sem a posicao da janela: arraste de verdade
+    so com mouse real.
 - **Quadro de pessoa:** avatar ou camera; anel verde de fala; nome em mono;
   icones de mudo/surdo; qualidade do sinal.
 - **Foto em GIF anima quando a pessoa fala** (2.0.4, pedido do dono em

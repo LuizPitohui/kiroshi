@@ -329,6 +329,15 @@ manda pausar de novo. A 2.0.6 reaplica a ultima ordem do servidor a cada 1,5 s
 `deploy/scripts/transmissoes.mjs` e `banda-da-midia.sh`
 ([08-producao.md](08-producao.md)).
 
+**Miniatura da chamada numa janela propria (2026-09-26, 2.0.7).** Pedido do
+dono: "essa miniatura da transmissao devo poder mover ela livremente pelo
+computador e poder redimensionar ela, clicar nela e ter a opcao de voltar para
+a tela da chamada". No app instalado a miniatura virou uma janela do Windows
+sempre por cima: arrasta por qualquer ponto (inclusive para outro monitor),
+redimensiona pelas beiradas em 16:9, lembra onde ficou, continua com o app
+minimizado, e um clique abre Voltar para a chamada / Fechar miniatura / Sair da
+chamada. Detalhe em [10-front-end-novo.md](10-front-end-novo.md).
+
 ## F3 — Supressao de ruido do zero
 
 **Pedido:** "o que esta implementado esta horrivel"; retirar, estudar, plano

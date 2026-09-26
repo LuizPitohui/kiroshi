@@ -89,6 +89,40 @@ export function useRecepcao(caixa: RefObject<HTMLElement | null>, alvo: AlvoDeRe
   }, [userId, fonte]);
 }
 
+/**
+ * O mesmo pedido, para um video que mora numa janela propria (a miniatura
+ * flutuante). A medida e a altura DAQUELA janela, pelos eventos dela: os
+ * observadores deste documento nao enxergam elementos de outra janela, e o
+ * video ficaria pausado. E ela esta sempre a vista — sempre por cima, e nao
+ * some quando o app e minimizado.
+ */
+export function useRecepcaoDaJanela(janela: Window | null, alvo: AlvoDeRecepcao | null): void {
+  const [altura, setAltura] = useState(0);
+
+  useEffect(() => {
+    if (!janela) return;
+    const medir = () => setAltura(janela.innerHeight);
+    medir();
+    janela.addEventListener('resize', medir);
+    return () => janela.removeEventListener('resize', medir);
+  }, [janela]);
+
+  const userId = alvo?.userId;
+  const fonte = alvo?.fonte;
+  const preferencia = alvo?.preferencia ?? 'auto';
+  const densidade = janela?.devicePixelRatio ?? 1;
+
+  useEffect(() => {
+    if (!userId || !fonte) return;
+    voice.ajustarRecepcao(userId, fonte, recepcaoPara({ fonte, alturaCss: altura, densidade, visivel: true, preferencia }));
+  }, [userId, fonte, preferencia, altura, densidade]);
+
+  useEffect(() => {
+    if (!userId || !fonte) return;
+    return () => voice.ajustarRecepcao(userId, fonte, null);
+  }, [userId, fonte]);
+}
+
 // ---------------------------------------------------------------------------
 // Qualidade medida
 // ---------------------------------------------------------------------------

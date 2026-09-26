@@ -11,8 +11,15 @@ interface EstadoDoPalco {
   destaque: string | null;
   /** Qualidade escolhida para a transmissao de cada pessoa. */
   preferencias: Record<string, Preferencia>;
+  /**
+   * A pessoa fechou a miniatura flutuante. Vale ate ela voltar para a tela da
+   * chamada: a proxima saida mostra a miniatura de novo.
+   */
+  miniFechada: boolean;
   destacar: (chave: string | null) => void;
   preferir: (userId: string, preferencia: Preferencia) => void;
+  fecharMini: () => void;
+  reabrirMini: () => void;
   /** Chamada nova, escolhas novas. */
   limpar: () => void;
 }
@@ -20,7 +27,10 @@ interface EstadoDoPalco {
 export const useEstadoDoPalco = create<EstadoDoPalco>((set) => ({
   destaque: null,
   preferencias: {},
+  miniFechada: false,
   destacar: (destaque) => set({ destaque }),
   preferir: (userId, preferencia) => set((s) => ({ preferencias: { ...s.preferencias, [userId]: preferencia } })),
-  limpar: () => set({ destaque: null, preferencias: {} }),
+  fecharMini: () => set({ miniFechada: true }),
+  reabrirMini: () => set({ miniFechada: false }),
+  limpar: () => set({ destaque: null, preferencias: {}, miniFechada: false }),
 }));

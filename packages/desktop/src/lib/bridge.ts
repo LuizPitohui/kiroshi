@@ -37,6 +37,10 @@ function createBrowserFallback(): KiroshiApi {
   return {
     window: {
       minimize: noop,
+      // Na aba do navegador, "voltar para a chamada" so troca de tela, e a
+      // miniatura e presa a pagina.
+      mostrar: noop,
+      moverMiniatura: noop,
       maximize: noop,
       close: noop,
       isMaximized: () => Promise.resolve(false),
