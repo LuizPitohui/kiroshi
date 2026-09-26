@@ -1,0 +1,14 @@
+# Tudo que a bancada gera ou baixa fica fora do git: audio, resultados, modelos.
+node_modules/
+package-lock.json
+modelos/
+dados/
+corpus/
+corpus-falso/
+saida/
+escuta/
+*.wav
+metricas.json
+tempos.json
+tempos-resumo.json
+dfn3.cjs

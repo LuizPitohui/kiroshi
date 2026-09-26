@@ -1,0 +1,124 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bancada F3</title>
+<script>
+const fs = require('fs');
+const path = require('path');
+const { pathToFileURL } = require('url');
+const LIB = path.join(__dirname, '..', '..', 'node_modules', '@sapphi-red', 'web-noise-suppressor', 'dist');
+const AQUI = __dirname;
+const TAXA = 48000;
+const CAUDA = 0.5; // segundos a mais no fim, para caber a latencia do motor
+
+const sr = require(path.join(LIB, 'index.cjs'));
+const { DeepFilterNet3Core } = require(path.join(AQUI, 'dfn3.cjs'));
+const urlDe = (p) => pathToFileURL(p).href;
+const binario = (p) => { const b = fs.readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
+
+function lerWav(caminho) {
+  const b = fs.readFileSync(caminho);
+  const n = (b.length - 44) / 2;
+  const a = new Float32Array(n);
+  for (let i = 0; i < n; i++) a[i] = b.readInt16LE(44 + i * 2) / 32768;
+  return a;
+}
+function gravarWav(caminho, a) {
+  const dados = Buffer.alloc(a.length * 2);
+  for (let i = 0; i < a.length; i++) dados.writeInt16LE(Math.round(Math.max(-1, Math.min(1, a[i])) * 32767), i * 2);
+  const c = Buffer.alloc(44);
+  c.write('RIFF', 0); c.writeUInt32LE(36 + dados.length, 4); c.write('WAVE', 8); c.write('fmt ', 12);
+  c.writeUInt32LE(16, 16); c.writeUInt16LE(1, 20); c.writeUInt16LE(1, 22); c.writeUInt32LE(TAXA, 24);
+  c.writeUInt32LE(TAXA * 2, 28); c.writeUInt16LE(2, 32); c.writeUInt16LE(16, 34); c.write('data', 36); c.writeUInt32LE(dados.length, 40);
+  fs.writeFileSync(caminho, Buffer.concat([c, dados]));
+}
+
+// Cada motor: monta o no dentro do contexto offline (carga FORA da medicao de tempo).
+function motores(porta) {
+  const dfn3 = (limite) => async (ctx) => {
+    const nucleo = new DeepFilterNet3Core({ sampleRate: TAXA, noiseReductionLevel: limite, assetConfig: { cdnUrl: `http://127.0.0.1:${porta}/dfn3` } });
+    await nucleo.initialize();
+    const no = await nucleo.createAudioWorkletNode(ctx);
+    return { no, fim: () => nucleo.destroy() };
+  };
+  const daBiblioteca = (worklet, Classe, wasm) => async (ctx) => {
+    await ctx.audioWorklet.addModule(urlDe(path.join(LIB, worklet)));
+    const no = new Classe(ctx, { maxChannels: 1, wasmBinary: binario(path.join(LIB, wasm)) });
+    return { no, fim: () => no.destroy?.() };
+  };
+  return {
+    bruto: async (ctx) => ({ no: ctx.createGain(), fim: () => {} }),
+    rnnoise: daBiblioteca('rnnoise/workletProcessor.js', sr.RnnoiseWorkletNode, 'rnnoise_simd.wasm'),
+    'rnnoise-sem-simd': daBiblioteca('rnnoise/workletProcessor.js', sr.RnnoiseWorkletNode, 'rnnoise.wasm'),
+    speex: daBiblioteca('speex/workletProcessor.js', sr.SpeexWorkletNode, 'speex.wasm'),
+    gtcrn: daBiblioteca('gtcrn/workletProcessor.js', sr.GtcrnWorkletNode, 'gtcrn.wasm'),
+    'dfn3-100': dfn3(100),
+    'dfn3-30': dfn3(30),
+    'dfn3-20': dfn3(20),
+    'dfn3-12': dfn3(12),
+  };
+}
+
+// A renderizacao offline e muito mais rapida que o tempo real, e alguns motores
+// terminam de subir o WASM no worklet de forma assincrona: sem esperar, os
+// primeiros segundos (ou o arquivo inteiro) saem mudos ou sem tratamento.
+// Por isso a entrada comeca depois de 0,5 s de silencio, a renderizacao
+// suspende em 0,25 s, espera 1,5 s de relogio e so entao segue. A espera sai
+// da conta do tempo.
+const PREFIXO = 0.5;
+async function processar(montar, entrada) {
+  const inicio = Math.round(PREFIXO * TAXA);
+  const total = inicio + entrada.length + Math.round(CAUDA * TAXA);
+  const ctx = new OfflineAudioContext(1, total, TAXA);
+  const { no, fim } = await montar(ctx);
+  const buf = ctx.createBuffer(1, entrada.length, TAXA);
+  buf.copyToChannel(entrada, 0);
+  const fonte = ctx.createBufferSource();
+  fonte.buffer = buf;
+  fonte.connect(no);
+  no.connect(ctx.destination);
+  fonte.start(PREFIXO);
+  let espera = 0;
+  ctx.suspend(0.25).then(async () => {
+    const t = performance.now();
+    await new Promise((r) => setTimeout(r, 1500));
+    espera = performance.now() - t;
+    await ctx.resume();
+  });
+  const t0 = performance.now();
+  const saida = await ctx.startRendering();
+  const ms = performance.now() - t0 - espera;
+  try { fim(); } catch {}
+  return { saida: saida.getChannelData(0).slice(inicio), ms };
+}
+
+async function rodar({ porta, motores: escolhidos, arquivos: soEstes }) {
+  const todos = motores(porta);
+  const lista = escolhidos ?? Object.keys(todos);
+  const arquivos = fs.readdirSync(path.join(AQUI, 'corpus')).filter((f) => f.endsWith('.wav') && (!soEstes || soEstes.includes(f)));
+  const tempos = {};
+  const resumo = {};
+  for (const nome of lista) {
+    const pasta = path.join(AQUI, 'saida', nome);
+    fs.mkdirSync(pasta, { recursive: true });
+    let msTotal = 0, sTotal = 0;
+    tempos[nome] = {};
+    for (const arq of arquivos) {
+      const entrada = lerWav(path.join(AQUI, 'corpus', arq));
+      try {
+        const { saida, ms } = await processar(todos[nome], entrada);
+        gravarWav(path.join(pasta, arq), saida);
+        // Motor que so repassou o som (falha silenciosa do pacote do DFN3): marca.
+        let dif = 0; for (let i = 0; i < entrada.length; i++) dif += Math.abs(saida[i] - entrada[i]);
+        if (nome !== 'bruto' && dif / entrada.length < 1e-5) { tempos[nome][arq] = 'erro: saida igual a entrada'; continue; }
+        tempos[nome][arq] = ms;
+        msTotal += ms; sTotal += entrada.length / TAXA;
+      } catch (e) {
+        tempos[nome][arq] = `erro: ${e.message}`;
+      }
+    }
+    resumo[nome] = { fracaoDoTempoReal: +(msTotal / (sTotal * 1000)).toFixed(4), segundos: +sTotal.toFixed(1) };
+    console.log(`${nome}: ${JSON.stringify(resumo[nome])}`);
+  }
+  return { resumo, tempos };
+}
+</script>

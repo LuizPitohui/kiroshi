@@ -1,0 +1,8 @@
+{
+  "name": "banco-de-ruido",
+  "private": true,
+  "description": "Bancada de medicao da supressao de ruido do Kiroshi (F3). Fora dos workspaces: nao entra no app.",
+  "dependencies": {
+    "deepfilternet3-noise-filter": "1.3.0"
+  }
+}

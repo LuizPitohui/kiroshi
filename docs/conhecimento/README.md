@@ -20,6 +20,7 @@ divergiu deles, esta base registra.
 | [08-producao.md](08-producao.md) | Topologia, regras de ouro de deploy, estabilidade observada, comandos de diagnostico |
 | [09-referencia-discord.md](09-referencia-discord.md) | Como o Discord resolve cada coisa que vamos construir (chamada em DM, cargos, convites, soundboard, notificacoes, conta) |
 | [10-front-end-novo.md](10-front-end-novo.md) | **Design do front-end novo (aprovado, vermelho Arasaka)** — identidade, linguagem visual, telas, arquitetura, plano de entrega; com o [prototipo](prototipo/index.html) |
+| [11-supressao-de-ruido.md](11-supressao-de-ruido.md) | **Supressao de ruido do zero (F3)** — estudo, bancada, resultados da rodada 1 e criterio de aceitacao; vira o plano depois da rodada 2 |
 
 `privado/` (fora do git — o repositorio e publico): enderecos e dados brutos de
 producao, a lista dos outros servicos do host e as pendencias de seguranca ainda
