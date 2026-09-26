@@ -24,6 +24,7 @@ import { EntrarPorConvite } from '../servidor/EntrarPorConvite.js';
 import { PainelDeMembros } from '../pessoas/PainelDeMembros.js';
 import { JanelasDaPessoa } from '../pessoas/JanelasDaPessoa.js';
 import { AvisoDeSenha } from './AvisoDeSenha.js';
+import { AvisoDeVersaoNova } from './AvisoDeVersaoNova.js';
 import { useInterface } from '../../app/interface.js';
 import { useTelaLarga } from '../../app/largura.js';
 
@@ -206,6 +207,7 @@ export function Casca(): React.JSX.Element {
         <main id="conteudo" tabIndex={-1} className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-void outline-none">
           {/* Primeiro no documento: o Tab chega na chamada recebida antes da conversa. */}
           <ChamadasDiretas />
+          <AvisoDeVersaoNova />
           <AvisoDeSenha />
           <div className="relative min-h-0 flex-1">
             <AreaPrincipal rota={rota} />

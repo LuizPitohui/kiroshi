@@ -11,6 +11,7 @@ import { aplicarDensidade } from '../lib/leitura.js';
 import { voice } from '../voice/controller.js';
 import { useStore } from '../store/index.js';
 import { aplicarTema } from './tema.js';
+import { useAtualizacao } from './atualizacao.js';
 import { Raiz } from './Raiz.js';
 import '../design/index.css';
 
@@ -32,7 +33,9 @@ export function iniciar(container: HTMLElement): void {
     Desligado, nada fica exposto.
   */
   try {
-    if (localStorage.getItem('kiroshi.depurar') === '1') (window as unknown as { __kiroshi: unknown }).__kiroshi = { voice, store: useStore };
+    if (localStorage.getItem('kiroshi.depurar') === '1') {
+      (window as unknown as { __kiroshi: unknown }).__kiroshi = { voice, store: useStore, atualizacao: useAtualizacao };
+    }
   } catch {
     // sem armazenamento: sem diagnostico
   }

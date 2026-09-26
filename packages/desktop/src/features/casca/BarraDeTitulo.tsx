@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Hash, Minus, Square, Volume2, X } from 'lucide-react';
+import { Download, Hash, Minus, Square, Volume2, X } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import { useRota } from '../../app/rotas.js';
 import { usePreferenciasDoApp } from '../../app/preferenciasDoApp.js';
+import { ouvirAtualizacao, prontaParaReiniciar, useAtualizacao } from '../../app/atualizacao.js';
 import { Marca } from './Marca.js';
 
 /**
@@ -14,8 +15,12 @@ export function BarraDeTitulo(): React.JSX.Element {
   const rota = useRota();
   // O X diz o que faz: esconde na bandeja ou fecha de vez (Configuracoes > Windows).
   const fecharParaBandeja = usePreferenciasDoApp((s) => s.preferencias?.fecharParaBandeja ?? true);
+  // Versao nova pronta: o selo fica aqui mesmo depois do "Depois" do aviso.
+  const pronta = useAtualizacao((s) => prontaParaReiniciar(s.atualizacao));
+  const aoSairDaChamada = useAtualizacao((s) => s.aoSairDaChamada);
   useEffect(() => {
     void usePreferenciasDoApp.getState().carregar();
+    ouvirAtualizacao();
   }, []);
   const servidor = useStore((s) => (rota.tela === 'servidor' || rota.tela === 'ajustes-servidor' ? s.guilds.get(rota.guildId)?.name : undefined));
   const canal = useStore((s) => {
@@ -56,6 +61,17 @@ export function BarraDeTitulo(): React.JSX.Element {
       </nav>
 
       <div className="ml-auto flex h-full [-webkit-app-region:no-drag]">
+        {pronta ? (
+          <button
+            type="button"
+            onClick={() => useAtualizacao.getState().mostrar()}
+            title={aoSairDaChamada ? 'O Kiroshi reinicia sozinho quando você sair da chamada' : 'Versão nova pronta: reiniciar para atualizar'}
+            className="mr-2 flex items-center gap-1.5 self-center border border-acento/60 bg-acento/15 px-2 py-0.5 font-mono text-10 uppercase tracking-rotulo text-texto hover:bg-acento hover:text-sobre-acento"
+          >
+            <Download aria-hidden className="size-3" strokeWidth={1.75} />
+            {aoSairDaChamada ? 'Reinicia ao sair da chamada' : 'Atualização pronta'}
+          </button>
+        ) : null}
         <button
           type="button"
           aria-label="Minimizar"

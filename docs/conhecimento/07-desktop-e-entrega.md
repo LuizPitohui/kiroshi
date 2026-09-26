@@ -236,8 +236,20 @@ inteiro colado em "Entrar em um servidor").
    `autoInstallOnAppQuit` ligados; procura 5 s depois de abrir e a cada 10 min,
    sem jitter; log em `%APPDATA%\@kiroshi\desktop\atualizacao.log`.
 5. Baixa inteiro (diferencial falha), confere sha512.
-6. Faixa `AvisoDeAtualizacao` na fase `pronta`: "Reiniciar agora" / "Depois".
-   **Nao avisa se a pessoa esta em chamada.**
+6. Faixa `AvisoDeAtualizacao` na fase `pronta`: "Reiniciar agora" / "Depois"
+   — so na interface 1.x. A 2.0.0 ate a 2.0.8 so mostravam o botao em
+   Configuracoes > Sobre ("esta escondido", disse o dono em 2026-09-26).
+   **Desde a 2.0.9** (`AvisoDeVersaoNova.tsx`, estado em `app/atualizacao.ts`):
+   pronta, aparece um aviso no alto da area principal ("A versao X do Kiroshi
+   esta pronta" + Reiniciar agora + Depois) e um selo "Atualizacao pronta" na
+   barra de titulo, que fica depois do "Depois" e traz o aviso de volta. Numa
+   chamada o aviso diz que reiniciar tira a pessoa dela e oferece **"Quando eu
+   sair da chamada"**: reinicia sozinho quando ela sair (o selo vira "Reinicia
+   ao sair da chamada"; "Nao reiniciar sozinho" desfaz). Foi reiniciar no meio
+   da chamada que deixou o Sid fantasma na lista em 2026-09-26. Testado no Beta
+   (estado simulado pelo `__kiroshi.atualizacao`): aviso, selo, Depois, selo
+   trazendo de volta, texto da chamada, e o reinicio pedido ao sair dela. Quem
+   esta na 2.0.8 ou antes so ve o aviso a partir da versao seguinte a 2.0.9.
 7. `quitAndInstall(true, true)` roda o NSIS `--updated /S --force-run`. Sem
    protecao contra clique duplo (o log mostra dois disparos seguidos em
    2026-09-23 01:41 UTC).

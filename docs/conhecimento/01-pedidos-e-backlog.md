@@ -357,9 +357,15 @@ reiniciou tres vezes em meia hora (atualizacoes publicadas em sequencia), cada
 saida chegando limpa ao SFU mas nao ao gateway, entao ele ficava na lista ate a
 conferencia (60 s) ou ate o app voltar. A API passou a encerrar a voz na hora
 quando o app fecha a conexao de proposito (1001/1000). Detalhe em
-[03-servidor.md](03-servidor.md#voz-no-servidor). **A pensar:** o "Reiniciar
-agora" da atualizacao derruba a pessoa da chamada no meio; talvez esperar ela
-sair, ou avisar.
+[03-servidor.md](03-servidor.md#voz-no-servidor). O "Reiniciar agora" no meio
+da chamada virou o item abaixo.
+
+**Aviso de versao nova (2026-09-26, 2.0.9).** Pedido do dono: "faz um aviso que
+tem nova atualizacao e botao para reiniciar; atualmente esta escondido" (so em
+Configuracoes > Sobre desde a 2.0.0). Aviso no alto da area principal e selo
+na barra de titulo quando a versao nova esta baixada; numa chamada, o aviso
+avisa que reiniciar tira a pessoa dela e oferece "Quando eu sair da chamada".
+Detalhe em [07-desktop-e-entrega.md](07-desktop-e-entrega.md#atualizacao-como-e-hoje).
 
 ## F3 — Supressao de ruido do zero
 
