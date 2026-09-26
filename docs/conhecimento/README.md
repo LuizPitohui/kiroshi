@@ -30,10 +30,10 @@ abertas.
 
 | Area | Estado |
 |---|---|
-| Versao publicada | **2.0.2** (2026-09-25): a limpeza por IA sai para ser refeita (F3). A 2.0.1 tirou o retorno da chamada do som da transmissao; a 2.0.0 trouxe a interface nova para todos. Beta 1.16.x segue como canal de teste |
-| Testes | 733 unitarios passando (shared 79, servidor 153, desktop 501); e2e 136/136; typecheck limpo |
+| Versao publicada | **2.0.3** (2026-09-26): chamada sem fantasmas (a propria saida, a voz caindo sozinha, sessao nova no meio da chamada). A 2.0.2 tirou a limpeza por IA (F3); a 2.0.1, o retorno da chamada no som da transmissao. Beta 1.16.x segue como canal de teste |
+| Testes | 742 unitarios passando (shared 79, servidor 162, desktop 501); e2e 136/136; typecheck limpo |
 | Conversa (texto) | autocompletar de mencao, canal e emoji; acoes por teclado; densidade confortavel e compacta |
-| Voz | silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada (5 s no maximo); atalhos globais de verdade (falar segurando, mutar, ensurdecer) |
+| Voz | sem fantasmas: a API confere a chamada com o LiveKit a cada 15 s e o app avisa a propria saida e a queda; silenciar, ensurdecer e mover valem no SFU; soundboard toca na chamada (5 s no maximo); atalhos globais de verdade (falar segurando, mutar, ensurdecer) |
 | Transmissao de tela | som do computador sem o do proprio Kiroshi (quem assiste nao ouve a propria voz de volta), sem tratamento de voz e em estereo (2.0.1); nunca abaixo de 720p para quem assiste, `<video>` sem recriar, pausa minimizado, qualidade medida no quadro. Telemetria enviada ao servidor e rede de quem usa relay: a fazer (F2) |
 | Supressao de ruido | sendo refeita do zero (F3). Passo 1 feito na 2.0.2: a limpeza por IA (DFN3 e GTCRN) saiu, fica a do navegador e o portao do modo por voz. Proximo: o estudo e o plano comprovado, para o dono ler antes de codar |
 | Chamada em DM | ligar e atender com toque, recusar, registro na conversa, desliga quem fica 3 min sozinho |

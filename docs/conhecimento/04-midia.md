@@ -255,10 +255,26 @@ O `adaptiveStream` mede o elemento x `pixelDensity`, que vale 1 com
   `SERVER_SHUTDOWN`, que todo deploy completo provoca) **culpa a rede da pessoa**.
 - Token de 6 h; `/voice/refresh` existe e o cliente nunca chama (aceita o
   `refreshToken` que o LiveKit manda pela sinalizacao).
-- **Estado de voz preso a sessao antiga:** depois de um novo IDENTIFY o cliente nao
-  reenvia `VOICE_STATE_UPDATE`; o servidor ignora a saida pedida por outra sessao
-  (`services/voice.ts:312`) — "fantasma" na lista de voz.
-- Reinicio da API apaga todos os estados de voz com as salas do LiveKit ainda ativas.
+- **Fantasmas na lista de voz — consertados em 2026-09-26 (API + app 2.0.3).**
+  Tres causas, tres consertos:
+  - *a propria saida:* o servidor nao devolve o aviso a quem saiu, e o app nao se
+    tirava da propria lista (ficava "ao vivo" na tela de quem acabou de sair).
+    Agora `sairDaVoz` tira na hora (`removeVoiceState`);
+  - *a voz caindo sozinha:* o app limpava a chamada e nao avisava o servidor, e
+    a pessoa ficava no canal para todos enquanto o app ficasse aberto. Agora a
+    queda inesperada (`RoomEvent.Disconnected` sem `saindoDeProposito`) avisa
+    (`voice.aoCairSemQuerer`, ligado em `api/events.ts`); a troca de sala do
+    mover passa por `leave()` e nao dispara o aviso;
+  - *sessao nova no meio da chamada:* depois de um novo IDENTIFY o app nao
+    reenviava `VOICE_STATE_UPDATE`, e o estado ficava preso a sessao antiga (a
+    saida da nova era ignorada). Agora o app reanuncia a voz no READY.
+  E para qualquer versao, a conferencia do servidor com o LiveKit
+  (`conferirVozComSfu`, [03-servidor.md](03-servidor.md)) tira quem consta sem
+  estar na sala ha 60 s.
+- Reinicio da API apaga todos os estados de voz com as salas do LiveKit ainda
+  ativas; o app 2.0.3+ reanuncia a propria voz no READY e volta a lista em
+  segundos (medido: 1,5 s depois de a API subir, sem a chamada cair). Versoes
+  anteriores somem da lista ate reentrar.
 - A cada 2 s o diagnostico cria uma RTCPeerConnection descartavel e coleta
   candidatos ICE (`controller.ts:679-685, 1749-1783`), a chamada inteira.
 

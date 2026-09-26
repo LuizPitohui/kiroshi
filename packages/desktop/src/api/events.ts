@@ -28,6 +28,31 @@ export function installGatewayHandlers(): void {
   gateway.on('READY', (payload) => {
     store().applyReady(payload);
 
+    /*
+      Sessao nova no meio de uma chamada — a API reiniciou, ou a retomada nao
+      deu: o servidor precisa saber que ESTA sessao esta na voz.
+
+      Sem isto, dois defeitos. Depois de um deploy da API (que apaga os estados
+      de voz na subida), quem estava na chamada sumia da lista do canal, para
+      todos, ate sair e entrar de novo. E quando a sessao era refeita sem
+      reinicio, o estado ficava preso a sessao antiga: o "sai" da nova era
+      ignorado pelo servidor, e a pessoa ficava no canal como fantasma.
+
+      O token que o servidor devolve e ignorado aqui mesmo (ja conectado neste
+      canal, ver voice/entrada.ts): a chamada nao cai nem reconecta.
+    */
+    const v = voice.getState();
+    if (v.connected && v.channelId && !v.saindo) {
+      gateway.updateVoiceState({
+        guildId: v.guildId,
+        channelId: v.channelId,
+        selfMute: v.selfMuted,
+        selfDeaf: v.selfDeafened,
+        selfVideo: v.cameraOn,
+        selfStream: v.screenSharing,
+      });
+    }
+
     // Abre no primeiro servidor se ainda nao houver nada selecionado.
     const { selectedGuildId, guilds } = store();
     if (!selectedGuildId && guilds.size > 0) {
@@ -181,6 +206,20 @@ export function installGatewayHandlers(): void {
   gateway.on('VOICE_SERVER_UPDATE', (payload) => {
     void voice.connect(payload);
   });
+
+  /*
+    A voz caiu sozinha e o app desistiu dela: o servidor e avisado, e a
+    propria pessoa sai da propria lista. Sem isto ela seguia no canal para
+    todos, como fantasma, enquanto o app ficasse aberto. Se o servidor ja
+    tinha tirado (moderacao), o aviso nao faz nada: ele so vale para a sessao
+    dona do estado de voz.
+  */
+  voice.aoCairSemQuerer = ({ guildId }) => {
+    const v = voice.getState();
+    gateway.updateVoiceState({ guildId, channelId: null, selfMute: v.selfMuted, selfDeaf: v.selfDeafened });
+    const eu = store().user?.id;
+    if (eu) store().removeVoiceState(eu);
+  };
 
   gateway.on('VOICE_CHANNEL_EFFECT', ({ guildId, soundId, userId }) => {
     if (userId === store().user?.id) return; // quem tocou ja ouviu localmente

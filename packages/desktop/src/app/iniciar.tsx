@@ -9,6 +9,7 @@ import { createRoot } from 'react-dom/client';
 import { aplicarMovimento } from '../lib/movimento.js';
 import { aplicarDensidade } from '../lib/leitura.js';
 import { voice } from '../voice/controller.js';
+import { useStore } from '../store/index.js';
 import { aplicarTema } from './tema.js';
 import { Raiz } from './Raiz.js';
 import '../design/index.css';
@@ -26,11 +27,12 @@ export function iniciar(container: HTMLElement): void {
   voice.configurarRecepcao({ manual: true });
   /*
     Diagnostico de campo: com `kiroshi.depurar = 1` no armazenamento, o motor
-    de voz fica em `window.__kiroshi` para o console (camadas, pausas, faixas).
+    de voz e o estado do app (a store) ficam em `window.__kiroshi` para o
+    console: camadas, pausas, faixas, quem consta em cada canal de voz.
     Desligado, nada fica exposto.
   */
   try {
-    if (localStorage.getItem('kiroshi.depurar') === '1') (window as unknown as { __kiroshi: unknown }).__kiroshi = { voice };
+    if (localStorage.getItem('kiroshi.depurar') === '1') (window as unknown as { __kiroshi: unknown }).__kiroshi = { voice, store: useStore };
   } catch {
     // sem armazenamento: sem diagnostico
   }

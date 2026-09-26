@@ -57,6 +57,10 @@ export function CallControls({ compacto = false }: CallControlsProps) {
       selfMute: voz.selfMuted,
       selfDeaf: voz.selfDeafened,
     });
+    // O servidor nao devolve a saida a quem saiu: sem isto a pessoa ficava na
+    // propria lista como fantasma (ver sairDaVoz em features/casca/acoesDeVoz.ts).
+    const eu = useStore.getState().user?.id;
+    if (eu) useStore.getState().removeVoiceState(eu);
     void voice.leave();
   }
 

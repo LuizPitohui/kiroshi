@@ -685,6 +685,7 @@ class VoiceController {
       .on(RoomEvent.ConnectionQualityChanged, () => this.refreshParticipants())
       .on(RoomEvent.Disconnected, (motivo?: unknown) => {
         const inesperada = !this.saindoDeProposito;
+        const perdido = { channelId: this.state.channelId, guildId: this.state.guildId };
 
         /*
           Solta a sala aqui, nao so no leave().
@@ -711,6 +712,19 @@ class VoiceController {
 
         // Sair por vontade propria nao e falha; so o resto merece explicacao.
         if (inesperada) void this.explicarQueda(motivo);
+
+        /*
+          A voz caiu e o app desistiu dela: o servidor precisa saber.
+
+          Antes ele nao sabia. O estado de voz ficava no banco e a pessoa
+          seguia na lista do canal para todo mundo — ela inclusive — enquanto
+          o app ficasse aberto: o fantasma que o dono reportou em 2026-09-26.
+
+          So na queda INESPERADA. Trocar de canal (mover, entrar em outro)
+          passa por leave(), que marca a saida como proposital; um aviso de
+          saida ali tiraria a pessoa do canal para onde ela acabou de ir.
+        */
+        if (inesperada && perdido.channelId) this.aoCairSemQuerer?.({ channelId: perdido.channelId, guildId: perdido.guildId });
       })
       .on(RoomEvent.Reconnecting, () => this.emit({ connecting: true }))
       .on(RoomEvent.Reconnected, () => {
@@ -1834,13 +1848,27 @@ class VoiceController {
    * pessoa; a propria saida nao volta como eco. So age se ainda estivermos no
    * canal citado, para nao derrubar uma chamada seguinte por engano.
    */
-  async leaveByRemote(channelId: string | null, motivo?: 'ALONE_TIMEOUT'): Promise<void> {
+  async leaveByRemote(channelId: string | null, motivo?: 'ALONE_TIMEOUT' | 'VOICE_LOST'): Promise<void> {
     if (channelId && this.state.channelId !== channelId) return;
+    /*
+      Ja fora da chamada: nada a desfazer nem a explicar. Acontece quando o
+      servidor tira quem a voz ja tinha deixado (VOICE_LOST) — a queda ja foi
+      explicada quando aconteceu, e um segundo aviso so confundiria.
+    */
+    if (!this.room && !this.state.channelId) return;
     await this.leave();
     // Moderador, expulsao, canal apagado, bloqueio, a regra dos 3 minutos: sem
     // isto a chamada sumia da tela sem explicacao nenhuma.
-    this.emit({ error: motivo === 'ALONE_TIMEOUT' ? AVISO_DE_SOLIDAO : AVISO_DE_DESCONEXAO });
+    this.emit({ error: motivo === 'ALONE_TIMEOUT' ? AVISO_DE_SOLIDAO : motivo === 'VOICE_LOST' ? AVISO_DE_VOZ_PERDIDA : AVISO_DE_DESCONEXAO });
   }
+
+  /**
+   * Chamado quando a voz cai sem ninguem ter pedido e o app desiste dela.
+   * Quem liga isto e api/events.ts, que conhece o gateway: avisa o servidor e
+   * tira a propria pessoa da lista. Fica como gancho para o controlador nao
+   * importar o gateway (que ja importa o controlador).
+   */
+  aoCairSemQuerer: ((canal: { channelId: string; guildId: string | null }) => void) | null = null;
 
   /**
    * Por onde a midia esta passando de fato.
@@ -2162,6 +2190,9 @@ class VoiceController {
 
 /** Tirado da chamada pelo servidor (moderador, expulsao, canal apagado, bloqueio). */
 export const AVISO_DE_DESCONEXAO = 'Você foi desconectado da chamada.';
+
+/** O servidor tirou quem constava na chamada sem estar na sala (ver `conferirVozComSfu`). */
+export const AVISO_DE_VOZ_PERDIDA = 'A conexão de voz caiu e você saiu da chamada.';
 
 /**
  * A regra dos 3 minutos sozinho numa chamada de DM. Texto nosso, no tom do

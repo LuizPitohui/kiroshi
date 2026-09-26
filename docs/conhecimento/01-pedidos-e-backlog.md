@@ -280,6 +280,20 @@ mesmo som, achados na medicao: o Chromium tratava o som da tela como microfone
 (eco, ruido e ganho automatico, e em mono), e a faixa saia com DTX e RED (131
 kbps em vez de 64). O conserto vale quando **quem transmite** esta na 2.0.1.
 
+**Fantasmas na chamada (2026-09-26, API + 2.0.3).** Pedido do dono: "quando
+alguem sai da call a pessoa nao desaparece, fica na call de forma fantasma, e
+tambem pessoas com versoes diferentes; de qualquer forma tem que arrumar". O
+caso da captura dele era a propria saida: o app nao se tirava da propria lista
+(o servidor nao devolve o aviso a quem saiu), e ele ficava "ao vivo" no canal.
+Havia mais duas causas: a voz caindo sozinha nao avisava o servidor (a pessoa
+ficava no canal para todos enquanto o app estivesse aberto), e uma sessao nova
+no meio da chamada deixava o estado preso a sessao antiga. O app 2.0.3 conserta
+as tres, e a API passou a conferir a chamada com o LiveKit a cada 15 s: quem
+consta sem estar na sala por 60 s sai, para qualquer versao do app. Detalhe em
+[04-midia.md](04-midia.md#reconexao-e-falhas) e [03-servidor.md](03-servidor.md#voz-no-servidor).
+Efeito colateral bom: depois de um deploy da API, quem esta na chamada (2.0.3+)
+volta a lista em segundos, em vez de sumir ate reentrar.
+
 ## F3 — Supressao de ruido do zero
 
 **Pedido:** "o que esta implementado esta horrivel"; retirar, estudar, plano

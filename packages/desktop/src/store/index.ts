@@ -126,6 +126,13 @@ interface AppState {
   upsertRelationship: (relationship: Relationship) => void;
   removeRelationship: (id: string) => void;
   setVoiceState: (state: VoiceState) => void;
+  /**
+   * Tira alguem da lista de voz sem esperar o servidor. Para a propria saida:
+   * o servidor nao devolve o aviso a quem saiu (derrubaria uma chamada nova
+   * de quem sai e entra rapido), entao sem isto a pessoa ficava na propria
+   * lista, como fantasma, ate o app reconectar.
+   */
+  removeVoiceState: (userId: string) => void;
   setCall: (call: Call) => void;
   setGuildSettings: (settings: GuildSettings) => void;
   setChannelSettings: (settings: ChannelSettings) => void;
@@ -520,6 +527,14 @@ export const useStore = create<AppState>((set, get) => ({
       // channelId null significa que a pessoa saiu da voz.
       if (!voiceState.channelId) voiceStates.delete(voiceState.userId);
       else voiceStates.set(voiceState.userId, voiceState);
+      return { voiceStates };
+    }),
+
+  removeVoiceState: (userId) =>
+    set((state) => {
+      if (!state.voiceStates.has(userId)) return {};
+      const voiceStates = new Map(state.voiceStates);
+      voiceStates.delete(userId);
       return { voiceStates };
     }),
 

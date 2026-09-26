@@ -1,4 +1,5 @@
 import { gateway } from '../../api/gateway.js';
+import { useStore } from '../../store/index.js';
 import { voice } from '../../voice/controller.js';
 import { avisar } from '../../design/primitivos/index.js';
 
@@ -42,10 +43,21 @@ export async function entrarNaVoz(canalId: string, guildId: string | null): Prom
   }
 }
 
-/** O servidor e avisado antes: a saida aparece para os outros mesmo que o SFU demore. */
+/**
+ * O servidor e avisado antes: a saida aparece para os outros mesmo que o SFU
+ * demore.
+ *
+ * E a propria pessoa sai da propria lista na hora. O servidor nao devolve o
+ * aviso de saida a quem saiu (um aviso atrasado derrubaria a chamada nova de
+ * quem sai e entra rapido), entao sem esta linha a pessoa seguia no canal, na
+ * propria tela, como fantasma — "ao vivo", se estava transmitindo — ate o app
+ * reconectar. Visto pelo dono em 2026-09-26.
+ */
 export function sairDaVoz(): void {
   const v = voice.getState();
   gateway.updateVoiceState({ guildId: v.guildId, channelId: null, selfMute: v.selfMuted, selfDeaf: v.selfDeafened });
+  const eu = useStore.getState().user?.id;
+  if (eu) useStore.getState().removeVoiceState(eu);
   void voice.leave();
 }
 
