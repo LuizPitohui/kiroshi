@@ -351,6 +351,16 @@ uma vez:
   sugestoes no Adicionar amigo ([10-front-end-novo.md](10-front-end-novo.md),
   Inicio).
 
+**Fantasma de quem fecha o app (2026-09-26, API).** Pedido do dono, com
+captura: "o Sid saiu da call mas nao some da lista". Nos logs: o app dele
+reiniciou tres vezes em meia hora (atualizacoes publicadas em sequencia), cada
+saida chegando limpa ao SFU mas nao ao gateway, entao ele ficava na lista ate a
+conferencia (60 s) ou ate o app voltar. A API passou a encerrar a voz na hora
+quando o app fecha a conexao de proposito (1001/1000). Detalhe em
+[03-servidor.md](03-servidor.md#voz-no-servidor). **A pensar:** o "Reiniciar
+agora" da atualizacao derruba a pessoa da chamada no meio; talvez esperar ela
+sair, ou avisar.
+
 ## F3 — Supressao de ruido do zero
 
 **Pedido:** "o que esta implementado esta horrivel"; retirar, estudar, plano

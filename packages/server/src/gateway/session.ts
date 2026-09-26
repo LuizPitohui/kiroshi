@@ -159,9 +159,25 @@ export class GatewaySession {
    * fechar. O `close` atrasado do antigo marcava a sessao ja reanexada como
    * desconectada, e dois minutos depois a varredura a descartava viva: o
    * socket novo seguia aberto, sem receber mais nada.
+   *
+   * Devolve se era o socket dela (falso: ja nao era, e o fechamento nao diz
+   * nada sobre a sessao).
    */
-  socketFechou(socket: WebSocket): void {
-    if (socket !== this.socket) return;
+  socketFechou(socket: WebSocket): boolean {
+    if (socket !== this.socket) return false;
     this.disconnectedAt = Date.now();
+    return true;
   }
+}
+
+/**
+ * Fechamentos em que o app foi embora DE PROPOSITO e nao volta nesta sessao:
+ * 1001 (a janela foi embora — sair do app, reiniciar para atualizar) e 1000
+ * (o app so usa para o logout). Nesses, a voz da sessao sai na hora.
+ *
+ * Queda de rede nao manda codigo (chega 1006) e o app reconectando usa 4000:
+ * esses seguem esperando a retomada, como sempre.
+ */
+export function fechamentoDeProposito(codigo: number): boolean {
+  return codigo === 1000 || codigo === 1001;
 }

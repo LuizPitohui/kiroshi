@@ -438,6 +438,17 @@ nenhum tipo. Hoje toda notificacao e decidida no cliente.
   na lista — o fantasma reportado pelo dono. O VoiceState ainda e apagado
   inteiro no boot; o app 2.0.3+ reanuncia a propria voz no READY e volta a
   lista em segundos.
+- **App fechando tira da voz na hora (2026-09-26).** O dono viu o Sid "sair da
+  call e nao sumir da lista": o app dele reiniciava (para atualizar), a sala do
+  SFU recebia a saida limpa (`CLIENT_REQUEST_LEAVE`), mas o gateway so fechava
+  o socket, e a sessao ficava na janela de retomada (2 min) — a voz sumia so
+  pela conferencia (60 s) ou quando o app voltava e se reanunciava. Agora o
+  fechamento do socket ATUAL da sessao com 1001 (a janela foi embora: sair,
+  reiniciar, atualizar) ou 1000 (o logout do app) encerra a voz daquela sessao
+  na hora (`fechamentoDeProposito`, `gateway/session.ts`; `handleClose`). Queda
+  de rede (1006) e o app reconectando (4000) seguem esperando a retomada.
+  Medido: fechar o app com `app.quit` e a saida chegar a outra conta levou 0,4
+  s. Vale para qualquer versao do app.
 - **VOICE_SERVER_UPDATE vai para todas as sessoes da conta** (`voice.ts:266`) —
   foi a causa do commit `bc4ad67` ("um segundo aparelho entrava na chamada
   sozinho"). O cliente se protegeu; o servidor nao mudou.

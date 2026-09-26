@@ -40,7 +40,7 @@ import {
   sessions,
   setPresence,
 } from './registry.js';
-import { GatewaySession } from './session.js';
+import { GatewaySession, fechamentoDeProposito } from './session.js';
 
 type IdentifyLido = z.infer<typeof identifySchema>;
 type ResumeLido = z.infer<typeof resumeSchema>;
@@ -108,9 +108,9 @@ export function attachGateway(httpServer: HttpServer): WebSocketServer {
       });
     });
 
-    socket.on('close', () => {
+    socket.on('close', (codigo) => {
       clearTimeout(identifyTimer);
-      handleClose(state);
+      handleClose(state, codigo);
     });
 
     socket.on('error', (error) => {
@@ -598,14 +598,29 @@ async function handleTyping(state: PendingConnection, payload: DigitacaoLida): P
 
 // ---------------------------------------------------------------------------
 
-function handleClose(state: PendingConnection): void {
+function handleClose(state: PendingConnection, codigo: number): void {
   const session = state.session;
   if (!session) return;
 
   // Se uma retomada ja levou a sessao para outro socket, o fechamento deste
   // nao e queda dela — ver `socketFechou`.
-  session.socketFechou(state.socket);
-  logger.debug({ sessionId: session.id, userId: session.userId }, 'socket caiu');
+  const eraDela = session.socketFechou(state.socket);
+  logger.debug({ sessionId: session.id, userId: session.userId, codigo }, 'socket caiu');
+
+  /*
+    O app foi embora de proposito (fechou, reiniciou para atualizar, logout):
+    a voz desta sessao sai AGORA. Esperando a retomada (2 min) ou a
+    conferencia com o SFU (60 s), a pessoa ficava na lista de voz de todo
+    mundo depois de fechar o app — o fantasma que o dono viu em 2026-09-26 (o
+    Sid reiniciando o app para atualizar: a sala do SFU recebia a saida, a
+    lista nao). So a voz: o resto da sessao segue as regras da retomada.
+  */
+  if (eraDela && fechamentoDeProposito(codigo)) {
+    logger.info({ sessionId: session.id, userId: session.userId, codigo }, 'gateway: o app fechou; voz desta sessao encerrada');
+    void disconnectFromVoice(session.userId, session.id).catch((error: unknown) =>
+      logger.warn({ error, userId: session.userId }, 'falha ao sair da voz no fechamento do app'),
+    );
+  }
 
   // Nao anunciamos offline na hora: a sessao pode voltar em segundos. Quem
   // decide e o sweeper, quando a janela de retomada expira.

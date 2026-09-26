@@ -14,7 +14,7 @@ import { GatewayCloseCode, SESSION_REPLAY_BUFFER } from '@kiroshi/shared';
 process.env.DATABASE_URL ??= 'postgresql://teste:teste@localhost:5432/teste';
 process.env.JWT_SECRET ??= 'segredo-de-teste-com-mais-de-trinta-e-dois-caracteres';
 
-const { GatewaySession } = await import('./session.js');
+const { GatewaySession, fechamentoDeProposito } = await import('./session.js');
 
 const ABERTO = 1;
 const FECHADO = 3;
@@ -147,7 +147,28 @@ describe('fechamento atrasado de um socket antigo', () => {
   it('a queda do socket atual continua contando', () => {
     const socket = socketFalso();
     const sessao = new GatewaySession('s1', 'u1', comoWs(socket), 'login-1');
-    sessao.socketFechou(comoWs(socket));
+    expect(sessao.socketFechou(comoWs(socket))).toBe(true);
     expect(sessao.disconnectedAt).not.toBeNull();
+  });
+
+  it('diz quando o socket que fechou ja nao era o da sessao', () => {
+    const antigo = socketFalso();
+    const sessao = new GatewaySession('s1', 'u1', comoWs(antigo), 'login-1');
+    sessao.close(GatewayCloseCode.SESSION_REPLACED, 'retomada em outro socket');
+    sessao.attachSocket(comoWs(socketFalso()));
+    expect(sessao.socketFechou(comoWs(antigo))).toBe(false);
+  });
+});
+
+describe('fechamento de proposito (a voz sai na hora)', () => {
+  it('1001 (o app fechou ou reiniciou) e 1000 (logout)', () => {
+    expect(fechamentoDeProposito(1001)).toBe(true);
+    expect(fechamentoDeProposito(1000)).toBe(true);
+  });
+
+  it('queda de rede (1006), sem codigo (1005) e o app reconectando (4000) esperam a retomada', () => {
+    expect(fechamentoDeProposito(1006)).toBe(false);
+    expect(fechamentoDeProposito(1005)).toBe(false);
+    expect(fechamentoDeProposito(4000)).toBe(false);
   });
 });
