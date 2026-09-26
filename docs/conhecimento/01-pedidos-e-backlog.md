@@ -603,6 +603,18 @@ e as retomadas por queda de sinalizacao do LiveKit (hipotese 10 do
 [04-midia.md](04-midia.md)). O `financeiro-une` ja respondia 502 antes da troca:
 nada escuta nas portas 8050/8051 do servidor.
 
+**Efeito colateral do HTTP/2 (achado em 2026-09-26, pelo dono: "nao consigo dar
+cargo a ninguem" e "os pedidos de amizade nao da para aceitar").** Em HTTP/2 o
+tunel repassa todo PUT, POST e PATCH SEM corpo com corpo vazio "em pedacos"
+(`Transfer-Encoding: chunked`) e sem tipo; o Fastify so pula a leitura quando
+nao ha corpo nenhum, entao procurava leitor para o tipo vazio e recusava com
+415 ("Unsupported Media Type"). Direto na API o mesmo pedido passava. Quebrou
+por um dia: dar e tirar cargo, aceitar amizade e todo PUT/PATCH/POST sem corpo
+(DELETE passava). Consertado na API (leitor `'*'` em `index.ts`: corpo vazio
+vira objeto vazio, corpo de verdade sem tipo segue recusado), sem mexer no
+tunel. Teste que pegaria: `curl -X PUT https://order.arasaka.fun/api/v1/relationships/1`
+tem que dar 401, nunca 415.
+
 ## F14 — Documentacao desatualizada
 
 README, ARQUITETURA, MANUAL, DEPLOY e a pagina `/privacidade` divergem do codigo

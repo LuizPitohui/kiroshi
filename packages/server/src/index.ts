@@ -84,6 +84,29 @@ async function buildServer() {
     },
   );
 
+  /**
+   * Pedido SEM tipo e com corpo "em pedacos" (`Transfer-Encoding: chunked`).
+   *
+   * E assim que o tunel da Cloudflare repassa todo PUT, POST e PATCH sem corpo
+   * desde que passou a falar HTTP/2 (2026-09-25, backlog F13): o app manda o
+   * pedido sem corpo e sem tipo, o tunel entrega com corpo vazio em pedacos, e
+   * o Fastify, que so pula a leitura quando nao ha corpo nenhum, procurava um
+   * leitor para o tipo vazio e recusava com 415. Pararam dar e tirar cargo
+   * (PUT), aceitar pedido de amizade (PUT), editar perfil sem mudancas e o que
+   * mais fosse um PUT/PATCH/POST sem corpo — a direto na API passava.
+   *
+   * No Fastify, `'*'` e o leitor do tipo vazio e de qualquer tipo sem leitor
+   * proprio. Corpo vazio vira objeto vazio, como no JSON acima; corpo de
+   * verdade de tipo desconhecido continua recusado.
+   */
+  app.addContentTypeParser('*', { parseAs: 'buffer' }, (_request, body: Buffer, done) => {
+    if (body.length === 0) {
+      done(null, {});
+      return;
+    }
+    done(new ApiError('UNSUPPORTED_MEDIA_TYPE', 'Tipo de conteudo nao aceito.'), undefined);
+  });
+
   // ---------------------------------------------------------------------------
   // Tratamento de erro centralizado
   // ---------------------------------------------------------------------------
