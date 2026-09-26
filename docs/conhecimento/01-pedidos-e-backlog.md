@@ -306,6 +306,17 @@ As fotos de GIF de antes (animadas em todo lugar) foram separadas pelo script
 [03-servidor.md](03-servidor.md#foto-de-perfil-204-pedido-do-dono-em-2026-09-26)
 e [10-front-end-novo.md](10-front-end-novo.md).
 
+**Voz de um lado so do fone (2026-09-26, 2.0.5).** Pedido do dono: "as
+pessoas so estao escutando minha voz de um lado do fone... desde as versoes
+1.x"; a dos outros sai dos dois lados. Causa medida: o microfone dele e a
+entrada estereo da placa-mae (headset mono num canal so) e ele desligou o
+cancelamento de eco — sem ele o Chromium entrega os 2 canais crus, o servidor
+de voz negocia Opus estereo, e o portao de voz so passava o canal esquerdo.
+Qualquer microfone estereo com o eco desligado saia de um lado so; voz so no
+canal direito nem chegava. A 2.0.5 junta o microfone num canal antes do
+portao, sem perder volume quando a voz vem de um lado so. Detalhe em
+[04-midia.md](04-midia.md#entrada-de-audio).
+
 ## F3 — Supressao de ruido do zero
 
 **Pedido:** "o que esta implementado esta horrivel"; retirar, estudar, plano

@@ -2,11 +2,18 @@ import { NoiseGateWorkletNode } from '@sapphi-red/web-noise-suppressor';
 import portaoWorkletUrl from '@sapphi-red/web-noise-suppressor/noiseGateWorklet.js?url';
 import type { AudioProcessorOptions, LocalAudioTrack, Track, TrackProcessor } from 'livekit-client';
 import type { MotorDeLimpeza } from './limpeza.js';
+import monoWorkletUrl from './mono.worklet.js?url';
 
 /**
  * A cadeia de audio do microfone depois da captura:
  *
- *   microfone -> MediaStreamSource -> [PORTAO] -> faixa que vai para a chamada
+ *   microfone -> MediaStreamSource -> MONO -> [PORTAO] -> faixa mono que vai para a chamada
+ *
+ * MONO junta os canais do microfone num so (`mono.worklet.js`). Sem ele, voz
+ * de headset numa entrada estereo saia de UM lado do fone de todo mundo (pedido
+ * do dono em 2026-09-26): com o cancelamento de eco desligado o Chromium
+ * entrega os dois canais crus, e o servidor de voz negocia Opus estereo. A
+ * faixa que sai e mono; o Opus a manda igual para os dois lados.
  *
  * O PORTAO fecha o microfone no silencio, no modo "por atividade de voz".
  * Antes dele esse modo transmitia o tempo todo: o ajuste de limiar existia nas
@@ -101,6 +108,34 @@ export function prepararFaixaParaProcessador(faixa: LocalAudioTrack): void {
 }
 
 /**
+ * O no que junta os canais do microfone num so.
+ *
+ * Sem o worklet (nao deveria acontecer no Electron), a media simples dos
+ * canais pelo proprio Web Audio: a voz de um lado so sai 6 dB mais baixa, mas
+ * sai dos dois lados do fone.
+ */
+async function criarMono(contexto: AudioContext): Promise<AudioNode> {
+  try {
+    await garantirModulo(contexto, monoWorkletUrl);
+    return new AudioWorkletNode(contexto, 'kiroshi-mono-do-microfone', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+      // Recebe quantos canais o microfone tiver, sem misturar nada antes.
+      channelCountMode: 'max',
+      channelInterpretation: 'discrete',
+    });
+  } catch (erro) {
+    console.warn('[microfone] sem o mono do worklet, usando a media dos canais', erro);
+    const media = contexto.createGain();
+    media.channelCount = 1;
+    media.channelCountMode = 'explicit';
+    media.channelInterpretation = 'speakers';
+    return media;
+  }
+}
+
+/**
  * A cadeia do portao: contexto, entrada, portao, saida.
  *
  * O no do meio e um GainNode que so repassa: e nele que o portao e o medidor
@@ -114,6 +149,7 @@ export class ApenasPortao implements ProcessadorDeLimpeza {
 
   private contexto: AudioContext | null = null;
   private origem: MediaStreamAudioSourceNode | null = null;
+  private mono: AudioNode | null = null;
   private meio: GainNode | null = null;
   private portao: AudioWorkletNode | null = null;
   private destino: MediaStreamAudioDestinationNode | null = null;
@@ -140,6 +176,7 @@ export class ApenasPortao implements ProcessadorDeLimpeza {
   async destroy(): Promise<void> {
     try {
       this.origem?.disconnect();
+      this.mono?.disconnect();
       this.meio?.disconnect();
       this.portao?.disconnect();
       this.destino?.disconnect();
@@ -151,6 +188,7 @@ export class ApenasPortao implements ProcessadorDeLimpeza {
     const contexto = this.contexto;
     this.contexto = null;
     this.origem = null;
+    this.mono = null;
     this.meio = null;
     this.portao = null;
     this.destino = null;
@@ -182,11 +220,17 @@ export class ApenasPortao implements ProcessadorDeLimpeza {
 
     try {
       const origem = contexto.createMediaStreamSource(new MediaStream([faixa]));
+      const mono = await criarMono(contexto);
       const meio = contexto.createGain();
       const destino = contexto.createMediaStreamDestination();
-      origem.connect(meio);
+      // A faixa que vai para a chamada tem UM canal: o que o fone de quem ouve
+      // recebe dos dois lados. (O padrao do no e 2.)
+      destino.channelCount = 1;
+      origem.connect(mono);
+      mono.connect(meio);
 
       this.origem = origem;
+      this.mono = mono;
       this.meio = meio;
       this.destino = destino;
       this.medidor = contexto.createAnalyser();
@@ -215,6 +259,8 @@ export class ApenasPortao implements ProcessadorDeLimpeza {
         openThreshold: limiar,
         closeThreshold: limiar - HISTERESE_DB,
         holdMs: ESPERA_MS,
+        // So olha e so passa o canal 0: certo porque a entrada ja vem mono (MONO).
+        // Antes do MONO, era isto que deixava a voz estereo num lado so.
         maxChannels: 1,
       });
     }

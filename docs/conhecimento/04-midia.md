@@ -53,12 +53,33 @@ Cadeia desde a 2.0.2 (`controller.ts`, `cadeia.ts`, `limpeza.ts`, `ruido.ts`):
    `echoCancellation` e `autoGainControl` exatamente como a pessoa escolheu
    (padrao: os quatro ligados). Id em texto puro vale como `ideal` — se o
    aparelho sumir, o Chromium escolhe outro sem avisar [I]. Nao pede
-   `channelCount`, `sampleRate`, `latency`.
-2. **Grafo proprio:** `AudioContext(48 kHz)` -> fonte -> `GainNode` que so
-   repassa -> portao (`NoiseGateWorkletNode`, so no modo por voz) ->
-   `MediaStreamDestination` -> `processedTrack` (`ApenasPortao`, `ruido.ts`). A
-   faixa recebe antes um `AudioContext` falso suspenso so para passar na
-   checagem do LiveKit (`prepararFaixaParaProcessador`).
+   `channelCount`, `sampleRate`, `latency` — e pedir `channelCount: 1` nao
+   adiantaria: medido no Beta, a captura continua com 2 canais.
+2. **Grafo proprio:** `AudioContext(48 kHz)` -> fonte -> **mono**
+   (`mono.worklet.js`, 2.0.5) -> `GainNode` que so repassa -> portao
+   (`NoiseGateWorkletNode`, so no modo por voz) -> `MediaStreamDestination` de
+   **1 canal** -> `processedTrack` (`ApenasPortao`, `ruido.ts`). A faixa recebe
+   antes um `AudioContext` falso suspenso so para passar na checagem do
+   LiveKit (`prepararFaixaParaProcessador`).
+   - **Por que o mono (2.0.5, pedido do dono em 2026-09-26: "as pessoas so
+     escutam minha voz de um lado do fone").** Microfone de headset (mono) na
+     entrada da placa-mae, que e estereo, poe a voz num canal so. Com o
+     cancelamento de eco LIGADO o Chromium entrega a captura mono; DESLIGADO
+     (o caso do dono, com tudo desligado; basta desligar o eco — so a
+     supressao de ruido ligada tambem vem estereo), entrega os 2 canais crus.
+     O servidor de voz responde `stereo=1` para o Opus, entao o Chrome codifica
+     estereo mesmo com o LiveKit marcando a faixa como mono (`forceStereo:
+     false`), e o SFU ainda marca `TF_STEREO`. E o portao so olhava e so
+     passava o canal 0 (`maxChannels: 1`): medido com dois Betas, voz so no
+     esquerdo chegava so no esquerdo; a mesma voz nos dois canais, tambem so
+     no esquerdo; voz so no direito, **muda** (o portao nunca abria).
+   - O mono conta so os canais com energia perto da do mais forte (sai 15 dB
+     abaixo, volta a 9 dB; decide so com som acima de -80 dBFS; pesos em
+     rampa de 20 ms) e faz a media deles: voz de um lado so sai inteira, sem
+     os 6 dB da media simples. Sem o worklet, cai na media do Web Audio.
+     Medido depois: os tres casos chegam iguais nos dois lados e no mesmo
+     volume (-29,8 dB de media, pico -16,7 a -17,2 dB); com os ajustes padrao
+     (captura mono) nada muda. Testes em `voice/mono.test.ts`.
 3. **Falha:** se o portao nao montar, a faixa segue sem ele; a limpeza do
    navegador ja foi pedida na captura, entao nunca sai crua por engano.
 4. **Publicacao:** Opus ate 64 kbps, DTX, RED, prioridade `high`.
@@ -90,7 +111,8 @@ real na maquina de dev (autoteste aprova ate 60%); intensidade vai para
 limite" (voz de lata). Ligar/desligar republica o microfone e recompila 24 MB.
 Reserva: GTCRN (modelo de 16 kHz [I] — voz abafada acima de ~8 kHz; o doc atual
 diz 48 kHz, provavelmente errado). Faixa processada possivelmente estereo
-(`MediaStreamDestination` tem 2 canais) [I].
+(`MediaStreamDestination` tem 2 canais) [I] — medido na 2.0.5: era, e com o
+portao isso deixava a voz num lado so (ver "Entrada de audio").
 
 **Por que o RNNoise "nunca rodou"** (commit `484b704`): `setProcessor` lanca erro
 se a faixa nao tem `audioContext`, e ele so e atribuido dentro do `publishTrack`.
