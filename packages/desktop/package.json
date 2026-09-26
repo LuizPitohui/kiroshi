@@ -19,12 +19,12 @@
     "publicar:beta": "node scripts/publicar.mjs beta"
   },
   "dependencies": {
-    "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "electron-updater": "^6.8.9",
     "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
     "@kiroshi/shared": "*",
+    "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
