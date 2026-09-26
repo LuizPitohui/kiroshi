@@ -77,6 +77,21 @@ const schema = z.object({
   LIVEKIT_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
+  /*
+    Por onde a API fala com o LiveKit (tirar da sala, listar quem esta nela).
+    Sem ela, usa a LIVEKIT_URL — a publica, dos clientes —, e cada conversa da
+    API com o SFU da a volta pela Cloudflare. Em producao aponta para o
+    LiveKit pela rede do proprio servidor: a conferencia de fantasmas (abaixo)
+    pergunta a cada poucos segundos e nao pode depender do tunel.
+  */
+  LIVEKIT_API_URL: z.string().optional(),
+  /*
+    Conferencia dos estados de voz com o SFU: de quanto em quanto tempo, e
+    quanto tempo alguem pode constar na chamada sem estar na sala antes de o
+    servidor tira-lo. Mudar so para teste.
+  */
+  VOICE_SWEEP_SECONDS: z.coerce.number().int().min(2).max(600).default(15),
+  VOICE_GHOST_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
   TURN_SERVERS: z.string().optional(),
   /*
     Chave do TURN gerenciado da Cloudflare.
@@ -196,8 +211,11 @@ function load() {
     voice: {
       enabled: voiceEnabled,
       url: env.LIVEKIT_URL ?? '',
+      apiUrl: env.LIVEKIT_API_URL || (env.LIVEKIT_URL ?? '').replace(/^ws/, 'http'),
       apiKey: env.LIVEKIT_API_KEY ?? '',
       apiSecret: env.LIVEKIT_API_SECRET ?? '',
+      conferenciaMs: env.VOICE_SWEEP_SECONDS * 1000,
+      fantasmaMs: env.VOICE_GHOST_SECONDS * 1000,
       turnServers,
       turnKeyId: env.CLOUDFLARE_TURN_KEY_ID ?? null,
       turnApiToken: env.CLOUDFLARE_TURN_API_TOKEN ?? null,

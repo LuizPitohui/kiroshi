@@ -394,8 +394,19 @@ nenhum tipo. Hoje toda notificacao e decidida no cliente.
   `userLimit`) e opcode 4 (cria VoiceState, checa CONNECT e limite, emite
   VOICE_STATE_UPDATE e VOICE_SERVER_UPDATE). **Erro no opcode 4 fecha o
   WebSocket com 4000.**
-- **Nao ha sincronizacao com o LiveKit** (nem webhook, nem polling). O VoiceState
-  so muda por opcode/mover/desconectar, e e apagado inteiro no boot.
+- **Conferencia com o LiveKit (2026-09-26):** a cada 15 s (`VOICE_SWEEP_SECONDS`)
+  a API lista quem esta em cada sala e compara com os VoiceState. Quem consta na
+  chamada sem estar na sala por 60 s seguidos (`VOICE_GHOST_SECONDS`; cobre a
+  entrada e a reconexao do cliente, que tenta ~44 s) sai com
+  `leaveReason: 'VOICE_LOST'`, e o aviso vai para todos, a propria pessoa
+  inclusive (e isso que limpa o fantasma dela nas versoes antigas do app). SFU
+  sem resposta = ninguem sai. Decisao pura em `lib/fantasmas.ts` (testada);
+  laco em `conferirVozComSfu`/`iniciarConferenciaDaVoz` (`services/voice.ts`).
+  Antes nao havia sincronizacao nenhuma: o VoiceState so mudava por
+  opcode/mover/desconectar ou expiracao da sessao, e quem caia sem avisar ficava
+  na lista — o fantasma reportado pelo dono. O VoiceState ainda e apagado
+  inteiro no boot; o app 2.0.3+ reanuncia a propria voz no READY e volta a
+  lista em segundos.
 - **VOICE_SERVER_UPDATE vai para todas as sessoes da conta** (`voice.ts:266`) —
   foi a causa do commit `bc4ad67` ("um segundo aparelho entrava na chamada
   sozinho"). O cliente se protegeu; o servidor nao mudou.
@@ -436,7 +447,9 @@ desativar/reativar, transferir servidor, ver quem esta em chamada (o script
 
 `NODE_ENV`, `PORT`, `HOST`, `LOG_LEVEL`, `DATABASE_URL`, `JWT_SECRET` (trocar
 desloga todos), `REDIS_URL`, `LIVEKIT_URL`/`_API_KEY`/`_API_SECRET` (as tres
-ligam a voz), `TURN_SERVERS`, `CLOUDFLARE_TURN_KEY_ID`/`_API_TOKEN`,
+ligam a voz), `LIVEKIT_API_URL` (por onde a API fala com o SFU; sem ela, a
+`LIVEKIT_URL`), `VOICE_SWEEP_SECONDS`/`VOICE_GHOST_SECONDS` (a conferencia de
+fantasmas, 15 e 60 por padrao), `TURN_SERVERS`, `CLOUDFLARE_TURN_KEY_ID`/`_API_TOKEN`,
 `FORCE_TURN_RELAY`, `GOOGLE_CLIENT_ID`/`_SECRET`, `CONTATO_PRIVACIDADE`,
 `STORAGE_DIR`, `PUBLIC_BASE_URL`, `ALLOW_OPEN_REGISTRATION`, `CORS_ORIGINS`,
 `KIROSHI_ENV_FILE`, `KIROSHI_DOWNLOAD_DIR`, `GOOGLE_SITE_VERIFICATION`,

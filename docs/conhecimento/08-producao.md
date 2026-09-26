@@ -21,8 +21,11 @@
 
 - `order.arasaka.fun`: API, gateway, anexos, paginas, `/baixar` (instalador e
   `latest.yml`), callback do Google.
-- `voz.arasaka.fun`: sinalizacao do LiveKit (a API tambem fala com o LiveKit por
-  ele — `RoomServiceClient` usa o `LIVEKIT_URL` publico).
+- `voz.arasaka.fun`: sinalizacao do LiveKit. A API fala com o LiveKit por dentro
+  do servidor desde 2026-09-26: `LIVEKIT_API_URL=http://host.docker.internal:7880`
+  no `.env` e `extra_hosts: host.docker.internal:host-gateway` no servico `api`
+  do compose (o LiveKit roda na rede do host). Antes ia pelo `LIVEKIT_URL`
+  publico, dando a volta pela Cloudflare — e parava quando o tunel parava.
 - Postgres: container compartilhado com outros projetos do dono; o Kiroshi usa
   `kiroshi_db` (producao) e `kiroshi_dev` (desenvolvimento), acessados pela ponte
   do Docker.

@@ -29,7 +29,7 @@ import { voiceRoutes } from './routes/voice.js';
 import { pruneAuditLog } from './services/audit.js';
 import { pruneExpiredInvites } from './services/invites.js';
 import { ensureStorageDir, pruneOrphanAttachments } from './services/storage.js';
-import { clearStaleVoiceStates, isVoiceEnabled } from './services/voice.js';
+import { clearStaleVoiceStates, iniciarConferenciaDaVoz, isVoiceEnabled } from './services/voice.js';
 
 async function buildServer() {
   const app = Fastify({
@@ -218,6 +218,9 @@ async function main(): Promise<void> {
   attachGateway(app.server as HttpServer);
   startJanitor();
 
+  // Quem consta na chamada sem estar na sala do SFU sai sozinho (services/voice.ts).
+  const pararConferenciaDaVoz = iniciarConferenciaDaVoz();
+
   // Faxina periodica. unref para nao segurar o processo no shutdown.
   const maintenance = setInterval(
     () => {
@@ -246,6 +249,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'encerrando');
 
     clearInterval(maintenance);
+    pararConferenciaDaVoz();
     // Fecha o HTTP primeiro para parar de aceitar pedidos novos, depois solta
     // banco e barramento.
     await app.close().catch(() => undefined);

@@ -18,6 +18,7 @@ import { resolveChannelPermissions, resolveMember } from './permissions.js';
 import { bloqueioNaDm } from './relacoes.js';
 import { fontesPermitidas, type Moderacao } from '../lib/direitos-de-voz.js';
 import { aoEntrarNaChamada, aoSairDaChamada } from './chamadas.js';
+import { conferirFantasmas } from '../lib/fantasmas.js';
 
 /**
  * Voz, video e compartilhamento de tela via LiveKit (SFU).
@@ -49,8 +50,9 @@ function getRoomService(): RoomServiceClient {
     throw new ApiError('VOICE_UNAVAILABLE', 'A voz nao esta configurada neste servidor.');
   }
   roomService ??= new RoomServiceClient(
-    // O SDK fala HTTP com o LiveKit; a URL do cliente e wss://.
-    config.voice.url.replace(/^ws/, 'http'),
+    // O SDK fala HTTP com o LiveKit. `apiUrl` e a LIVEKIT_API_URL, ou a URL
+    // dos clientes (wss://) trocada para http(s) — ver config.ts.
+    config.voice.apiUrl,
     config.voice.apiKey,
     config.voice.apiSecret,
   );
@@ -424,7 +426,7 @@ export async function tirarDaVoz(
 }
 
 /** Por que o servidor tirou alguem da voz, quando foi uma regra (ver VoiceState). */
-type MotivoDaSaida = 'ALONE_TIMEOUT';
+type MotivoDaSaida = 'ALONE_TIMEOUT' | 'VOICE_LOST';
 
 /** Apaga o estado, avisa quem enxerga o canal e tira da sala no SFU. */
 async function encerrarVoz(
@@ -744,6 +746,84 @@ function agendarSaidaDaSalaAntiga(channelId: string, userId: string): void {
       await removeFromRoom(channelId, userId);
     })();
   }, PRAZO_PARA_TROCAR_DE_SALA_MS).unref();
+}
+
+// ---------------------------------------------------------------------------
+// Conferencia com o SFU: quem consta na chamada sem estar nela
+// ---------------------------------------------------------------------------
+
+/** Desde quando cada estado de voz sem ninguem na sala esta assim (ver lib/fantasmas.ts). */
+let ausentes: ReadonlyMap<string, number> = new Map();
+
+/**
+ * Tira da voz quem consta na chamada mas nao esta na sala do SFU ha mais do
+ * que o prazo, e avisa todo mundo — a propria pessoa inclusive, para o app
+ * dela tambem largar a chamada e se tirar da lista.
+ *
+ * A decisao e toda daqui, entao vale para qualquer versao do app: as antigas
+ * nao avisavam o servidor quando a voz caia sozinha, e ficavam na lista.
+ */
+export async function conferirVozComSfu(agora = Date.now()): Promise<number> {
+  if (!config.voice.enabled) return 0;
+
+  const estados = await prisma.voiceState.findMany({
+    select: { userId: true, channelId: true, guildId: true, sessionId: true },
+  });
+  if (estados.length === 0) {
+    ausentes = new Map();
+    return 0;
+  }
+
+  let presentes: Map<string, Set<string>>;
+  try {
+    presentes = await quemEstaNasSalas([...new Set(estados.map((e) => roomNameFor(e.channelId)))]);
+  } catch (error) {
+    // Nao saber quem esta na sala nao e saber que ninguem esta: ninguem sai.
+    logger.warn({ error }, 'voz: nao consegui conferir as salas no SFU');
+    return 0;
+  }
+
+  const resultado = conferirFantasmas(estados, presentes, roomNameFor, ausentes, agora, config.voice.fantasmaMs);
+  ausentes = resultado.ausentes;
+
+  for (const estado of resultado.encerrar) {
+    logger.info(
+      { userId: estado.userId, channelId: estado.channelId, sessionId: estado.sessionId, prazoMs: config.voice.fantasmaMs },
+      'voz: fora da sala do SFU pelo prazo inteiro, tirando da chamada',
+    );
+    await encerrarVoz(estado, { notifyUser: true, motivo: 'VOICE_LOST' });
+  }
+  return resultado.encerrar.length;
+}
+
+/** Quem esta em cada sala. Sala que nao existe (ninguem nela) fica de fora. */
+async function quemEstaNasSalas(salas: string[]): Promise<Map<string, Set<string>>> {
+  const servico = getRoomService();
+  const abertas = await servico.listRooms(salas);
+  const presentes = new Map<string, Set<string>>();
+  for (const sala of abertas) {
+    const participantes = await servico.listParticipants(sala.name);
+    presentes.set(sala.name, new Set(participantes.map((p) => p.identity)));
+  }
+  return presentes;
+}
+
+/** Liga a conferencia periodica. Devolve como desligar, para o encerramento do processo. */
+export function iniciarConferenciaDaVoz(): () => void {
+  if (!config.voice.enabled) return () => undefined;
+  let rodando = false;
+  const timer = setInterval(() => {
+    // Uma conferencia lenta (SFU demorando) nao empilha outra por cima.
+    if (rodando) return;
+    rodando = true;
+    void conferirVozComSfu()
+      .catch((error: unknown) => logger.warn({ error }, 'voz: conferencia com o SFU falhou'))
+      .finally(() => {
+        rodando = false;
+      });
+  }, config.voice.conferenciaMs);
+  timer.unref();
+  return () => clearInterval(timer);
 }
 
 /** Limpa estados de voz orfaos na subida, depois de uma queda do processo. */

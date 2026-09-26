@@ -38,6 +38,10 @@ services:
     ports:
       # So no loopback: quem chega de fora vem pelo Cloudflare Tunnel.
       - "127.0.0.1:4000:4000"
+    extra_hosts:
+      # O LiveKit roda na rede do host: e por este nome que a API fala com ele
+      # sem dar a volta pela Cloudflare (LIVEKIT_API_URL no .env).
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s

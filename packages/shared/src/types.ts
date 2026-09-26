@@ -303,10 +303,15 @@ export interface VoiceState {
   joinedAt: string;
   /**
    * Por que a pessoa saiu, quando foi o servidor que a tirou por uma regra.
-   * So vem no aviso de saida; hoje a unica regra e a dos 3 minutos sozinho
-   * numa chamada de DM.
+   * So vem no aviso de saida:
+   *
+   *   ALONE_TIMEOUT  a regra dos 3 minutos sozinho numa chamada de DM
+   *   VOICE_LOST     constava na chamada sem estar na sala do SFU pelo prazo
+   *                  inteiro (a voz caiu e ninguem avisou)
+   *
+   * Versoes do app que nao conhecem um motivo mostram o aviso generico.
    */
-  leaveReason?: 'ALONE_TIMEOUT';
+  leaveReason?: 'ALONE_TIMEOUT' | 'VOICE_LOST';
 }
 
 /**
